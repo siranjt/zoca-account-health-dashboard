@@ -26,14 +26,17 @@ function Legend({ items }: { items: { name: string; color: string }[] }) {
   );
 }
 
-function Tooltip({ leftPct, title, rows }: { leftPct: number; title: string; rows: { name: string; color?: string; value: string }[] }) {
+function Tooltip({ leftPct, title, rows, pinned, onClose }: { leftPct: number; title: string; rows: { name: string; color?: string; value: string }[]; pinned?: boolean; onClose?: () => void }) {
   const flip = leftPct > 60;
   return (
     <div
-      className="pointer-events-none absolute z-20 -translate-y-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs shadow-md"
+      className={`absolute z-20 -translate-y-1 rounded-md border bg-white px-2 py-1 text-xs shadow-md ${pinned ? "border-indigo-300 shadow-lg" : "pointer-events-none border-slate-200"}`}
       style={{ left: `${leftPct}%`, top: 0, transform: `translateX(${flip ? "-105%" : "8px"})` }}
     >
-      <div className="mb-0.5 font-medium text-slate-500">{title}</div>
+      {pinned && (
+        <button onClick={onClose} className="absolute right-1 top-0.5 leading-none text-slate-400 hover:text-slate-700" title="Close">×</button>
+      )}
+      <div className={`mb-0.5 font-medium text-slate-500 ${pinned ? "pr-3" : ""}`}>{title}{pinned ? " · pinned" : ""}</div>
       {rows.map((r) => (
         <div key={r.name} className="flex items-center gap-1.5 whitespace-nowrap">
           {r.color && <span className="inline-block h-2 w-2 rounded-sm" style={{ background: r.color }} />}
@@ -57,20 +60,29 @@ export function ChartCard({ title, subtitle, children }: { title: string; subtit
   );
 }
 
-// hook: map a mousemove over an SVG (viewBox 0..W) to a data index
+// hook: map mouse over an SVG (viewBox 0..W) to a data index; supports click-to-pin
 function useIndexHover(n: number, W: number, PL: number, PR: number) {
   const ref = useRef<SVGSVGElement>(null);
   const [hi, setHi] = useState<number | null>(null);
-  function onMove(e: React.MouseEvent) {
+  const [pinned, setPinned] = useState<number | null>(null);
+  function idxFrom(e: React.MouseEvent): number | null {
     const el = ref.current;
-    if (!el) return;
+    if (!el) return null;
     const rect = el.getBoundingClientRect();
     const vbx = ((e.clientX - rect.left) / rect.width) * W;
     const frac = (vbx - PL) / (W - PL - PR);
-    const idx = Math.round(frac * (n - 1));
-    setHi(Math.max(0, Math.min(n - 1, idx)));
+    return Math.max(0, Math.min(n - 1, Math.round(frac * (n - 1))));
   }
-  return { ref, hi, onMove, onLeave: () => setHi(null) };
+  return {
+    ref,
+    hi,
+    pinned,
+    active: pinned ?? hi,
+    onMove: (e: React.MouseEvent) => setHi(idxFrom(e)),
+    onLeave: () => setHi(null),
+    onClick: (e: React.MouseEvent) => setPinned((p) => (p === idxFrom(e) ? null : idxFrom(e))),
+    clear: () => setPinned(null),
+  };
 }
 
 // ---- multi-line (profile metrics) -----------------------------------------
@@ -85,7 +97,7 @@ export function MultiLineChart({ xLabels, series }: { xLabels: string[]; series:
   return (
     <div className="relative">
       <Legend items={series.map((s) => ({ name: s.name, color: s.color }))} />
-      <svg ref={hv.ref} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 200 }} role="img" onMouseMove={hv.onMove} onMouseLeave={hv.onLeave}>
+      <svg ref={hv.ref} viewBox={`0 0 ${W} ${H}`} className="w-full cursor-pointer" style={{ maxHeight: 200 }} role="img" onMouseMove={hv.onMove} onMouseLeave={hv.onLeave} onClick={hv.onClick}>
         {ticks.map((t, i) => (
           <g key={i}>
             <line x1={PL} x2={W - PR} y1={y(t)} y2={y(t)} stroke={VIZ.grid} strokeWidth={1} />
@@ -98,15 +110,15 @@ export function MultiLineChart({ xLabels, series }: { xLabels: string[]; series:
         {[0, Math.floor(n / 2), n - 1].map((i) => (
           <text key={i} x={x(i)} y={H - 6} textAnchor="middle" fontSize={9} fill={VIZ.muted}>{xLabels[i]?.slice(5)}</text>
         ))}
-        {hv.hi != null && (
+        {hv.active != null && (
           <g>
-            <line x1={x(hv.hi)} x2={x(hv.hi)} y1={PT} y2={H - PB} stroke={VIZ.baseline} strokeWidth={1} strokeDasharray="3 3" />
-            {series.map((s) => <circle key={s.name} cx={x(hv.hi!)} cy={y(s.values[hv.hi!])} r={3} fill={s.color} stroke="#fff" strokeWidth={1} />)}
+            <line x1={x(hv.active)} x2={x(hv.active)} y1={PT} y2={H - PB} stroke={VIZ.baseline} strokeWidth={1} strokeDasharray="3 3" />
+            {series.map((s) => <circle key={s.name} cx={x(hv.active!)} cy={y(s.values[hv.active!])} r={3} fill={s.color} stroke="#fff" strokeWidth={1} />)}
           </g>
         )}
       </svg>
-      {hv.hi != null && (
-        <Tooltip leftPct={(x(hv.hi) / W) * 100} title={xLabels[hv.hi]} rows={series.map((s) => ({ name: s.name, color: s.color, value: formatNumber(s.values[hv.hi!]) }))} />
+      {hv.active != null && (
+        <Tooltip leftPct={(x(hv.active) / W) * 100} title={xLabels[hv.active]} rows={series.map((s) => ({ name: s.name, color: s.color, value: formatNumber(s.values[hv.active!]) }))} pinned={hv.pinned != null} onClose={hv.clear} />
       )}
     </div>
   );
@@ -125,15 +137,15 @@ export function LeadsReviewsChart({ data }: { data: { mon: string; leads: number
     const PT = 6, PB = 4;
     const y = (v: number) => PT + (1 - v / maxV) * (h - PT - PB);
     return (
-      <svg viewBox={`0 0 ${W} ${h}`} className="w-full" style={{ maxHeight: h }} role="img" onMouseMove={hv.onMove} onMouseLeave={hv.onLeave} ref={kind === "line" ? hv.ref : undefined}>
+      <svg viewBox={`0 0 ${W} ${h}`} className="w-full cursor-pointer" style={{ maxHeight: h }} role="img" onMouseMove={hv.onMove} onMouseLeave={hv.onLeave} onClick={hv.onClick} ref={kind === "line" ? hv.ref : undefined}>
         <line x1={PL} x2={W - PR} y1={y(0)} y2={y(0)} stroke={VIZ.baseline} strokeWidth={1} />
         <text x={PL - 3} y={y(maxV) + 3} textAnchor="end" fontSize={9} fill={VIZ.muted}>{maxV}</text>
         {kind === "line" ? (
           <polyline points={data.map((d, i) => `${xc(i)},${y(key(d))}`).join(" ")} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" />
         ) : (
-          data.map((d, i) => { const v = key(d); return <rect key={i} x={xc(i) - bw * 0.3} y={y(v)} width={bw * 0.6} height={Math.max(0, y(0) - y(v))} rx={1.5} fill={color} opacity={hv.hi === i ? 1 : 0.85} />; })
+          data.map((d, i) => { const v = key(d); return <rect key={i} x={xc(i) - bw * 0.3} y={y(v)} width={bw * 0.6} height={Math.max(0, y(0) - y(v))} rx={1.5} fill={color} opacity={hv.active === i ? 1 : 0.85} />; })
         )}
-        {hv.hi != null && <circle cx={xc(hv.hi)} cy={y(key(data[hv.hi]))} r={kind === "line" ? 3 : 0} fill={color} stroke="#fff" strokeWidth={1} />}
+        {hv.active != null && <circle cx={xc(hv.active)} cy={y(key(data[hv.active]))} r={kind === "line" ? 3 : 0} fill={color} stroke="#fff" strokeWidth={1} />}
       </svg>
     );
   };
@@ -146,11 +158,11 @@ export function LeadsReviewsChart({ data }: { data: { mon: string; leads: number
         <span>{data[0]?.mon}</span>
         <span>{data[data.length - 1]?.mon}</span>
       </div>
-      {hv.hi != null && (
-        <Tooltip leftPct={(xc(hv.hi) / W) * 100} title={data[hv.hi].mon} rows={[
-          { name: "Leads", color: VIZ.series[0], value: String(data[hv.hi].leads) },
-          { name: "Reviews", color: VIZ.series[1], value: String(data[hv.hi].reviews) },
-        ]} />
+      {hv.active != null && (
+        <Tooltip leftPct={(xc(hv.active) / W) * 100} title={data[hv.active].mon} rows={[
+          { name: "Leads", color: VIZ.series[0], value: String(data[hv.active].leads) },
+          { name: "Reviews", color: VIZ.series[1], value: String(data[hv.active].reviews) },
+        ]} pinned={hv.pinned != null} onClose={hv.clear} />
       )}
     </div>
   );
@@ -170,7 +182,7 @@ export function RankTrendChart({ data }: { data: { d: string; avgRank: number | 
   return (
     <div className="relative">
       <Legend items={[{ name: "Avg rank (lower = better)", color: VIZ.series[0] }]} />
-      <svg ref={hv.ref} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 170 }} role="img" onMouseMove={hv.onMove} onMouseLeave={hv.onLeave}>
+      <svg ref={hv.ref} viewBox={`0 0 ${W} ${H}`} className="w-full cursor-pointer" style={{ maxHeight: 170 }} role="img" onMouseMove={hv.onMove} onMouseLeave={hv.onLeave} onClick={hv.onClick}>
         {ticks.map((t, i) => (
           <g key={i}>
             <line x1={PL} x2={W - PR} y1={y(t)} y2={y(t)} stroke={VIZ.grid} strokeWidth={1} />
@@ -178,15 +190,15 @@ export function RankTrendChart({ data }: { data: { d: string; avgRank: number | 
           </g>
         ))}
         <polyline points={pts.map((p, i) => `${x(i)},${y(p.avgRank)}`).join(" ")} fill="none" stroke={VIZ.series[0]} strokeWidth={2} strokeLinejoin="round" />
-        {pts.map((p, i) => <circle key={i} cx={x(i)} cy={y(p.avgRank)} r={hv.hi === i ? 3.5 : 2} fill={VIZ.series[0]} stroke="#fff" strokeWidth={hv.hi === i ? 1 : 0} />)}
+        {pts.map((p, i) => <circle key={i} cx={x(i)} cy={y(p.avgRank)} r={hv.active === i ? 3.5 : 2} fill={VIZ.series[0]} stroke="#fff" strokeWidth={hv.active === i ? 1 : 0} />)}
         {[0, n - 1].map((i) => <text key={i} x={x(i)} y={H - 4} textAnchor={i === 0 ? "start" : "end"} fontSize={9} fill={VIZ.muted}>{pts[i].d.slice(5)}</text>)}
-        {hv.hi != null && <line x1={x(hv.hi)} x2={x(hv.hi)} y1={PT} y2={H - PB} stroke={VIZ.baseline} strokeWidth={1} strokeDasharray="3 3" />}
+        {hv.active != null && <line x1={x(hv.active)} x2={x(hv.active)} y1={PT} y2={H - PB} stroke={VIZ.baseline} strokeWidth={1} strokeDasharray="3 3" />}
       </svg>
-      {hv.hi != null && (
-        <Tooltip leftPct={(x(hv.hi) / W) * 100} title={pts[hv.hi].d} rows={[
-          { name: "Avg rank", color: VIZ.series[0], value: `#${pts[hv.hi].avgRank}` },
-          ...(pts[hv.hi].top3 != null ? [{ name: "Top-3 %", value: `${pts[hv.hi].top3}%` }] : []),
-        ]} />
+      {hv.active != null && (
+        <Tooltip leftPct={(x(hv.active) / W) * 100} title={pts[hv.active].d} rows={[
+          { name: "Avg rank", color: VIZ.series[0], value: `#${pts[hv.active].avgRank}` },
+          ...(pts[hv.active].top3 != null ? [{ name: "Top-3 %", value: `${pts[hv.active].top3}%` }] : []),
+        ]} pinned={hv.pinned != null} onClose={hv.clear} />
       )}
     </div>
   );
@@ -201,6 +213,7 @@ export function FunnelChart({ f }: { f: { enquiries: number; opened: number; con
     { label: "Contacted", v: f.contacted },
     { label: "Booked", v: f.booked },
   ];
+  const [sel, setSel] = useState<number | null>(null);
   const max = Math.max(1, f.enquiries);
   const conv = f.enquiries ? Math.round((f.booked / f.enquiries) * 100) : 0;
   return (
@@ -210,16 +223,23 @@ export function FunnelChart({ f }: { f: { enquiries: number; opened: number; con
         {rows.map((r, i) => {
           const pct = f.enquiries ? Math.round((r.v / f.enquiries) * 100) : 0;
           return (
-            <div key={r.label} className="flex items-center gap-2 text-xs" title={`${r.label}: ${r.v} (${pct}% of enquiries)`}>
-              <span className="w-16 shrink-0 text-slate-500">{r.label}</span>
+            <button key={r.label} onClick={() => setSel((s) => (s === i ? null : i))} className={`flex w-full items-center gap-2 rounded text-xs ${sel === i ? "bg-indigo-50" : ""}`}>
+              <span className="w-16 shrink-0 text-left text-slate-500">{r.label}</span>
               <div className="h-4 flex-1 rounded bg-slate-100">
                 <div className="h-4 rounded transition-all hover:brightness-95" style={{ width: `${(r.v / max) * 100}%`, background: RAMP[i], minWidth: r.v > 0 ? 2 : 0 }} />
               </div>
               <span className="w-8 shrink-0 text-right font-medium tabular-nums text-slate-700">{r.v}</span>
-            </div>
+            </button>
           );
         })}
       </div>
+      {sel != null && (
+        <div className="mt-2 rounded bg-slate-50 px-2 py-1 text-xs text-slate-600">
+          <b>{rows[sel].label}:</b> {rows[sel].v}
+          {f.enquiries > 0 && <> · {Math.round((rows[sel].v / f.enquiries) * 100)}% of enquiries</>}
+          {sel > 0 && rows[sel - 1].v > 0 && <> · {Math.round((rows[sel].v / rows[sel - 1].v) * 100)}% of {rows[sel - 1].label.toLowerCase()}</>}
+        </div>
+      )}
     </div>
   );
 }
