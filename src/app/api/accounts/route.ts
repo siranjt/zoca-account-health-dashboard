@@ -4,6 +4,7 @@ import { getAccountsPayload } from "@/lib/data";
 // Always run fresh (no static caching) so numbers reflect the latest query.
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+export const maxDuration = 60;
 
 export async function GET() {
   const payload = await getAccountsPayload();

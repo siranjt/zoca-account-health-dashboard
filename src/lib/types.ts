@@ -3,80 +3,70 @@
 // One `AccountRow` == one line in the list view.
 // ===========================================================================
 
-/** Zoca products an account can have active. "discovery" = local SEO + website. */
-export type ZocaProduct =
-  | "discovery"
-  | "front_desk"
-  | "campaigns"
-  | "social"
-  | "ads";
+/** The base product every Discovery account has (local SEO + website). */
+export const BASE_PRODUCT = "Discovery";
 
-export const PRODUCT_LABELS: Record<ZocaProduct, string> = {
-  discovery: "Discovery",
-  front_desk: "Front Desk",
-  campaigns: "Campaigns",
-  social: "Social",
-  ads: "Ads",
+/** Map cx.health_score agent tokens -> display labels. */
+export const AGENT_LABELS: Record<string, string> = {
+  "discovery-agent": "Discovery",
+  "loyalty-agent": "Loyalty",
+  "social-agent": "Social",
+  "ads-agent": "Ads",
+  "win-agent": "WIN",
+  domain: "Domain",
 };
 
-/** Health tier -> maps to the green / yellow / red marker in the list view. */
-export type HealthTier = "healthy" | "monitor" | "at_risk";
+export function labelAgent(token: string): string {
+  const t = token.trim().toLowerCase();
+  return AGENT_LABELS[t] ?? t.replace(/-agent$/, "").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
+export type HealthTier = "healthy" | "monitor" | "at_risk" | "critical";
 export type HealthColor = "green" | "yellow" | "red";
 
 export interface HealthScore {
-  /** 0-100 sub-scores (from Retool: engagement / value / product). */
   engagement: number | null;
   value: number | null;
   product: number | null;
-  /** composite = 0.4*engagement + 0.4*value + 0.2*product (confirmed from Retool). */
   composite: number | null;
   tier: HealthTier;
   color: HealthColor;
+  /** raw tier label from Metabase, e.g. "CRITICAL - DEAL BREAKER" */
+  tierLabel: string;
   /** which dimension is dragging the score (e.g. "Engagement"). */
   reason: string | null;
+  recommendedAction: string | null;
 }
 
 export interface AccountRow {
-  // --- identity ---
-  entityId: string; // location entity_id (Retool: Business Details)
-  name: string; // GBP Title / business name
+  entityId: string;
+  name: string;
   city: string | null;
   state: string | null;
   accountManager: string | null;
-  accountExecutive: string | null;
 
-  // --- lifecycle (used to exclude churned) ---
-  isChurned: boolean;
-  cancelledDate: string | null;
-  nextBillingDate: string | null;
-  paidStatus: string | null;
-
-  // --- health marker ---
   health: HealthScore;
+  mrr: number | null;
 
-  // --- core metrics (over the reporting window) ---
-  leadsReceived: number; // excludes test leads
+  leadsReceived: number;
   reviewsReceived: number;
-  photosUploaded: number; // Photos Uploaded on GBP
+  photosUploaded: number;
   profileClicks: number;
   websiteClicks: number;
-  bookOnlineClicks: number | null; // null when booking CTA is not active
+  bookOnlineClicks: number | null;
   bookOnlineActive: boolean;
 
-  // --- SEO ---
-  keywordsTracked: number;
-  keywordsTop3Pct: number | null; // % of keywords ranking in top 3
+  keywordsTracked: number | null;
+  keywordsTop3Pct: number | null;
   avgCurrentRank: number | null;
-  keywordImpressions: number; // latest complete month
+  keywordImpressions: number;
 
-  // --- lead responsiveness (averages, in milliseconds; null if N/A) ---
   avgReceivedToOpenedMs: number | null;
   avgReceivedToContactedMs: number | null;
   avgOpenedToContactedMs: number | null;
 
-  // --- cross-product context ---
-  activeProducts: ZocaProduct[]; // includes discovery; "other agents" = the rest
+  /** display labels of active products, incl. "Discovery" */
+  activeProducts: string[];
 }
 
 export interface AccountsPayload {
@@ -84,4 +74,9 @@ export interface AccountsPayload {
   source: "mock" | "metabase";
   windowDays: number;
   accounts: AccountRow[];
+}
+
+/** "Other agents active" = products beyond the base Discovery product. */
+export function otherProducts(a: AccountRow): string[] {
+  return a.activeProducts.filter((p) => p !== BASE_PRODUCT);
 }

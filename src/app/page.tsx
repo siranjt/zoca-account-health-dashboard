@@ -4,6 +4,7 @@ import { formatDate } from "@/lib/format";
 
 // Server component: fetch on each request so the dashboard is always live.
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export default async function Home() {
   const payload = await getAccountsPayload();

@@ -31,8 +31,9 @@ export async function getAccountsPayload(): Promise<AccountsPayload> {
     accounts = getMockAccounts();
   }
 
-  // Hard rule: exclude churned accounts from the list view.
-  accounts = accounts.filter((a) => !a.isChurned);
+  // Churned accounts are already excluded at the source:
+  //  - metabase: cx.health_score only contains active accounts
+  //  - mock: getMockAccounts() returns active-only seeds
 
   return {
     generatedAt: new Date().toISOString(),

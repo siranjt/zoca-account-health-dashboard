@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { AccountRow, HealthColor, ZocaProduct } from "@/lib/types";
-import { PRODUCT_LABELS } from "@/lib/types";
+import type { AccountRow, HealthColor } from "@/lib/types";
+import { otherProducts } from "@/lib/types";
 import HealthDot from "./HealthDot";
 import {
   formatDuration,
@@ -35,10 +35,6 @@ interface SortState {
 
 const HEALTH_RANK: Record<HealthColor, number> = { red: 0, yellow: 1, green: 2 };
 const LS_KEY = "zoca-ahd-view-v1";
-
-function otherProductsOf(a: AccountRow): ZocaProduct[] {
-  return a.activeProducts.filter((p) => p !== "discovery");
-}
 
 export default function AccountsTable({ accounts }: { accounts: AccountRow[] }) {
   const [query, setQuery] = useState("");
@@ -90,13 +86,12 @@ export default function AccountsTable({ accounts }: { accounts: AccountRow[] }) 
         (a) =>
           a.name.toLowerCase().includes(q) ||
           (a.city ?? "").toLowerCase().includes(q) ||
-          (a.accountManager ?? "").toLowerCase().includes(q) ||
-          (a.accountExecutive ?? "").toLowerCase().includes(q)
+          (a.accountManager ?? "").toLowerCase().includes(q)
       );
     }
     if (colorFilter !== "all") out = out.filter((a) => a.health.color === colorFilter);
     if (amFilter !== "all") out = out.filter((a) => a.accountManager === amFilter);
-    if (onlyMultiProduct) out = out.filter((a) => otherProductsOf(a).length > 0);
+    if (onlyMultiProduct) out = out.filter((a) => otherProducts(a).length > 0);
 
     const dir = sort.dir === "asc" ? 1 : -1;
     out.sort((a, b) => dir * cmp(a, b, sort.key));
@@ -117,7 +112,7 @@ export default function AccountsTable({ accounts }: { accounts: AccountRow[] }) 
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search business, city, AM, AE…"
+          placeholder="Search business, city, AM…"
           className="w-64 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-slate-400"
         />
         <select
@@ -206,7 +201,7 @@ export default function AccountsTable({ accounts }: { accounts: AccountRow[] }) 
           </thead>
           <tbody>
             {rows.map((a) => {
-              const others = otherProductsOf(a);
+              const others = otherProducts(a);
               return (
                 <tr key={a.entityId} className="border-t border-slate-100 hover:bg-slate-50">
                   <td className="px-3 py-2 text-center">
@@ -243,7 +238,7 @@ export default function AccountsTable({ accounts }: { accounts: AccountRow[] }) 
                     <div className="flex flex-wrap gap-1">
                       <Chip label="Discovery" tone="neutral" />
                       {others.map((p) => (
-                        <Chip key={p} label={PRODUCT_LABELS[p]} tone="accent" />
+                        <Chip key={p} label={p} tone="accent" />
                       ))}
                     </div>
                   </td>
@@ -272,7 +267,7 @@ function cmp(a: AccountRow, b: AccountRow, key: SortKey): number {
     case "name":
       return a.name.localeCompare(b.name);
     case "otherProducts":
-      return otherProductsOf(a).length - otherProductsOf(b).length;
+      return otherProducts(a).length - otherProducts(b).length;
     default: {
       const av = (a[key] as number | null) ?? -Infinity;
       const bv = (b[key] as number | null) ?? -Infinity;

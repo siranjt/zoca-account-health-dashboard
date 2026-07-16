@@ -1,151 +1,147 @@
 // ===========================================================================
 // Metabase client (SERVER-SIDE ONLY).
 //
-// This module talks to the Metabase REST API using an API key held in a
-// server env var. It must never be imported into a client component — the
-// API key must never reach the browser.
-//
-// Two query styles are supported:
-//   • queryCard(cardId)  -> runs a saved Question (recommended: reuse the
-//                           exact cards that power the Retool dashboard).
-//   • queryNative(sql)   -> runs ad-hoc SQL against METABASE_DATABASE_ID.
-//
-// WIRING TODO (once the Metabase card IDs / SQL are known):
-//   Fill METABASE_CARD_* env vars, then complete `getAccountsFromMetabase()`
-//   below to map card rows -> AccountRow[]. The column->tab mapping is
-//   documented in README.md and mirrored by the mock data.
+// Talks to Metabase's /api/dataset endpoint (ad-hoc native SQL) using an API
+// key held in a server env var. Zero footprint: it only RUNS queries and reads
+// rows back — it never creates or edits any Question, card, or dashboard.
+// Never import this into a client component: the API key must not reach the
+// browser.
 // ===========================================================================
 
-import type { AccountRow } from "./types";
+import { masterSql, timingSql } from "./queries";
+import { labelAgent } from "./types";
+import { mapTier } from "./health";
+import type { AccountRow, HealthScore } from "./types";
 
 export interface MetabaseConfig {
   url: string;
   apiKey: string;
-  databaseId?: number;
-  cards: Record<string, string | undefined>;
+  databaseId: number;
 }
 
 export function readMetabaseConfig(): MetabaseConfig | null {
-  // Primary name matches the Vercel env var (METABASE_BASE_URL); METABASE_URL
-  // kept as a fallback so either name works.
   const url = process.env.METABASE_BASE_URL ?? process.env.METABASE_URL;
   const apiKey = process.env.METABASE_API_KEY;
   if (!url || !apiKey) return null;
   return {
     url: url.replace(/\/+$/, ""),
     apiKey,
-    databaseId: process.env.METABASE_DATABASE_ID
-      ? Number(process.env.METABASE_DATABASE_ID)
-      : undefined,
-    cards: {
-      accounts: process.env.METABASE_CARD_ACCOUNTS,
-      leads: process.env.METABASE_CARD_LEADS,
-      reviews: process.env.METABASE_CARD_REVIEWS,
-      photos: process.env.METABASE_CARD_PHOTOS,
-      rankings: process.env.METABASE_CARD_RANKINGS,
-      impressions: process.env.METABASE_CARD_IMPRESSIONS,
-      gbpMetrics: process.env.METABASE_CARD_GBP_METRICS,
-      health: process.env.METABASE_CARD_HEALTH,
-      products: process.env.METABASE_CARD_PRODUCTS,
-    },
+    databaseId: Number(process.env.METABASE_DATABASE_ID) || 7, // 7 = "Zoca Aurora"
   };
 }
 
-interface MetabaseRow {
-  [key: string]: unknown;
-}
+type Row = Record<string, unknown>;
 
-/** Convert Metabase's { data: { cols, rows } } into an array of objects. */
-function rowsToObjects(json: any): MetabaseRow[] {
-  const cols: Array<{ name: string }> = json?.data?.cols ?? [];
-  const rows: unknown[][] = json?.data?.rows ?? [];
-  return rows.map((row) => {
-    const obj: MetabaseRow = {};
-    cols.forEach((c, i) => {
-      obj[c.name] = row[i];
-    });
-    return obj;
-  });
-}
-
-/** Run a saved Metabase Question and return its rows as objects. */
-export async function queryCard(
-  cfg: MetabaseConfig,
-  cardId: string,
-  parameters: unknown[] = []
-): Promise<MetabaseRow[]> {
-  const res = await fetch(`${cfg.url}/api/card/${cardId}/query`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-KEY": cfg.apiKey,
-    },
-    body: JSON.stringify({ parameters }),
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(
-      `Metabase card ${cardId} query failed: ${res.status} ${res.statusText}`
-    );
-  }
-  return rowsToObjects(await res.json());
-}
-
-/** Run ad-hoc SQL against the configured database. */
-export async function queryNative(
-  cfg: MetabaseConfig,
-  sql: string,
-  templateTags: Record<string, unknown> = {}
-): Promise<MetabaseRow[]> {
-  if (!cfg.databaseId) {
-    throw new Error("METABASE_DATABASE_ID is required for native SQL queries");
-  }
+async function runDataset(cfg: MetabaseConfig, sql: string): Promise<Row[]> {
   const res = await fetch(`${cfg.url}/api/dataset`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-KEY": cfg.apiKey,
-    },
+    headers: { "Content-Type": "application/json", "x-api-key": cfg.apiKey },
     body: JSON.stringify({
       database: cfg.databaseId,
       type: "native",
-      native: { query: sql, "template-tags": templateTags },
+      native: { query: sql },
     }),
     cache: "no-store",
   });
   if (!res.ok) {
-    throw new Error(
-      `Metabase native query failed: ${res.status} ${res.statusText}`
-    );
+    const body = await res.text();
+    throw new Error(`Metabase /api/dataset ${res.status}: ${body.slice(0, 300)}`);
   }
-  return rowsToObjects(await res.json());
+  const json: any = await res.json();
+  if (json?.status === "failed" || json?.error) {
+    throw new Error(`Metabase query failed: ${String(json.error).slice(0, 300)}`);
+  }
+  const cols: Array<{ name: string }> = json?.data?.cols ?? [];
+  const rows: unknown[][] = json?.data?.rows ?? [];
+  return rows.map((r) => {
+    const o: Row = {};
+    cols.forEach((c, i) => (o[c.name] = r[i]));
+    return o;
+  });
 }
 
-/**
- * Build the full list of non-churned accounts from Metabase.
- *
- * NOT YET IMPLEMENTED — needs the real card IDs / SQL. Until the cards are
- * wired, this throws so the API route cleanly falls back to mock data.
- *
- * Implementation plan (see README "Data mapping"):
- *   1. accounts card  -> base list + identity + lifecycle (filter out churned)
- *   2. health card    -> engagement/value/product per entityId -> buildHealth()
- *   3. leads card     -> leadsReceived (exclude test leads) + the three
- *                        received/opened/contacted timestamp averages
- *   4. reviews/photos/rankings/impressions/gbpMetrics cards -> remaining columns
- *   5. products card  -> activeProducts (paid "agents": discovery, front_desk, …)
- *   Join everything by entityId.
- */
-export async function getAccountsFromMetabase(
-  _windowDays: number
-): Promise<AccountRow[]> {
-  const cfg = readMetabaseConfig();
-  if (!cfg) throw new Error("Metabase not configured");
-  if (!cfg.cards.accounts) {
-    throw new Error(
-      "Metabase card IDs not set yet — fill METABASE_CARD_* env vars and complete getAccountsFromMetabase()"
-    );
+const num = (v: unknown): number | null => {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+const int0 = (v: unknown): number => Math.round(num(v) ?? 0);
+const secToMs = (v: unknown): number | null => {
+  const n = num(v);
+  return n == null ? null : Math.round(n * 1000);
+};
+
+function parseProducts(agents: unknown): string[] {
+  if (!agents || typeof agents !== "string") return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const tok of agents.split(",")) {
+    const label = labelAgent(tok);
+    if (label && !seen.has(label)) {
+      seen.add(label);
+      out.push(label);
+    }
   }
-  // TODO: implement the joins described above once card IDs are provided.
-  throw new Error("getAccountsFromMetabase() not implemented — awaiting card IDs");
+  // Discovery first, others after
+  return out.sort((a, b) => (a === "Discovery" ? -1 : b === "Discovery" ? 1 : a.localeCompare(b)));
+}
+
+function toHealth(r: Row): HealthScore {
+  const tierLabel = String(r.health_tier ?? "");
+  const { tier, color } = mapTier(tierLabel);
+  const reason = (r.health_tier_reason_names as string) || null;
+  const action = (r.recommended_action as string) || null;
+  return {
+    engagement: num(r.score_engagement),
+    value: num(r.score_value_realization),
+    product: num(r.score_product_stability),
+    composite: num(r.composite_health_score),
+    tier,
+    color,
+    tierLabel,
+    reason,
+    recommendedAction: action,
+  };
+}
+
+export async function getAccountsFromMetabase(windowDays: number): Promise<AccountRow[]> {
+  const cfg = readMetabaseConfig();
+  if (!cfg) throw new Error("Metabase not configured (METABASE_BASE_URL / METABASE_API_KEY)");
+
+  const [master, timing] = await Promise.all([
+    runDataset(cfg, masterSql(windowDays)),
+    runDataset(cfg, timingSql()),
+  ]);
+
+  const timingByEntity = new Map<string, Row>();
+  for (const t of timing) timingByEntity.set(String(t.entity_id), t);
+
+  return master.map((r): AccountRow => {
+    const id = String(r.entity_id);
+    const t = timingByEntity.get(id);
+    return {
+      entityId: id,
+      name: (r.gbp_title as string) || "(unnamed)",
+      city: (r.city as string) || null,
+      state: (r.state as string) || null,
+      accountManager: (r.am_name as string) || null,
+      health: toHealth(r),
+      mrr: num(r.total_mrr),
+      leadsReceived: int0(r.leads_received),
+      reviewsReceived: int0(r.reviews_received),
+      photosUploaded: int0(r.photos_uploaded),
+      profileClicks: int0(r.profile_clicks),
+      websiteClicks: int0(r.website_clicks),
+      bookOnlineClicks: r.book_online_active ? int0(r.book_online_clicks) : null,
+      bookOnlineActive: r.book_online_active === true,
+      keywordsTracked: num(r.keywords_tracked),
+      keywordsTop3Pct: num(r.keywords_top3_pct),
+      avgCurrentRank: num(r.avg_current_rank),
+      keywordImpressions: int0(r.keyword_impressions),
+      avgReceivedToOpenedMs: t ? secToMs(t.recv_to_open_s) : null,
+      avgReceivedToContactedMs: t ? secToMs(t.recv_to_contact_s) : null,
+      avgOpenedToContactedMs: t ? secToMs(t.open_to_contact_s) : null,
+      activeProducts: parseProducts(r.agents_paid_for),
+    };
+  });
 }
