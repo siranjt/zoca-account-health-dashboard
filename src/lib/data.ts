@@ -2,9 +2,13 @@
 // Data provider — picks the source (mock vs metabase), always excludes churned.
 // ===========================================================================
 
-import { getAccountsFromMetabase } from "./metabase";
-import { getMockAccounts } from "./mock";
-import type { AccountsPayload, AccountRow } from "./types";
+import { getAccountsFromMetabase, getAccountDetailFromMetabase } from "./metabase";
+import { getMockAccounts, getMockAccountDetail } from "./mock";
+import type { AccountDetail, AccountsPayload, AccountRow } from "./types";
+
+function useMetabase(): boolean {
+  return (process.env.DATA_SOURCE ?? "mock").toLowerCase() === "metabase";
+}
 
 export const ALLOWED_WINDOWS = [7, 30, 90, 180];
 
@@ -19,12 +23,11 @@ export async function getAccountsPayload(windowDaysOverride?: number): Promise<A
     windowDaysOverride && ALLOWED_WINDOWS.includes(windowDaysOverride)
       ? windowDaysOverride
       : getWindowDays();
-  const useMetabase = (process.env.DATA_SOURCE ?? "mock").toLowerCase() === "metabase";
 
   let source: "mock" | "metabase" = "mock";
   let accounts: AccountRow[];
 
-  if (useMetabase) {
+  if (useMetabase()) {
     try {
       accounts = await getAccountsFromMetabase(windowDays);
       source = "metabase";
@@ -47,4 +50,22 @@ export async function getAccountsPayload(windowDaysOverride?: number): Promise<A
     windowDays,
     accounts,
   };
+}
+
+export async function getAccountDetail(
+  id: string,
+  windowDaysOverride?: number
+): Promise<AccountDetail> {
+  const windowDays =
+    windowDaysOverride && ALLOWED_WINDOWS.includes(windowDaysOverride)
+      ? windowDaysOverride
+      : getWindowDays();
+  if (useMetabase()) {
+    try {
+      return await getAccountDetailFromMetabase(id, windowDays);
+    } catch (err) {
+      console.error("[data] account detail fetch failed, using mock:", err);
+    }
+  }
+  return getMockAccountDetail(id);
 }

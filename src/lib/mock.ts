@@ -6,7 +6,17 @@
 // ===========================================================================
 
 import { buildHealth } from "./health";
-import type { AccountRow } from "./types";
+import type { AccountDetail, AccountRow } from "./types";
+
+function mkSpark(base: number, seed: string): number[] {
+  let h = 0;
+  for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return Array.from({ length: 12 }, () => {
+    h = (h * 1103515245 + 12345) >>> 0;
+    const f = 0.55 + ((h % 100) / 100) * 0.9;
+    return Math.max(0, Math.round(base * f));
+  });
+}
 
 const HOUR = 3_600_000;
 const MIN = 60_000;
@@ -88,9 +98,60 @@ function toRow(s: Seed): AccountRow {
     keywordImpressions: s.impressions,
     avgReceivedToOpenedMs: s.toOpened, avgReceivedToContactedMs: s.toContacted,
     avgOpenedToContactedMs: s.openedToContacted, activeProducts: s.products,
+    leadsDelta: { cur: s.leads, prev: Math.round(s.leads * 0.8) },
+    reviewsDelta: { cur: s.reviews, prev: Math.max(0, s.reviews - 1) },
+    clicksDelta: { cur: s.profileClicks, prev: Math.round(s.profileClicks * 0.9) },
+    sparkLeads: mkSpark(s.leads, s.entityId),
+    sparkClicks: mkSpark(Math.round(s.profileClicks / 8), s.entityId + "c"),
   };
 }
 
 export function getMockAccounts(): AccountRow[] {
   return SEEDS.filter((s) => !s.churned).map(toRow);
+}
+
+export function getMockAccountDetail(id: string): AccountDetail {
+  const s = SEEDS.find((x) => x.entityId === id) ?? SEEDS[0];
+  const pw = mkSpark(Math.round(s.profileClicks / 4), id);
+  const ww = mkSpark(Math.round(s.websiteClicks / 4), id + "w");
+  const cw = mkSpark(3, id + "call");
+  const dw = mkSpark(15, id + "dir");
+  const lw = mkSpark(Math.round(s.leads / 4), id + "lead");
+  const profileWeekly = pw.map((v, i) => {
+    const d = new Date(2026, 3, 5 + i * 7).toISOString().slice(0, 10);
+    return {
+      wk: d,
+      profileClicks: v,
+      websiteClicks: ww[i],
+      callClicks: cw[i],
+      directions: dw[i],
+      leads: lw[i],
+      totalInteractions: ww[i] + cw[i] + dw[i],
+    };
+  });
+  const lr = mkSpark(Math.round(s.leads / 2), id + "m").map((v, i) => ({
+    mon: `2026-${String(i + 1).padStart(2, "0")}`,
+    leads: v,
+    reviews: mkSpark(Math.max(1, Math.round(s.reviews / 3)), id + "rev")[i],
+  }));
+  const rankTrend = Array.from({ length: 10 }, (_, i) => {
+    const d = new Date(2026, 4, 1 + i * 14).toISOString().slice(0, 10);
+    return {
+      d,
+      top3: s.top3,
+      avgRank: (s.avgRank ?? 15) + Math.sin(i) * 1.5,
+    };
+  });
+  return {
+    entityId: id,
+    profileWeekly,
+    leadsReviews: lr,
+    rankTrend,
+    funnel: {
+      enquiries: s.leads,
+      opened: Math.round(s.leads * 0.4),
+      contacted: Math.round(s.leads * 0.25),
+      booked: Math.round(s.leads * 0.15),
+    },
+  };
 }

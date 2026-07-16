@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { AccountRow, AccountsPayload, HealthColor } from "@/lib/types";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import type { AccountRow, AccountsPayload, Delta, HealthColor } from "@/lib/types";
 import { otherProducts } from "@/lib/types";
 import HealthDot from "./HealthDot";
+import DetailPanel from "./DetailPanel";
+import { Sparkline, DeltaBadge } from "./Sparkline";
+import { VIZ } from "@/lib/theme";
 import {
   formatDate,
   formatDuration,
@@ -50,6 +53,16 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [amFilter, setAmFilter] = useState<string>("all");
   const [onlyMultiProduct, setOnlyMultiProduct] = useState(false);
   const [sort, setSort] = useState<SortState>({ key: "health", dir: "asc" });
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+
+  function toggleExpand(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   async function loadWindow(days: number) {
     if (!WINDOWS.includes(days)) return;
@@ -271,47 +284,63 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
           <tbody>
             {rows.map((a) => {
               const others = otherProducts(a);
+              const isOpen = expanded.has(a.entityId);
               return (
-                <tr key={a.entityId} className="border-t border-slate-100 hover:bg-slate-50">
-                  <td className="px-3 py-2 text-center">
-                    <HealthDot health={a.health} />
-                  </td>
-                  <td className="sticky left-0 bg-white px-3 py-2">
-                    <div className="font-medium text-slate-900">{a.name}</div>
-                    <div className="text-xs text-slate-400">
-                      {[a.city, a.state].filter(Boolean).join(", ")}
-                      {a.accountManager ? ` · AM ${a.accountManager}` : ""}
-                    </div>
-                  </td>
-                  <Num>{formatNumber(a.leadsReceived)}</Num>
-                  <Num>{formatNumber(a.reviewsReceived)}</Num>
-                  <Num>{formatNumber(a.photosUploaded)}</Num>
-                  <Num>{formatNumber(a.profileClicks)}</Num>
-                  <Num>{formatNumber(a.websiteClicks)}</Num>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {a.bookOnlineActive ? (
-                      formatNumber(a.bookOnlineClicks)
-                    ) : (
-                      <span className="text-slate-300" title="Book Online CTA not active on GBP">
-                        n/a
-                      </span>
-                    )}
-                  </td>
-                  <Num>{formatPercent(a.keywordsTop3Pct)}</Num>
-                  <Num>{formatRank(a.avgCurrentRank)}</Num>
-                  <Num>{formatNumber(a.keywordImpressions)}</Num>
-                  <Num>{formatDuration(a.avgReceivedToOpenedMs)}</Num>
-                  <Num>{formatDuration(a.avgReceivedToContactedMs)}</Num>
-                  <Num>{formatDuration(a.avgOpenedToContactedMs)}</Num>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-wrap gap-1">
-                      <Chip label="Discovery" tone="neutral" />
-                      {others.map((p) => (
-                        <Chip key={p} label={p} tone="accent" />
-                      ))}
-                    </div>
-                  </td>
-                </tr>
+                <Fragment key={a.entityId}>
+                  <tr
+                    className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${isOpen ? "bg-slate-50" : ""}`}
+                    onClick={() => toggleExpand(a.entityId)}
+                  >
+                    <td className="px-3 py-2 text-center">
+                      <HealthDot health={a.health} />
+                    </td>
+                    <td className="sticky left-0 bg-white px-3 py-2">
+                      <div className="flex items-start gap-1.5">
+                        <span className="mt-0.5 select-none text-slate-400">{isOpen ? "▾" : "▸"}</span>
+                        <div>
+                          <div className="font-medium text-slate-900">{a.name}</div>
+                          <div className="text-xs text-slate-400">
+                            {[a.city, a.state].filter(Boolean).join(", ")}
+                            {a.accountManager ? ` · AM ${a.accountManager}` : ""}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <MetricCell value={a.leadsReceived} delta={a.leadsDelta} spark={a.sparkLeads} color={VIZ.series[0]} />
+                    <MetricCell value={a.reviewsReceived} delta={a.reviewsDelta} color={VIZ.series[1]} />
+                    <Num>{formatNumber(a.photosUploaded)}</Num>
+                    <MetricCell value={a.profileClicks} delta={a.clicksDelta} spark={a.sparkClicks} color={VIZ.series[0]} />
+                    <Num>{formatNumber(a.websiteClicks)}</Num>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {a.bookOnlineActive ? (
+                        formatNumber(a.bookOnlineClicks)
+                      ) : (
+                        <span className="text-slate-300" title="Book Online CTA not active on GBP">n/a</span>
+                      )}
+                    </td>
+                    <Num>{formatPercent(a.keywordsTop3Pct)}</Num>
+                    <Num>{formatRank(a.avgCurrentRank)}</Num>
+                    <Num>{formatNumber(a.keywordImpressions)}</Num>
+                    <Num>{formatDuration(a.avgReceivedToOpenedMs)}</Num>
+                    <Num>{formatDuration(a.avgReceivedToContactedMs)}</Num>
+                    <Num>{formatDuration(a.avgOpenedToContactedMs)}</Num>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-1">
+                        <Chip label="Discovery" tone="neutral" />
+                        {others.map((p) => (
+                          <Chip key={p} label={p} tone="accent" />
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                  {isOpen && (
+                    <tr>
+                      <td colSpan={15} className="p-0">
+                        <DetailPanel account={a} windowDays={windowDays} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
             {rows.length === 0 && (
@@ -386,6 +415,32 @@ function Th({
 
 function Num({ children }: { children: React.ReactNode }) {
   return <td className="px-3 py-2 text-right tabular-nums text-slate-700">{children}</td>;
+}
+
+function MetricCell({
+  value,
+  delta,
+  spark,
+  color,
+}: {
+  value: number;
+  delta?: Delta;
+  spark?: number[];
+  color?: string;
+}) {
+  return (
+    <td className="px-3 py-2 text-right align-middle">
+      <div className="flex items-center justify-end gap-1.5">
+        <span className="tabular-nums text-slate-700">{formatNumber(value)}</span>
+        {delta && <DeltaBadge delta={delta} />}
+      </div>
+      {spark && spark.length > 1 && (
+        <div className="mt-0.5 flex justify-end">
+          <Sparkline data={spark} color={color} />
+        </div>
+      )}
+    </td>
+  );
 }
 
 function Chip({ label, tone }: { label: string; tone: "neutral" | "accent" }) {

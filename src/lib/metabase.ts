@@ -8,10 +8,18 @@
 // browser.
 // ===========================================================================
 
-import { masterSql, timingSql } from "./queries";
+import {
+  masterSql,
+  timingSql,
+  trendsSql,
+  detailProfileWeeklySql,
+  detailLeadsReviewsMonthlySql,
+  detailRankTrendSql,
+  detailFunnelSql,
+} from "./queries";
 import { labelAgent } from "./types";
 import { mapTier } from "./health";
-import type { AccountRow, HealthScore } from "./types";
+import type { AccountDetail, AccountRow, HealthScore } from "./types";
 
 export interface MetabaseConfig {
   url: string;
@@ -108,17 +116,21 @@ export async function getAccountsFromMetabase(windowDays: number): Promise<Accou
   const cfg = readMetabaseConfig();
   if (!cfg) throw new Error("Metabase not configured (METABASE_BASE_URL / METABASE_API_KEY)");
 
-  const [master, timing] = await Promise.all([
+  const [master, timing, trends] = await Promise.all([
     runDataset(cfg, masterSql(windowDays)),
     runDataset(cfg, timingSql()),
+    runDataset(cfg, trendsSql(windowDays)),
   ]);
 
   const timingByEntity = new Map<string, Row>();
   for (const t of timing) timingByEntity.set(String(t.entity_id), t);
+  const trendsByEntity = new Map<string, Row>();
+  for (const t of trends) trendsByEntity.set(String(t.entity_id), t);
 
   return master.map((r): AccountRow => {
     const id = String(r.entity_id);
     const t = timingByEntity.get(id);
+    const tr = trendsByEntity.get(id);
     return {
       entityId: id,
       name: (r.gbp_title as string) || "(unnamed)",
@@ -142,6 +154,68 @@ export async function getAccountsFromMetabase(windowDays: number): Promise<Accou
       avgReceivedToContactedMs: t ? secToMs(t.recv_to_contact_s) : null,
       avgOpenedToContactedMs: t ? secToMs(t.open_to_contact_s) : null,
       activeProducts: parseProducts(r.agents_paid_for),
+      leadsDelta: tr ? { cur: int0(tr.cur_leads), prev: int0(tr.prev_leads) } : undefined,
+      reviewsDelta: tr ? { cur: int0(tr.cur_reviews), prev: int0(tr.prev_reviews) } : undefined,
+      clicksDelta: tr ? { cur: int0(tr.cur_clicks), prev: int0(tr.prev_clicks) } : undefined,
+      sparkLeads: tr ? parseSpark(tr.leads_spark) : [],
+      sparkClicks: tr ? parseSpark(tr.clicks_spark) : [],
     };
   });
+}
+
+function parseSpark(v: unknown): number[] {
+  if (!v) return [];
+  let arr: unknown = v;
+  if (typeof v === "string") {
+    try {
+      arr = JSON.parse(v);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .map((o) => Number((o as { c?: unknown })?.c ?? 0))
+    .filter((n) => Number.isFinite(n));
+}
+
+export async function getAccountDetailFromMetabase(
+  id: string,
+  windowDays: number
+): Promise<AccountDetail> {
+  const cfg = readMetabaseConfig();
+  if (!cfg) throw new Error("Metabase not configured");
+  const [pw, lr, rt, fn] = await Promise.all([
+    runDataset(cfg, detailProfileWeeklySql(id)),
+    runDataset(cfg, detailLeadsReviewsMonthlySql(id)),
+    runDataset(cfg, detailRankTrendSql(id)),
+    runDataset(cfg, detailFunnelSql(id, Math.max(windowDays, 90))),
+  ]);
+  const f = fn[0] ?? {};
+  return {
+    entityId: id,
+    profileWeekly: pw.map((r) => ({
+      wk: String(r.wk),
+      profileClicks: int0(r.profile_clicks),
+      websiteClicks: int0(r.website_clicks),
+      callClicks: int0(r.call_clicks),
+      directions: int0(r.directions),
+      leads: int0(r.leads),
+      totalInteractions: int0(r.total_interactions),
+    })),
+    leadsReviews: lr.map((r) => ({
+      mon: String(r.mon),
+      leads: int0(r.leads),
+      reviews: int0(r.reviews),
+    })),
+    rankTrend: rt
+      .map((r) => ({ d: String(r.d), top3: num(r.top3), avgRank: num(r.avg_rank) }))
+      .reverse(),
+    funnel: {
+      enquiries: int0(f.enquiries),
+      opened: int0(f.opened),
+      contacted: int0(f.contacted),
+      booked: int0(f.booked),
+    },
+  };
 }

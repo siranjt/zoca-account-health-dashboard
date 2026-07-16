@@ -142,3 +142,91 @@ SELECT entity_id,
 FROM j
 GROUP BY entity_id`;
 }
+
+// ===========================================================================
+// TRENDS (all-accounts): current-vs-previous deltas + 12-week sparklines.
+// One query, 831 rows, ~2s. Powers the in-row sparklines and ▲/▼ arrows.
+// ===========================================================================
+export function trendsSql(windowDays: number): string {
+  const w = `interval '${windowDays} days'`;
+  const w2 = `interval '${windowDays * 2} days'`;
+  const PC = "m.desktop_map_clicks+m.desktop_search_clicks+m.mobile_map_clicks+m.mobile_search_clicks";
+  return `
+WITH
+lc AS (SELECT entity_id, COUNT(*) c FROM website.booking_enquiries WHERE source='WEBSITE' AND is_test_lead=false AND created_at>=now()-${w} GROUP BY 1),
+lp AS (SELECT entity_id, COUNT(*) c FROM website.booking_enquiries WHERE source='WEBSITE' AND is_test_lead=false AND created_at>=now()-${w2} AND created_at<now()-${w} GROUP BY 1),
+rc AS (SELECT entity_id, COUNT(*) c FROM reviews.reviews WHERE is_deleted=false AND review_time>=now()-${w} GROUP BY 1),
+rp AS (SELECT entity_id, COUNT(*) c FROM reviews.reviews WHERE is_deleted=false AND review_time>=now()-${w2} AND review_time<now()-${w} GROUP BY 1),
+pc AS (SELECT gl.entity_id, SUM(${PC}) c FROM gbp.metrics m JOIN gbp.locations gl ON gl.name=m.location_name WHERE m.metrics_timestamp>=now()-${w} GROUP BY 1),
+pp AS (SELECT gl.entity_id, SUM(${PC}) c FROM gbp.metrics m JOIN gbp.locations gl ON gl.name=m.location_name WHERE m.metrics_timestamp>=now()-${w2} AND m.metrics_timestamp<now()-${w} GROUP BY 1),
+lspark AS (SELECT entity_id, json_agg(json_build_object('w',to_char(wk,'YYYY-MM-DD'),'c',c) ORDER BY wk) s
+  FROM (SELECT entity_id, date_trunc('week',created_at)::date wk, COUNT(*) c FROM website.booking_enquiries
+        WHERE source='WEBSITE' AND is_test_lead=false AND created_at>=now()-interval '84 days' GROUP BY 1,2) x GROUP BY 1),
+pspark AS (SELECT entity_id, json_agg(json_build_object('w',to_char(wk,'YYYY-MM-DD'),'c',c) ORDER BY wk) s
+  FROM (SELECT gl.entity_id, date_trunc('week',m.metrics_timestamp)::date wk, SUM(${PC}) c FROM gbp.metrics m
+        JOIN gbp.locations gl ON gl.name=m.location_name WHERE m.metrics_timestamp>=now()-interval '84 days' GROUP BY 1,2) y GROUP BY 1)
+SELECT hs.entity_id,
+  COALESCE(lc.c,0) cur_leads, COALESCE(lp.c,0) prev_leads,
+  COALESCE(rc.c,0) cur_reviews, COALESCE(rp.c,0) prev_reviews,
+  COALESCE(pc.c,0) cur_clicks, COALESCE(pp.c,0) prev_clicks,
+  lspark.s leads_spark, pspark.s clicks_spark
+FROM cx.health_score hs
+LEFT JOIN lc USING(entity_id) LEFT JOIN lp USING(entity_id)
+LEFT JOIN rc USING(entity_id) LEFT JOIN rp USING(entity_id)
+LEFT JOIN pc USING(entity_id) LEFT JOIN pp USING(entity_id)
+LEFT JOIN lspark USING(entity_id) LEFT JOIN pspark USING(entity_id)`;
+}
+
+// ===========================================================================
+// DETAIL (one account) — lazy-loaded when a row is expanded.
+// ===========================================================================
+const PCX = "m.desktop_map_clicks+m.desktop_search_clicks+m.mobile_map_clicks+m.mobile_search_clicks";
+
+export function detailProfileWeeklySql(id: string): string {
+  return `
+WITH g AS (SELECT date_trunc('week',m.metrics_timestamp)::date wk,
+  SUM(m.website_clicks) wc, SUM(m.call_clicks) cc, SUM(m.business_direction_requests) dc, SUM(${PCX}) pc
+  FROM gbp.metrics m JOIN gbp.locations gl ON gl.name=m.location_name
+  WHERE gl.entity_id='${id}'::uuid AND m.metrics_timestamp>=now()-interval '26 weeks' GROUP BY 1),
+l AS (SELECT date_trunc('week',created_at)::date wk, COUNT(*) leads FROM website.booking_enquiries
+  WHERE entity_id='${id}'::uuid AND source='WEBSITE' AND is_test_lead=false AND created_at>=now()-interval '26 weeks' GROUP BY 1)
+SELECT to_char(COALESCE(g.wk,l.wk),'YYYY-MM-DD') wk,
+  COALESCE(g.pc,0) profile_clicks, COALESCE(g.wc,0) website_clicks, COALESCE(g.cc,0) call_clicks,
+  COALESCE(g.dc,0) directions, COALESCE(l.leads,0) leads,
+  COALESCE(g.wc,0)+COALESCE(g.cc,0)+COALESCE(g.dc,0) total_interactions
+FROM g FULL JOIN l ON g.wk=l.wk ORDER BY 1`;
+}
+
+export function detailLeadsReviewsMonthlySql(id: string): string {
+  return `
+WITH l AS (SELECT date_trunc('month',created_at)::date m, COUNT(*) leads FROM website.booking_enquiries
+  WHERE entity_id='${id}'::uuid AND source='WEBSITE' AND is_test_lead=false AND created_at>=now()-interval '12 months' GROUP BY 1),
+r AS (SELECT date_trunc('month',review_time)::date m, COUNT(*) reviews FROM reviews.reviews
+  WHERE entity_id='${id}'::uuid AND is_deleted=false AND review_time>=now()-interval '12 months' GROUP BY 1)
+SELECT to_char(COALESCE(l.m,r.m),'YYYY-MM') mon, COALESCE(l.leads,0) leads, COALESCE(r.reviews,0) reviews
+FROM l FULL JOIN r ON l.m=r.m ORDER BY 1`;
+}
+
+export function detailRankTrendSql(id: string): string {
+  return `
+SELECT to_char(dateval,'YYYY-MM-DD') d,
+  ROUND((100.0*COUNT(*) FILTER (WHERE avg_rank<=3)/NULLIF(COUNT(*),0))::numeric,1) top3,
+  ROUND(AVG(avg_rank)::numeric,1) avg_rank
+FROM local_seo.rank WHERE entity_id='${id}'::uuid AND is_active
+GROUP BY dateval ORDER BY dateval DESC LIMIT 16`;
+}
+
+export function detailFunnelSql(id: string, windowDays: number): string {
+  const w = `interval '${windowDays} days'`;
+  return `
+WITH be AS (SELECT id AS enquiry_id, status, created_at FROM website.booking_enquiries
+  WHERE entity_id='${id}'::uuid AND source='WEBSITE' AND is_test_lead=false AND created_at>=now()-${w}),
+opened AS (SELECT DISTINCT lead_id FROM mixpanelzocaappdata.export WHERE event='Leads-View-Chat' AND lead_id IS NOT NULL),
+contacted AS (SELECT DISTINCT enquiry_id FROM clients.communication_logs WHERE type IN ('SMS','CALL'))
+SELECT
+  COUNT(*) enquiries,
+  COUNT(*) FILTER (WHERE be.enquiry_id::text IN (SELECT lead_id::text FROM opened)) opened,
+  COUNT(*) FILTER (WHERE be.enquiry_id::text IN (SELECT enquiry_id::text FROM contacted)) contacted,
+  COUNT(*) FILTER (WHERE be.status='BOOKED') booked
+FROM be`;
+}

@@ -67,6 +67,36 @@ export interface AccountRow {
 
   /** display labels of active products, incl. "Discovery" */
   activeProducts: string[];
+
+  // --- trend cues (current vs previous window + 12-week sparklines) ---
+  leadsDelta?: Delta;
+  reviewsDelta?: Delta;
+  clicksDelta?: Delta;
+  sparkLeads?: number[];
+  sparkClicks?: number[];
+}
+
+/** current-period value vs the immediately-preceding period. */
+export interface Delta {
+  cur: number;
+  prev: number;
+}
+
+/** Lazy-loaded per-account time series for the expanded detail panel. */
+export interface AccountDetail {
+  entityId: string;
+  profileWeekly: {
+    wk: string;
+    profileClicks: number;
+    websiteClicks: number;
+    callClicks: number;
+    directions: number;
+    leads: number;
+    totalInteractions: number;
+  }[];
+  leadsReviews: { mon: string; leads: number; reviews: number }[];
+  rankTrend: { d: string; top3: number | null; avgRank: number | null }[];
+  funnel: { enquiries: number; opened: number; contacted: number; booked: number };
 }
 
 export interface AccountsPayload {
