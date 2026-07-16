@@ -103,6 +103,10 @@ function toRow(s: Seed): AccountRow {
     clicksDelta: { cur: s.profileClicks, prev: Math.round(s.profileClicks * 0.9) },
     sparkLeads: mkSpark(s.leads, s.entityId),
     sparkClicks: mkSpark(Math.round(s.profileClicks / 8), s.entityId + "c"),
+    daysToInvoice: 30 - (s.leads % 30),
+    daysOverdue: s.mrr === 0 ? 12 : null,
+    failedPayments: s.leads % 3,
+    tenureDays: 60 + s.leads * 5,
   };
 }
 

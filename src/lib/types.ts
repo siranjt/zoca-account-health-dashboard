@@ -61,6 +61,12 @@ export interface AccountRow {
   avgCurrentRank: number | null;
   keywordImpressions: number;
 
+  // --- payments / lifecycle ---
+  daysToInvoice: number | null; // days until next invoice generated (negative = overdue cycle)
+  daysOverdue: number | null; // days the oldest unpaid invoice has been overdue
+  failedPayments: number; // count of failed payment attempts (all time)
+  tenureDays: number | null; // days since onboarding (how long with Zoca)
+
   avgReceivedToOpenedMs: number | null;
   avgReceivedToContactedMs: number | null;
   avgOpenedToContactedMs: number | null;
@@ -103,6 +109,9 @@ export interface AccountsPayload {
   generatedAt: string;
   source: "mock" | "metabase";
   windowDays: number;
+  from: string; // ISO — start of the metrics window
+  to: string; // ISO — end of the metrics window
+  custom: boolean; // true when a custom date range is in effect
   accounts: AccountRow[];
 }
 

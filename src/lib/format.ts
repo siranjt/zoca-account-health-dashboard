@@ -31,6 +31,26 @@ export function formatRank(n: number | null): string {
   return n.toFixed(1);
 }
 
+export function formatDays(n: number | null): string {
+  if (n == null) return "—";
+  return `${n}d`;
+}
+
+export function formatTenure(days: number | null): string {
+  if (days == null) return "—";
+  if (days < 60) return `${days}d`;
+  const months = Math.round(days / 30);
+  if (months < 24) return `${months} mo`;
+  return `${(days / 365).toFixed(1)} yr`;
+}
+
+/** short "Jul 9" style for range labels */
+export function formatShort(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 export function formatDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);

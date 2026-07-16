@@ -112,14 +112,20 @@ function toHealth(r: Row): HealthScore {
   };
 }
 
-export async function getAccountsFromMetabase(windowDays: number): Promise<AccountRow[]> {
+export interface MbRange {
+  from: string;
+  to: string;
+  days: number;
+}
+
+export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<AccountRow[]> {
   const cfg = readMetabaseConfig();
   if (!cfg) throw new Error("Metabase not configured (METABASE_BASE_URL / METABASE_API_KEY)");
 
   const [master, timing, trends] = await Promise.all([
-    runDataset(cfg, masterSql(windowDays)),
+    runDataset(cfg, masterSql(rangeArg.from, rangeArg.to)),
     runDataset(cfg, timingSql()),
-    runDataset(cfg, trendsSql(windowDays)),
+    runDataset(cfg, trendsSql(rangeArg.from, rangeArg.to, rangeArg.days)),
   ]);
 
   const timingByEntity = new Map<string, Row>();
@@ -150,6 +156,10 @@ export async function getAccountsFromMetabase(windowDays: number): Promise<Accou
       keywordsTop3Pct: num(r.keywords_top3_pct),
       avgCurrentRank: num(r.avg_current_rank),
       keywordImpressions: int0(r.keyword_impressions),
+      daysToInvoice: num(r.days_to_invoice),
+      daysOverdue: num(r.days_overdue),
+      failedPayments: int0(r.failed_payments),
+      tenureDays: num(r.tenure_days),
       avgReceivedToOpenedMs: t ? secToMs(t.recv_to_open_s) : null,
       avgReceivedToContactedMs: t ? secToMs(t.recv_to_contact_s) : null,
       avgOpenedToContactedMs: t ? secToMs(t.open_to_contact_s) : null,

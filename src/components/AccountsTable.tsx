@@ -9,10 +9,13 @@ import { Sparkline, DeltaBadge } from "./Sparkline";
 import { VIZ } from "@/lib/theme";
 import {
   formatDate,
+  formatDays,
   formatDuration,
   formatNumber,
   formatPercent,
   formatRank,
+  formatShort,
+  formatTenure,
 } from "@/lib/format";
 
 type SortKey =
@@ -30,6 +33,10 @@ type SortKey =
   | "avgReceivedToOpenedMs"
   | "avgReceivedToContactedMs"
   | "avgOpenedToContactedMs"
+  | "daysToInvoice"
+  | "daysOverdue"
+  | "failedPayments"
+  | "tenureDays"
   | "otherProducts";
 
 interface SortState {
@@ -47,6 +54,12 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [source, setSource] = useState(initial.source);
   const [generatedAt, setGeneratedAt] = useState(initial.generatedAt);
   const [loading, setLoading] = useState(false);
+  const [from, setFrom] = useState(initial.from);
+  const [to, setTo] = useState(initial.to);
+  const [custom, setCustom] = useState(initial.custom);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [dateFrom, setDateFrom] = useState(() => initial.from.slice(0, 10));
+  const [dateTo, setDateTo] = useState(() => initial.to.slice(0, 10));
 
   const [query, setQuery] = useState("");
   const [colorFilter, setColorFilter] = useState<"all" | HealthColor>("all");
@@ -65,22 +78,40 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     });
   }
 
-  async function loadWindow(days: number) {
-    if (!WINDOWS.includes(days)) return;
-    setWindowDays(days);
+  async function loadRange(params: { window?: number; from?: string; to?: string }) {
     setLoading(true);
     try {
-      const res = await fetch(`/api/accounts?window=${days}`, { cache: "no-store" });
+      const qs = new URLSearchParams();
+      if (params.from && params.to) {
+        qs.set("from", params.from);
+        qs.set("to", params.to);
+      } else if (params.window) {
+        qs.set("window", String(params.window));
+      }
+      const res = await fetch(`/api/accounts?${qs.toString()}`, { cache: "no-store" });
       const p = await res.json();
       setAccounts(p.accounts);
       setWindowDays(p.windowDays);
       setSource(p.source);
       setGeneratedAt(p.generatedAt);
+      setFrom(p.from);
+      setTo(p.to);
+      setCustom(p.custom);
     } catch {
       /* keep existing data on error */
     } finally {
       setLoading(false);
     }
+  }
+  function loadWindow(days: number) {
+    if (!WINDOWS.includes(days)) return;
+    setPickerOpen(false);
+    loadRange({ window: days });
+  }
+  function applyCustom() {
+    if (!dateFrom || !dateTo || dateFrom > dateTo) return;
+    setPickerOpen(false);
+    loadRange({ from: dateFrom, to: dateTo });
   }
 
   // restore persisted view state
@@ -95,8 +126,12 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
         if (s.onlyMultiProduct != null) setOnlyMultiProduct(s.onlyMultiProduct);
         if (s.onlyDeclining != null) setOnlyDeclining(s.onlyDeclining);
         if (s.sort) setSort(s.sort);
-        if (s.windowDays && WINDOWS.includes(s.windowDays) && s.windowDays !== initial.windowDays) {
-          loadWindow(s.windowDays);
+        if (s.custom && s.dateFrom && s.dateTo) {
+          setDateFrom(s.dateFrom);
+          setDateTo(s.dateTo);
+          loadRange({ from: s.dateFrom, to: s.dateTo });
+        } else if (s.windowDays && WINDOWS.includes(s.windowDays) && s.windowDays !== initial.windowDays) {
+          loadRange({ window: s.windowDays });
         }
       }
     } catch {
@@ -109,12 +144,12 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     try {
       localStorage.setItem(
         LS_KEY,
-        JSON.stringify({ query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, sort, windowDays })
+        JSON.stringify({ query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, sort, windowDays, custom, dateFrom, dateTo })
       );
     } catch {
       /* ignore */
     }
-  }, [query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, sort, windowDays]);
+  }, [query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, sort, windowDays, custom, dateFrom, dateTo]);
 
   const managers = useMemo(() => {
     const set = new Set<string>();
@@ -161,7 +196,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   }, [rows]);
 
   function exportCsv() {
-    const cols = ["Business", "City", "State", "AM", "Health", "Composite", "Leads", "Reviews", "Photos", "ProfileClicks", "WebsiteClicks", "BookOnline", "KWTracked", "Top3%", "AvgRank", "Impressions", "Products"];
+    const cols = ["Business", "City", "State", "AM", "Health", "Composite", "Leads", "Reviews", "Photos", "ProfileClicks", "WebsiteClicks", "BookOnline", "KWTracked", "Top3%", "AvgRank", "Impressions", "DaysToInvoice", "DaysOverdue", "MissedPayments", "TenureDays", "Products"];
     const cell = (v: unknown) => {
       const s = v == null ? "" : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -172,7 +207,9 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
         a.name, a.city, a.state, a.accountManager, a.health.tierLabel, a.health.composite,
         a.leadsReceived, a.reviewsReceived, a.photosUploaded, a.profileClicks, a.websiteClicks,
         a.bookOnlineActive ? a.bookOnlineClicks : "n/a", a.keywordsTracked, a.keywordsTop3Pct,
-        a.avgCurrentRank, a.keywordImpressions, a.activeProducts.join(" | "),
+        a.avgCurrentRank, a.keywordImpressions,
+        a.daysToInvoice, a.daysOverdue, a.failedPayments, a.tenureDays,
+        a.activeProducts.join(" | "),
       ].map(cell).join(","));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -196,25 +233,47 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500">
         <span>{accounts.length} active accounts</span>
-        <span>· metrics over last</span>
-        <div
-          className="inline-flex overflow-hidden rounded-md border border-slate-300"
-          title="Window applies to Leads, Reviews, Profile/Website/Book-Online clicks. Photos, rankings, impressions and the health marker are not windowed."
-        >
-          {WINDOWS.map((d) => (
+        <span>· metrics {custom ? "from" : "over last"}</span>
+        <div className="relative inline-flex items-center">
+          <div
+            className="inline-flex overflow-hidden rounded-md border border-slate-300"
+            title="Window applies to Leads, Reviews, Photos (uploads) and clicks. Rankings, impressions, payments and the health marker reflect current state."
+          >
+            {WINDOWS.map((d) => (
+              <button
+                key={d}
+                onClick={() => loadWindow(d)}
+                disabled={loading}
+                className={`px-2 py-0.5 text-xs font-medium disabled:opacity-60 ${
+                  !custom && windowDays === d ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {d}d
+              </button>
+            ))}
             <button
-              key={d}
-              onClick={() => loadWindow(d)}
+              onClick={() => setPickerOpen((o) => !o)}
               disabled={loading}
-              className={`px-2 py-0.5 text-xs font-medium disabled:opacity-60 ${
-                windowDays === d
-                  ? "bg-slate-800 text-white"
-                  : "bg-white text-slate-600 hover:bg-slate-100"
+              className={`border-l border-slate-300 px-2 py-0.5 text-xs font-medium disabled:opacity-60 ${
+                custom ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-100"
               }`}
             >
-              {d}d
+              {custom ? `${formatShort(from)}–${formatShort(to)}` : "Custom"}
             </button>
-          ))}
+          </div>
+          {pickerOpen && (
+            <div className="absolute left-0 top-7 z-30 flex items-end gap-2 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
+              <label className="text-[11px] text-slate-500">
+                From
+                <input type="date" value={dateFrom} max={dateTo} onChange={(e) => setDateFrom(e.target.value)} className="block rounded border border-slate-300 px-1 py-0.5 text-xs" />
+              </label>
+              <label className="text-[11px] text-slate-500">
+                To
+                <input type="date" value={dateTo} min={dateFrom} onChange={(e) => setDateTo(e.target.value)} className="block rounded border border-slate-300 px-1 py-0.5 text-xs" />
+              </label>
+              <button onClick={applyCustom} className="rounded bg-slate-800 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-700">Apply</button>
+            </div>
+          )}
         </div>
         {source === "metabase" ? (
           <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-700">
@@ -354,6 +413,18 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               <Th onClick={() => toggleSort("avgOpenedToContactedMs")} active={sort} k="avgOpenedToContactedMs" num>
                 Open→Contact
               </Th>
+              <Th onClick={() => toggleSort("daysToInvoice")} active={sort} k="daysToInvoice" num>
+                Next invoice
+              </Th>
+              <Th onClick={() => toggleSort("daysOverdue")} active={sort} k="daysOverdue" num>
+                Overdue
+              </Th>
+              <Th onClick={() => toggleSort("failedPayments")} active={sort} k="failedPayments" num>
+                Missed pmts
+              </Th>
+              <Th onClick={() => toggleSort("tenureDays")} active={sort} k="tenureDays" num>
+                Tenure
+              </Th>
               <Th onClick={() => toggleSort("otherProducts")} active={sort} k="otherProducts">
                 Products
               </Th>
@@ -402,6 +473,26 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
                     <Num>{formatDuration(a.avgReceivedToOpenedMs)}</Num>
                     <Num>{formatDuration(a.avgReceivedToContactedMs)}</Num>
                     <Num>{formatDuration(a.avgOpenedToContactedMs)}</Num>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700" title="Days until the next invoice is generated">
+                      {a.daysToInvoice != null ? formatDays(a.daysToInvoice) : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums" title="Days the oldest unpaid invoice has been overdue">
+                      {a.daysOverdue != null && a.daysOverdue > 0 ? (
+                        <span className="font-semibold text-red-600">{formatDays(a.daysOverdue)}</span>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums" title="Times a payment has failed (all-time)">
+                      {a.failedPayments > 0 ? (
+                        <span className="font-semibold text-red-600">{a.failedPayments}</span>
+                      ) : (
+                        <span className="text-slate-400">0</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700" title="How long the client has been with Zoca">
+                      {formatTenure(a.tenureDays)}
+                    </td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-1">
                         <Chip label="Discovery" tone="neutral" />
@@ -413,7 +504,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={15} className="p-0">
+                      <td colSpan={19} className="p-0">
                         <DetailPanel account={a} windowDays={windowDays} />
                       </td>
                     </tr>
@@ -423,7 +514,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={15} className="px-3 py-10 text-center text-slate-400">
+                <td colSpan={19} className="px-3 py-10 text-center text-slate-400">
                   No accounts match these filters.
                 </td>
               </tr>
