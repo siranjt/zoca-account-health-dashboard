@@ -68,6 +68,12 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [onlyDeclining, setOnlyDeclining] = useState(false);
   const [sort, setSort] = useState<SortState>({ key: "health", dir: "asc" });
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [pop, setPop] = useState<{ x: number; y: number; body: React.ReactNode } | null>(null);
+
+  function openPop(e: React.MouseEvent, body: React.ReactNode) {
+    e.stopPropagation();
+    setPop({ x: e.clientX, y: e.clientY, body });
+  }
 
   function toggleExpand(id: string) {
     setExpanded((prev) => {
@@ -221,6 +227,69 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     URL.revokeObjectURL(url);
   }
 
+  function metricPop(a: AccountRow, key: string): React.ReactNode {
+    const H = (t: string) => <div className="mb-1 text-xs font-medium text-slate-500">{t}</div>;
+    const Big = ({ v, d, s }: { v: React.ReactNode; d?: Delta; s?: number[] }) => (
+      <div>
+        <div className="flex items-baseline gap-2">
+          <span className="text-2xl font-semibold tabular-nums text-slate-900">{v}</span>
+          {d && <DeltaBadge delta={d} />}
+        </div>
+        {s && s.length > 1 && <div className="mt-1"><Sparkline data={s} width={210} height={34} /></div>}
+      </div>
+    );
+    const R = ({ l, v, red }: { l: string; v: React.ReactNode; red?: boolean }) => (
+      <div className="flex justify-between py-0.5 text-xs">
+        <span className="text-slate-500">{l}</span>
+        <span className={`font-medium tabular-nums ${red ? "text-red-600" : "text-slate-800"}`}>{v}</span>
+      </div>
+    );
+    switch (key) {
+      case "leads": return <div className="w-60">{H(`Leads · ${a.name}`)}<Big v={formatNumber(a.leadsReceived)} d={a.leadsDelta} s={a.sparkLeads} />{a.leadsDelta && <div className="mt-1"><R l="Previous period" v={a.leadsDelta.prev} /></div>}</div>;
+      case "reviews": return <div className="w-56">{H("Reviews received")}<Big v={formatNumber(a.reviewsReceived)} d={a.reviewsDelta} />{a.reviewsDelta && <R l="Previous period" v={a.reviewsDelta.prev} />}</div>;
+      case "photos": return <div className="w-56">{H("Photos uploaded")}<Big v={formatNumber(a.photosUploaded)} /><div className="mt-1 text-xs text-slate-400">Uploaded within the selected window.</div></div>;
+      case "profileClicks": return <div className="w-60">{H("Profile clicks")}<Big v={formatNumber(a.profileClicks)} d={a.clicksDelta} s={a.sparkClicks} /></div>;
+      case "websiteClicks": return <div className="w-52">{H("Website clicks")}<Big v={formatNumber(a.websiteClicks)} /></div>;
+      case "bookOnline": return <div className="w-52">{H("Book Online clicks")}<Big v={a.bookOnlineActive ? formatNumber(a.bookOnlineClicks) : "n/a"} />{!a.bookOnlineActive && <div className="mt-1 text-xs text-slate-400">Book-Online CTA not active on GBP.</div>}</div>;
+      case "rank": return <div className="w-56">{H("Keyword rankings")}<R l="Keywords tracked" v={a.keywordsTracked ?? "—"} /><R l="% in top 3" v={a.keywordsTop3Pct != null ? `${a.keywordsTop3Pct}%` : "—"} /><R l="Avg current rank" v={a.avgCurrentRank != null ? `#${a.avgCurrentRank}` : "—"} /><R l="Impressions (mo)" v={formatNumber(a.keywordImpressions)} /></div>;
+      case "impressions": return <div className="w-52">{H("Keyword impressions")}<Big v={formatNumber(a.keywordImpressions)} /><div className="mt-1 text-xs text-slate-400">Latest complete month.</div></div>;
+      case "timing": return <div className="w-56">{H("Lead response time")}<R l="Received → Opened" v={formatDuration(a.avgReceivedToOpenedMs)} /><R l="Received → Contacted" v={formatDuration(a.avgReceivedToContactedMs)} /><R l="Opened → Contacted" v={formatDuration(a.avgOpenedToContactedMs)} /></div>;
+      case "payments": return <div className="w-60">{H(`Payments · ${a.name}`)}<R l="MRR" v={a.mrr != null ? `$${a.mrr}` : "—"} /><R l="Next invoice in" v={a.daysToInvoice != null ? `${a.daysToInvoice}d` : "—"} /><R l="Overdue" v={a.daysOverdue && a.daysOverdue > 0 ? `${a.daysOverdue}d` : "—"} red={!!(a.daysOverdue && a.daysOverdue > 0)} /><R l="Missed payments" v={a.failedPayments} red={a.failedPayments > 0} /><R l="Tenure" v={formatTenure(a.tenureDays)} /></div>;
+      case "health": return (
+        <div className="w-60">
+          {H(`Health · ${a.health.tierLabel}`)}
+          <div className="text-2xl font-semibold tabular-nums">{a.health.composite != null ? a.health.composite.toFixed(0) : "—"}<span className="ml-1 text-xs font-normal text-slate-400">composite</span></div>
+          <div className="mt-1"><R l="Engagement" v={a.health.engagement?.toFixed(0) ?? "—"} /><R l="Value" v={a.health.value?.toFixed(0) ?? "—"} /><R l="Product" v={a.health.product?.toFixed(0) ?? "—"} /></div>
+          {a.health.reason && <div className="mt-1 text-xs text-slate-500">Watch: {a.health.reason}</div>}
+          {a.health.recommendedAction && <div className="mt-1 text-xs text-slate-500">Action: {a.health.recommendedAction}</div>}
+          <button onClick={(e) => { e.stopPropagation(); setPop(null); if (!expanded.has(a.entityId)) toggleExpand(a.entityId); }} className="mt-2 w-full rounded bg-slate-800 px-2 py-1 text-xs font-medium text-white hover:bg-slate-700">Open full charts →</button>
+        </div>
+      );
+      default: return null;
+    }
+  }
+
+  function distro(key: keyof AccountRow, label: string): React.ReactNode {
+    const vals = rows.map((a) => a[key]).filter((v): v is number => typeof v === "number");
+    if (!vals.length) return <div className="w-56 text-xs text-slate-400">No data.</div>;
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const bins = 10, counts = new Array(bins).fill(0), span = max - min || 1;
+    vals.forEach((v) => { counts[Math.min(bins - 1, Math.floor(((v - min) / span) * bins))]++; });
+    const cmax = Math.max(...counts);
+    const sorted = [...vals].sort((x, y) => x - y);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    return (
+      <div className="w-64">
+        <div className="mb-1 text-xs font-medium text-slate-500">{label} · {rows.length} accounts</div>
+        <div className="flex h-16 items-end gap-0.5">
+          {counts.map((c, i) => <div key={i} className="flex-1 rounded-t" style={{ height: `${cmax ? (c / cmax) * 100 : 0}%`, background: "#86b6ef" }} title={`${c} accounts`} />)}
+        </div>
+        <div className="mt-1 flex justify-between text-[10px] text-slate-400"><span>{formatNumber(Math.round(min))}</span><span>{formatNumber(Math.round(max))}</span></div>
+        <div className="mt-1 flex justify-between text-xs"><span className="text-slate-500">Median</span><span className="font-medium tabular-nums">{formatNumber(Math.round(median))}</span></div>
+      </div>
+    );
+  }
+
   function toggleSort(key: SortKey) {
     setSort((prev) =>
       prev.key === key
@@ -294,18 +363,18 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
         <Kpi label={`Reviews · ${windowDays}d`} value={formatNumber(kpi.reviews)} />
         <Kpi label="Avg composite" value={kpi.avgComp != null ? kpi.avgComp.toFixed(1) : "—"} />
         <Kpi
-          label="Health mix"
+          label="Health mix (click to filter)"
           custom={
             <span className="text-base font-semibold tabular-nums">
-              <span style={{ color: "#16a34a" }}>{kpi.green}</span>
+              <button onClick={() => setColorFilter((c) => (c === "green" ? "all" : "green"))} style={{ color: "#16a34a" }} className="hover:underline" title="Filter healthy">{kpi.green}</button>
               <span className="text-slate-300"> / </span>
-              <span style={{ color: "#d97706" }}>{kpi.yellow}</span>
+              <button onClick={() => setColorFilter((c) => (c === "yellow" ? "all" : "yellow"))} style={{ color: "#d97706" }} className="hover:underline" title="Filter monitor">{kpi.yellow}</button>
               <span className="text-slate-300"> / </span>
-              <span style={{ color: "#dc2626" }}>{kpi.red}</span>
+              <button onClick={() => setColorFilter((c) => (c === "red" ? "all" : "red"))} style={{ color: "#dc2626" }} className="hover:underline" title="Filter at-risk">{kpi.red}</button>
             </span>
           }
         />
-        <Kpi label="Leads declining" value={formatNumber(kpi.declining)} alert={kpi.declining > 0} />
+        <Kpi label="Leads declining" value={formatNumber(kpi.declining)} alert={kpi.declining > 0} onClick={() => setOnlyDeclining((v) => !v)} active={onlyDeclining} />
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -360,6 +429,14 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
         >
           ⭳ Export CSV
         </button>
+        {(colorFilter !== "all" || amFilter !== "all" || onlyMultiProduct || onlyDeclining || query) && (
+          <button
+            onClick={() => { setColorFilter("all"); setAmFilter("all"); setOnlyMultiProduct(false); setOnlyDeclining(false); setQuery(""); }}
+            className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
+          >
+            ✕ Clear filters
+          </button>
+        )}
         <span className="ml-auto text-sm text-slate-500">{rows.length} shown</span>
       </div>
 
@@ -377,16 +454,16 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               <Th onClick={() => toggleSort("name")} active={sort} k="name" sticky>
                 Business
               </Th>
-              <Th onClick={() => toggleSort("leadsReceived")} active={sort} k="leadsReceived" num>
+              <Th onClick={() => toggleSort("leadsReceived")} active={sort} k="leadsReceived" num onDistro={(e) => openPop(e, distro("leadsReceived", "Leads"))}>
                 Leads
               </Th>
-              <Th onClick={() => toggleSort("reviewsReceived")} active={sort} k="reviewsReceived" num>
+              <Th onClick={() => toggleSort("reviewsReceived")} active={sort} k="reviewsReceived" num onDistro={(e) => openPop(e, distro("reviewsReceived", "Reviews"))}>
                 Reviews
               </Th>
-              <Th onClick={() => toggleSort("photosUploaded")} active={sort} k="photosUploaded" num>
+              <Th onClick={() => toggleSort("photosUploaded")} active={sort} k="photosUploaded" num onDistro={(e) => openPop(e, distro("photosUploaded", "Photos"))}>
                 Photos
               </Th>
-              <Th onClick={() => toggleSort("profileClicks")} active={sort} k="profileClicks" num>
+              <Th onClick={() => toggleSort("profileClicks")} active={sort} k="profileClicks" num onDistro={(e) => openPop(e, distro("profileClicks", "Profile clicks"))}>
                 Profile clicks
               </Th>
               <Th onClick={() => toggleSort("websiteClicks")} active={sort} k="websiteClicks" num>
@@ -401,7 +478,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               <Th onClick={() => toggleSort("avgCurrentRank")} active={sort} k="avgCurrentRank" num>
                 Avg rank
               </Th>
-              <Th onClick={() => toggleSort("keywordImpressions")} active={sort} k="keywordImpressions" num>
+              <Th onClick={() => toggleSort("keywordImpressions")} active={sort} k="keywordImpressions" num onDistro={(e) => openPop(e, distro("keywordImpressions", "Keyword impressions"))}>
                 KW impr.
               </Th>
               <Th onClick={() => toggleSort("avgReceivedToOpenedMs")} active={sort} k="avgReceivedToOpenedMs" num>
@@ -416,13 +493,13 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               <Th onClick={() => toggleSort("daysToInvoice")} active={sort} k="daysToInvoice" num>
                 Next invoice
               </Th>
-              <Th onClick={() => toggleSort("daysOverdue")} active={sort} k="daysOverdue" num>
+              <Th onClick={() => toggleSort("daysOverdue")} active={sort} k="daysOverdue" num onDistro={(e) => openPop(e, distro("daysOverdue", "Days overdue"))}>
                 Overdue
               </Th>
-              <Th onClick={() => toggleSort("failedPayments")} active={sort} k="failedPayments" num>
+              <Th onClick={() => toggleSort("failedPayments")} active={sort} k="failedPayments" num onDistro={(e) => openPop(e, distro("failedPayments", "Missed payments"))}>
                 Missed pmts
               </Th>
-              <Th onClick={() => toggleSort("tenureDays")} active={sort} k="tenureDays" num>
+              <Th onClick={() => toggleSort("tenureDays")} active={sort} k="tenureDays" num onDistro={(e) => openPop(e, distro("tenureDays", "Tenure (days)"))}>
                 Tenure
               </Th>
               <Th onClick={() => toggleSort("otherProducts")} active={sort} k="otherProducts">
@@ -440,7 +517,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
                     className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${isOpen ? "bg-slate-50" : ""}`}
                     onClick={() => toggleExpand(a.entityId)}
                   >
-                    <td className="px-3 py-2 text-center">
+                    <td className="cursor-pointer px-3 py-2 text-center hover:bg-indigo-50" onClick={(e) => openPop(e, metricPop(a, "health"))} title="Click for health breakdown">
                       <HealthDot health={a.health} />
                     </td>
                     <td className="sticky left-0 bg-white px-3 py-2">
@@ -450,54 +527,67 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
                           <div className="font-medium text-slate-900">{a.name}</div>
                           <div className="text-xs text-slate-400">
                             {[a.city, a.state].filter(Boolean).join(", ")}
-                            {a.accountManager ? ` · AM ${a.accountManager}` : ""}
+                            {a.accountManager ? (
+                              <>
+                                {" · AM "}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setAmFilter(a.accountManager!); }}
+                                  className="underline decoration-dotted underline-offset-2 hover:text-indigo-600"
+                                  title={`Filter to ${a.accountManager}`}
+                                >
+                                  {a.accountManager}
+                                </button>
+                              </>
+                            ) : ""}
                           </div>
                         </div>
                       </div>
                     </td>
-                    <MetricCell value={a.leadsReceived} delta={a.leadsDelta} spark={a.sparkLeads} color={VIZ.series[0]} />
-                    <MetricCell value={a.reviewsReceived} delta={a.reviewsDelta} color={VIZ.series[1]} />
-                    <Num>{formatNumber(a.photosUploaded)}</Num>
-                    <MetricCell value={a.profileClicks} delta={a.clicksDelta} spark={a.sparkClicks} color={VIZ.series[0]} />
-                    <Num>{formatNumber(a.websiteClicks)}</Num>
-                    <td className="px-3 py-2 text-right tabular-nums">
+                    <MetricCell value={a.leadsReceived} delta={a.leadsDelta} spark={a.sparkLeads} color={VIZ.series[0]} onClick={(e) => openPop(e, metricPop(a, "leads"))} />
+                    <MetricCell value={a.reviewsReceived} delta={a.reviewsDelta} color={VIZ.series[1]} onClick={(e) => openPop(e, metricPop(a, "reviews"))} />
+                    <Num onClick={(e) => openPop(e, metricPop(a, "photos"))}>{formatNumber(a.photosUploaded)}</Num>
+                    <MetricCell value={a.profileClicks} delta={a.clicksDelta} spark={a.sparkClicks} color={VIZ.series[0]} onClick={(e) => openPop(e, metricPop(a, "profileClicks"))} />
+                    <Num onClick={(e) => openPop(e, metricPop(a, "websiteClicks"))}>{formatNumber(a.websiteClicks)}</Num>
+                    <td className="cursor-pointer px-3 py-2 text-right tabular-nums hover:bg-indigo-50" onClick={(e) => openPop(e, metricPop(a, "bookOnline"))}>
                       {a.bookOnlineActive ? (
                         formatNumber(a.bookOnlineClicks)
                       ) : (
                         <span className="text-slate-300" title="Book Online CTA not active on GBP">n/a</span>
                       )}
                     </td>
-                    <Num>{formatPercent(a.keywordsTop3Pct)}</Num>
-                    <Num>{formatRank(a.avgCurrentRank)}</Num>
-                    <Num>{formatNumber(a.keywordImpressions)}</Num>
-                    <Num>{formatDuration(a.avgReceivedToOpenedMs)}</Num>
-                    <Num>{formatDuration(a.avgReceivedToContactedMs)}</Num>
-                    <Num>{formatDuration(a.avgOpenedToContactedMs)}</Num>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-700" title="Days until the next invoice is generated">
+                    <Num onClick={(e) => openPop(e, metricPop(a, "rank"))}>{formatPercent(a.keywordsTop3Pct)}</Num>
+                    <Num onClick={(e) => openPop(e, metricPop(a, "rank"))}>{formatRank(a.avgCurrentRank)}</Num>
+                    <Num onClick={(e) => openPop(e, metricPop(a, "impressions"))}>{formatNumber(a.keywordImpressions)}</Num>
+                    <Num onClick={(e) => openPop(e, metricPop(a, "timing"))}>{formatDuration(a.avgReceivedToOpenedMs)}</Num>
+                    <Num onClick={(e) => openPop(e, metricPop(a, "timing"))}>{formatDuration(a.avgReceivedToContactedMs)}</Num>
+                    <Num onClick={(e) => openPop(e, metricPop(a, "timing"))}>{formatDuration(a.avgOpenedToContactedMs)}</Num>
+                    <td className="cursor-pointer px-3 py-2 text-right tabular-nums text-slate-700 hover:bg-indigo-50" onClick={(e) => openPop(e, metricPop(a, "payments"))} title="Click for payment detail">
                       {a.daysToInvoice != null ? formatDays(a.daysToInvoice) : "—"}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums" title="Days the oldest unpaid invoice has been overdue">
+                    <td className="cursor-pointer px-3 py-2 text-right tabular-nums hover:bg-indigo-50" onClick={(e) => openPop(e, metricPop(a, "payments"))}>
                       {a.daysOverdue != null && a.daysOverdue > 0 ? (
                         <span className="font-semibold text-red-600">{formatDays(a.daysOverdue)}</span>
                       ) : (
                         <span className="text-slate-300">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums" title="Times a payment has failed (all-time)">
+                    <td className="cursor-pointer px-3 py-2 text-right tabular-nums hover:bg-indigo-50" onClick={(e) => openPop(e, metricPop(a, "payments"))}>
                       {a.failedPayments > 0 ? (
                         <span className="font-semibold text-red-600">{a.failedPayments}</span>
                       ) : (
                         <span className="text-slate-400">0</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-700" title="How long the client has been with Zoca">
+                    <td className="cursor-pointer px-3 py-2 text-right tabular-nums text-slate-700 hover:bg-indigo-50" onClick={(e) => openPop(e, metricPop(a, "payments"))}>
                       {formatTenure(a.tenureDays)}
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-1">
                         <Chip label="Discovery" tone="neutral" />
                         {others.map((p) => (
-                          <Chip key={p} label={p} tone="accent" />
+                          <button key={p} onClick={(e) => { e.stopPropagation(); setOnlyMultiProduct(true); }} title="Filter to accounts with other products">
+                            <Chip label={p} tone="accent" />
+                          </button>
                         ))}
                       </div>
                     </td>
@@ -522,6 +612,22 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
           </tbody>
         </table>
       </div>
+
+      {pop && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setPop(null)} />
+          <div
+            className="fixed z-50 rounded-lg border border-slate-200 bg-white p-3 shadow-xl"
+            style={{
+              left: Math.min(pop.x + 8, (typeof window !== "undefined" ? window.innerWidth : 1200) - 290),
+              top: Math.min(pop.y + 8, (typeof window !== "undefined" ? window.innerHeight : 800) - 240),
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {pop.body}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -558,6 +664,7 @@ function Th({
   num,
   center,
   sticky,
+  onDistro,
 }: {
   children: React.ReactNode;
   onClick: () => void;
@@ -566,6 +673,7 @@ function Th({
   num?: boolean;
   center?: boolean;
   sticky?: boolean;
+  onDistro?: (e: React.MouseEvent) => void;
 }) {
   const is = active.key === k;
   return (
@@ -578,21 +686,37 @@ function Th({
     >
       {children}
       <span className="ml-1 text-slate-400">{is ? (active.dir === "asc" ? "▲" : "▼") : ""}</span>
+      {onDistro && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onDistro(e); }}
+          className="ml-1 align-middle text-[10px] text-slate-300 hover:text-indigo-600"
+          title="Distribution across accounts"
+        >
+          ▦
+        </button>
+      )}
     </th>
   );
 }
 
-function Kpi({ label, value, custom, alert }: { label: string; value?: React.ReactNode; custom?: React.ReactNode; alert?: boolean }) {
+function Kpi({ label, value, custom, alert, onClick, active }: { label: string; value?: React.ReactNode; custom?: React.ReactNode; alert?: boolean; onClick?: () => void; active?: boolean }) {
   return (
-    <div className={`rounded-lg border bg-white px-3 py-2 ${alert ? "border-red-200" : "border-slate-200"}`}>
+    <div
+      onClick={onClick}
+      className={`rounded-lg border bg-white px-3 py-2 ${onClick ? "cursor-pointer hover:border-indigo-300" : ""} ${active ? "ring-2 ring-indigo-300" : ""} ${alert ? "border-red-200" : "border-slate-200"}`}
+    >
       <div className="text-[11px] uppercase tracking-wide text-slate-400">{label}</div>
       {custom ?? <div className={`text-lg font-semibold tabular-nums ${alert ? "text-red-600" : "text-slate-800"}`}>{value}</div>}
     </div>
   );
 }
 
-function Num({ children }: { children: React.ReactNode }) {
-  return <td className="px-3 py-2 text-right tabular-nums text-slate-700">{children}</td>;
+function Num({ children, onClick }: { children: React.ReactNode; onClick?: (e: React.MouseEvent) => void }) {
+  return (
+    <td onClick={onClick} className={`px-3 py-2 text-right tabular-nums text-slate-700 ${onClick ? "cursor-pointer hover:bg-indigo-50" : ""}`}>
+      {children}
+    </td>
+  );
 }
 
 function MetricCell({
@@ -600,14 +724,16 @@ function MetricCell({
   delta,
   spark,
   color,
+  onClick,
 }: {
   value: number;
   delta?: Delta;
   spark?: number[];
   color?: string;
+  onClick?: (e: React.MouseEvent) => void;
 }) {
   return (
-    <td className="px-3 py-2 text-right align-middle">
+    <td onClick={onClick} className={`px-3 py-2 text-right align-middle ${onClick ? "cursor-pointer hover:bg-indigo-50" : ""}`}>
       <div className="flex items-center justify-end gap-1.5">
         <span className="tabular-nums text-slate-700">{formatNumber(value)}</span>
         {delta && <DeltaBadge delta={delta} />}
