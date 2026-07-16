@@ -52,6 +52,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [colorFilter, setColorFilter] = useState<"all" | HealthColor>("all");
   const [amFilter, setAmFilter] = useState<string>("all");
   const [onlyMultiProduct, setOnlyMultiProduct] = useState(false);
+  const [onlyDeclining, setOnlyDeclining] = useState(false);
   const [sort, setSort] = useState<SortState>({ key: "health", dir: "asc" });
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
@@ -92,6 +93,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
         if (s.colorFilter) setColorFilter(s.colorFilter);
         if (s.amFilter) setAmFilter(s.amFilter);
         if (s.onlyMultiProduct != null) setOnlyMultiProduct(s.onlyMultiProduct);
+        if (s.onlyDeclining != null) setOnlyDeclining(s.onlyDeclining);
         if (s.sort) setSort(s.sort);
         if (s.windowDays && WINDOWS.includes(s.windowDays) && s.windowDays !== initial.windowDays) {
           loadWindow(s.windowDays);
@@ -107,12 +109,12 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     try {
       localStorage.setItem(
         LS_KEY,
-        JSON.stringify({ query, colorFilter, amFilter, onlyMultiProduct, sort, windowDays })
+        JSON.stringify({ query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, sort, windowDays })
       );
     } catch {
       /* ignore */
     }
-  }, [query, colorFilter, amFilter, onlyMultiProduct, sort, windowDays]);
+  }, [query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, sort, windowDays]);
 
   const managers = useMemo(() => {
     const set = new Set<string>();
@@ -135,11 +137,52 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     if (colorFilter !== "all") out = out.filter((a) => a.health.color === colorFilter);
     if (amFilter !== "all") out = out.filter((a) => a.accountManager === amFilter);
     if (onlyMultiProduct) out = out.filter((a) => otherProducts(a).length > 0);
+    if (onlyDeclining) out = out.filter((a) => a.leadsDelta != null && a.leadsDelta.cur < a.leadsDelta.prev);
 
     const dir = sort.dir === "asc" ? 1 : -1;
     out.sort((a, b) => dir * cmp(a, b, sort.key));
     return out;
-  }, [accounts, query, colorFilter, amFilter, onlyMultiProduct, sort]);
+  }, [accounts, query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, sort]);
+
+  const kpi = useMemo(() => {
+    const leads = rows.reduce((s, a) => s + a.leadsReceived, 0);
+    const reviews = rows.reduce((s, a) => s + a.reviewsReceived, 0);
+    const comps = rows.map((a) => a.health.composite).filter((v): v is number => v != null);
+    const avgComp = comps.length ? comps.reduce((s, v) => s + v, 0) / comps.length : null;
+    return {
+      leads,
+      reviews,
+      avgComp,
+      green: rows.filter((a) => a.health.color === "green").length,
+      yellow: rows.filter((a) => a.health.color === "yellow").length,
+      red: rows.filter((a) => a.health.color === "red").length,
+      declining: rows.filter((a) => a.leadsDelta && a.leadsDelta.cur < a.leadsDelta.prev).length,
+    };
+  }, [rows]);
+
+  function exportCsv() {
+    const cols = ["Business", "City", "State", "AM", "Health", "Composite", "Leads", "Reviews", "Photos", "ProfileClicks", "WebsiteClicks", "BookOnline", "KWTracked", "Top3%", "AvgRank", "Impressions", "Products"];
+    const cell = (v: unknown) => {
+      const s = v == null ? "" : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [cols.join(",")];
+    for (const a of rows) {
+      lines.push([
+        a.name, a.city, a.state, a.accountManager, a.health.tierLabel, a.health.composite,
+        a.leadsReceived, a.reviewsReceived, a.photosUploaded, a.profileClicks, a.websiteClicks,
+        a.bookOnlineActive ? a.bookOnlineClicks : "n/a", a.keywordsTracked, a.keywordsTop3Pct,
+        a.avgCurrentRank, a.keywordImpressions, a.activeProducts.join(" | "),
+      ].map(cell).join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `account-health-${windowDays}d.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   function toggleSort(key: SortKey) {
     setSort((prev) =>
@@ -186,6 +229,26 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
         {loading && <span className="text-slate-400">· refreshing…</span>}
       </div>
 
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <Kpi label="Accounts shown" value={formatNumber(rows.length)} />
+        <Kpi label={`Leads · ${windowDays}d`} value={formatNumber(kpi.leads)} />
+        <Kpi label={`Reviews · ${windowDays}d`} value={formatNumber(kpi.reviews)} />
+        <Kpi label="Avg composite" value={kpi.avgComp != null ? kpi.avgComp.toFixed(1) : "—"} />
+        <Kpi
+          label="Health mix"
+          custom={
+            <span className="text-base font-semibold tabular-nums">
+              <span style={{ color: "#16a34a" }}>{kpi.green}</span>
+              <span className="text-slate-300"> / </span>
+              <span style={{ color: "#d97706" }}>{kpi.yellow}</span>
+              <span className="text-slate-300"> / </span>
+              <span style={{ color: "#dc2626" }}>{kpi.red}</span>
+            </span>
+          }
+        />
+        <Kpi label="Leads declining" value={formatNumber(kpi.declining)} alert={kpi.declining > 0} />
+      </div>
+
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <input
           value={query}
@@ -223,6 +286,21 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
           />
           Other products active
         </label>
+        <label className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm">
+          <input
+            type="checkbox"
+            checked={onlyDeclining}
+            onChange={(e) => setOnlyDeclining(e.target.checked)}
+          />
+          Leads declining
+        </label>
+        <button
+          onClick={exportCsv}
+          className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
+          title="Download the current filtered view as CSV"
+        >
+          ⭳ Export CSV
+        </button>
         <span className="ml-auto text-sm text-slate-500">{rows.length} shown</span>
       </div>
 
@@ -410,6 +488,15 @@ function Th({
       {children}
       <span className="ml-1 text-slate-400">{is ? (active.dir === "asc" ? "▲" : "▼") : ""}</span>
     </th>
+  );
+}
+
+function Kpi({ label, value, custom, alert }: { label: string; value?: React.ReactNode; custom?: React.ReactNode; alert?: boolean }) {
+  return (
+    <div className={`rounded-lg border bg-white px-3 py-2 ${alert ? "border-red-200" : "border-slate-200"}`}>
+      <div className="text-[11px] uppercase tracking-wide text-slate-400">{label}</div>
+      {custom ?? <div className={`text-lg font-semibold tabular-nums ${alert ? "text-red-600" : "text-slate-800"}`}>{value}</div>}
+    </div>
   );
 }
 
