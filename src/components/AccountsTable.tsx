@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { AccountRow, HealthColor } from "@/lib/types";
+import type { AccountRow, AccountsPayload, HealthColor } from "@/lib/types";
 import { otherProducts } from "@/lib/types";
 import HealthDot from "./HealthDot";
 import {
+  formatDate,
   formatDuration,
   formatNumber,
   formatPercent,
@@ -35,13 +36,38 @@ interface SortState {
 
 const HEALTH_RANK: Record<HealthColor, number> = { red: 0, yellow: 1, green: 2 };
 const LS_KEY = "zoca-ahd-view-v1";
+const WINDOWS = [7, 30, 90, 180];
 
-export default function AccountsTable({ accounts }: { accounts: AccountRow[] }) {
+export default function AccountsTable({ initial }: { initial: AccountsPayload }) {
+  const [accounts, setAccounts] = useState<AccountRow[]>(initial.accounts);
+  const [windowDays, setWindowDays] = useState<number>(initial.windowDays);
+  const [source, setSource] = useState(initial.source);
+  const [generatedAt, setGeneratedAt] = useState(initial.generatedAt);
+  const [loading, setLoading] = useState(false);
+
   const [query, setQuery] = useState("");
   const [colorFilter, setColorFilter] = useState<"all" | HealthColor>("all");
   const [amFilter, setAmFilter] = useState<string>("all");
   const [onlyMultiProduct, setOnlyMultiProduct] = useState(false);
   const [sort, setSort] = useState<SortState>({ key: "health", dir: "asc" });
+
+  async function loadWindow(days: number) {
+    if (!WINDOWS.includes(days)) return;
+    setWindowDays(days);
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/accounts?window=${days}`, { cache: "no-store" });
+      const p = await res.json();
+      setAccounts(p.accounts);
+      setWindowDays(p.windowDays);
+      setSource(p.source);
+      setGeneratedAt(p.generatedAt);
+    } catch {
+      /* keep existing data on error */
+    } finally {
+      setLoading(false);
+    }
+  }
 
   // restore persisted view state
   useEffect(() => {
@@ -54,22 +80,26 @@ export default function AccountsTable({ accounts }: { accounts: AccountRow[] }) 
         if (s.amFilter) setAmFilter(s.amFilter);
         if (s.onlyMultiProduct != null) setOnlyMultiProduct(s.onlyMultiProduct);
         if (s.sort) setSort(s.sort);
+        if (s.windowDays && WINDOWS.includes(s.windowDays) && s.windowDays !== initial.windowDays) {
+          loadWindow(s.windowDays);
+        }
       }
     } catch {
       /* ignore */
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     try {
       localStorage.setItem(
         LS_KEY,
-        JSON.stringify({ query, colorFilter, amFilter, onlyMultiProduct, sort })
+        JSON.stringify({ query, colorFilter, amFilter, onlyMultiProduct, sort, windowDays })
       );
     } catch {
       /* ignore */
     }
-  }, [query, colorFilter, amFilter, onlyMultiProduct, sort]);
+  }, [query, colorFilter, amFilter, onlyMultiProduct, sort, windowDays]);
 
   const managers = useMemo(() => {
     const set = new Set<string>();
@@ -108,6 +138,41 @@ export default function AccountsTable({ accounts }: { accounts: AccountRow[] }) 
 
   return (
     <div>
+      <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500">
+        <span>{accounts.length} active accounts</span>
+        <span>· metrics over last</span>
+        <div
+          className="inline-flex overflow-hidden rounded-md border border-slate-300"
+          title="Window applies to Leads, Reviews, Profile/Website/Book-Online clicks. Photos, rankings, impressions and the health marker are not windowed."
+        >
+          {WINDOWS.map((d) => (
+            <button
+              key={d}
+              onClick={() => loadWindow(d)}
+              disabled={loading}
+              className={`px-2 py-0.5 text-xs font-medium disabled:opacity-60 ${
+                windowDays === d
+                  ? "bg-slate-800 text-white"
+                  : "bg-white text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              {d}d
+            </button>
+          ))}
+        </div>
+        {source === "metabase" ? (
+          <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-700">
+            live: Metabase
+          </span>
+        ) : (
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700">
+            sample data
+          </span>
+        )}
+        <span>· generated {formatDate(generatedAt)}</span>
+        {loading && <span className="text-slate-400">· refreshing…</span>}
+      </div>
+
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <input
           value={query}
@@ -148,7 +213,11 @@ export default function AccountsTable({ accounts }: { accounts: AccountRow[] }) 
         <span className="ml-auto text-sm text-slate-500">{rows.length} shown</span>
       </div>
 
-      <div className="table-scroll rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div
+        className={`table-scroll rounded-lg border border-slate-200 bg-white shadow-sm transition-opacity ${
+          loading ? "pointer-events-none opacity-60" : ""
+        }`}
+      >
         <table className="w-full border-collapse text-sm">
           <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
