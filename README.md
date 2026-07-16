@@ -89,7 +89,7 @@ Tier → color (defaults, chosen so 66.81 = Monitor/yellow):
 
 ## Wiring Metabase (`src/lib/metabase.ts`)
 
-1. Set `METABASE_URL`, `METABASE_API_KEY`, `METABASE_DATABASE_ID`.
+1. Set `METABASE_BASE_URL`, `METABASE_API_KEY`, `METABASE_DATABASE_ID`.
 2. Set the `METABASE_CARD_*` ids to the saved Questions that power the Retool
    tabs (or leave them and use `queryNative` SQL instead).
 3. Implement `getAccountsFromMetabase()` — join the cards by `entityId` per the

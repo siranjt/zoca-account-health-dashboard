@@ -26,7 +26,9 @@ export interface MetabaseConfig {
 }
 
 export function readMetabaseConfig(): MetabaseConfig | null {
-  const url = process.env.METABASE_URL;
+  // Primary name matches the Vercel env var (METABASE_BASE_URL); METABASE_URL
+  // kept as a fallback so either name works.
+  const url = process.env.METABASE_BASE_URL ?? process.env.METABASE_URL;
   const apiKey = process.env.METABASE_API_KEY;
   if (!url || !apiKey) return null;
   return {
