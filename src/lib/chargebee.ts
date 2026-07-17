@@ -94,7 +94,8 @@ export async function getBillingByEntityId(entityId: string): Promise<BillingRes
   });
   const txns = (txnRes.list || []).map(({ transaction: t }) => ({ status: t.status, amount_usd: dollars(t.amount), date: isoDate(t.date), error: t.error_text || null }));
 
-  const unpaid = invoices.filter((i) => i.status !== "paid" && i.amount_due_usd > 0);
+  // "unpaid" = actually owed. Exclude paid AND voided (voided isn't owed).
+  const unpaid = invoices.filter((i) => i.status !== "paid" && i.status !== "voided" && i.amount_due_usd > 0);
   const failed = txns.filter((t) => t.status === "failure");
 
   return {
