@@ -14,12 +14,14 @@ import type { AccountRow, AccountsPayload } from "@/lib/types";
 // as-of citations, and a plan→act→self-correct reasoning prompt. Deeper Zoca
 // data tools (Keeper/Chargebee/HubSpot) come in later batches.
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120; // headroom so the time-budget can always force a final answer before the platform kills us
 
 const MODEL = process.env.ANTHROPIC_ASK_MODEL || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
-const MAX_ITERS = 5;
-const MAX_TOOLS_PER_TURN = 8; // hard cap so Alfred can't explode into N per-account calls
-const TOOL_TIMEOUT_MS = 15000;
+const MAX_ITERS = 8;               // room for genuine multi-step reasoning...
+const MAX_TOOLS_PER_TURN = 8;      // ...but never N per-account calls in one turn
+const TOOL_TIMEOUT_MS = 15000;     // a single slow tool can't stall the turn
+const MODEL_TIMEOUT_MS = 45000;    // a single stuck model call can't hang the request
+const ANSWER_BUDGET_MS = 40000;    // past this, stop tooling and FORCE a final synthesized answer
 
 const ALFRED_SYS =
   `You are Alfred — the razor-sharp butler and account-health analyst for Zoca, a SaaS that runs Google Business Profile, reviews, and lead-gen for local salons/spas/med-spas. You reason over the live Account Health data through tools.
@@ -413,16 +415,34 @@ function logTrace(t: Record<string, unknown>) {
   try { console.log("[alfred:trace] " + JSON.stringify(t)); } catch { /* never let logging break a reply */ }
 }
 
-async function anthropic(messages: unknown[]) {
+const FINALIZE_NOTE = "Reply now with your best final answer using only the information already gathered above. Do NOT request or call any more tools. If some data is missing, answer with what you have and note the gap in one line — never end without an answer.";
+
+async function anthropic(messages: unknown[], opts: { withTools?: boolean; finalize?: boolean } = {}): Promise<any> {
+  const { withTools = true, finalize = false } = opts;
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error("ANTHROPIC_API_KEY not set");
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: MODEL, max_tokens: 1500, system: [{ type: "text", text: ALFRED_SYS, cache_control: { type: "ephemeral" } }], tools: TOOLS, messages }),
-  });
-  return r.json();
+  const system: unknown[] = [{ type: "text", text: ALFRED_SYS, cache_control: { type: "ephemeral" } }];
+  if (finalize) system.push({ type: "text", text: FINALIZE_NOTE });
+  const body: Record<string, unknown> = { model: MODEL, max_tokens: 1500, system, messages };
+  if (withTools) body.tools = TOOLS;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), MODEL_TIMEOUT_MS);
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    return await r.json();
+  } catch {
+    return { type: "error", error: { message: "model call timed out" } };
+  } finally {
+    clearTimeout(timer);
+  }
 }
+
+const textOf = (resp: any) => (resp?.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
 
 export async function POST(req: Request) {
   let q = "", history: { role: string; text: string }[] = [];
@@ -461,11 +481,24 @@ export async function POST(req: Request) {
   try {
     for (let i = 0; i < MAX_ITERS; i++) {
       iters = i + 1;
-      const resp: any = await anthropic(messages);
+      // On the last iteration OR once we've spent the time budget, stop gathering
+      // and FORCE a final synthesized answer (no tools) — so a complex question
+      // always resolves instead of half-hanging or timing out.
+      const mustAnswer = i === MAX_ITERS - 1 || Date.now() - t0 > ANSWER_BUDGET_MS;
+      const resp: any = await anthropic(messages, { withTools: !mustAnswer, finalize: mustAnswer });
       const u = resp?.usage || {};
       tokIn += u.input_tokens || 0; tokOut += u.output_tokens || 0; tokCache += u.cache_read_input_tokens || 0;
-      if (!resp || resp.type === "error") return finish("My reasoning engine erred, sir — " + (resp?.error?.message || "unknown") + ".", "api_error");
-      if (resp.stop_reason === "tool_use") {
+      if (!resp || resp.type === "error") {
+        // A model call failed/timed out. If we already gathered data, try ONE
+        // clean synthesis pass before giving up, so the user still gets an answer.
+        if (!mustAnswer && toolsUsed.length) {
+          const fb: any = await anthropic(messages, { withTools: false, finalize: true });
+          const t = textOf(fb);
+          if (t) return finish(t, "recovered");
+        }
+        return finish("My reasoning stalled just now, sir — please ask again in a moment.", "api_error");
+      }
+      if (!mustAnswer && resp.stop_reason === "tool_use") {
         messages.push({ role: "assistant", content: resp.content });
         const blocks = (resp.content || []).filter((b: any) => b.type === "tool_use");
         // Cap concurrent tool calls per turn: run the first N in parallel; any
@@ -485,8 +518,12 @@ export async function POST(req: Request) {
         messages.push({ role: "user", content: results });
         continue;
       }
-      const text = (resp.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
-      return finish(text || "(no answer, sir)", "ok");
+      const text = textOf(resp);
+      if (text) return finish(text, mustAnswer ? "forced" : "ok");
+      // Model returned no text (e.g. it still tried to use a tool on the forced
+      // pass). Do one explicit no-tools synthesis so we never return empty.
+      const fb: any = await anthropic(messages, { withTools: false, finalize: true });
+      return finish(textOf(fb) || "Here's the best I can give from what I gathered, sir — please narrow the question for more detail.", "forced2");
     }
     return finish("I dug into that but couldn't converge, sir — please narrow the question.", "no_converge");
   } catch (e) {
