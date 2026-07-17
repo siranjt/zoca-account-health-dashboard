@@ -40,6 +40,14 @@ export function readMetabaseConfig(): MetabaseConfig | null {
 
 type Row = Record<string, unknown>;
 
+// Run an ad-hoc read query against Zoca Aurora (read-only). Used by Alfred's
+// support-ticket and review-detail tools. Throws if Metabase isn't configured.
+export async function queryAurora(sql: string): Promise<Row[]> {
+  const cfg = readMetabaseConfig();
+  if (!cfg) throw new Error("Metabase not configured (METABASE_BASE_URL / METABASE_API_KEY)");
+  return runDataset(cfg, sql);
+}
+
 async function runDataset(cfg: MetabaseConfig, sql: string): Promise<Row[]> {
   const res = await fetch(`${cfg.url}/api/dataset`, {
     method: "POST",
