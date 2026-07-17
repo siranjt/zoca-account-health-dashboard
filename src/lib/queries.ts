@@ -85,6 +85,14 @@ SELECT entity_id,
 FROM j GROUP BY entity_id`;
 }
 
+/** Open HubSpot support tickets per account, keyed by the account (location_entity_id). */
+export function ticketsSql(): string {
+  return `SELECT location_entity_id AS entity_id, COUNT(*)::int AS open_tickets
+FROM hubspot.tickets
+WHERE location_entity_id IS NOT NULL
+GROUP BY location_entity_id`;
+}
+
 /** current-vs-previous deltas + 12-week sparklines. prev = [from-lenDays, from). */
 export function trendsSql(from: string, to: string, lenDays: number): string {
   const cur = (col: string) => range(col, from, to);

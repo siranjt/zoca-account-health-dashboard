@@ -107,6 +107,7 @@ function toRow(s: Seed): AccountRow {
     daysOverdue: s.mrr === 0 ? 12 : null,
     failedPayments: s.leads % 3,
     tenureDays: 60 + s.leads * 5,
+    openTickets: s.leads % 6,
   };
 }
 

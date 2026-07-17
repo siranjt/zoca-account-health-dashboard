@@ -12,6 +12,7 @@ import {
   masterSql,
   timingSql,
   trendsSql,
+  ticketsSql,
   detailProfileWeeklySql,
   detailLeadsReviewsMonthlySql,
   detailRankTrendSql,
@@ -130,16 +131,19 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
   const cfg = readMetabaseConfig();
   if (!cfg) throw new Error("Metabase not configured (METABASE_BASE_URL / METABASE_API_KEY)");
 
-  const [master, timing, trends] = await Promise.all([
+  const [master, timing, trends, tickets] = await Promise.all([
     runDataset(cfg, masterSql(rangeArg.from, rangeArg.to)),
     runDataset(cfg, timingSql()),
     runDataset(cfg, trendsSql(rangeArg.from, rangeArg.to, rangeArg.days)),
+    runDataset(cfg, ticketsSql()).catch(() => [] as Row[]),
   ]);
 
   const timingByEntity = new Map<string, Row>();
   for (const t of timing) timingByEntity.set(String(t.entity_id), t);
   const trendsByEntity = new Map<string, Row>();
   for (const t of trends) trendsByEntity.set(String(t.entity_id), t);
+  const ticketsByEntity = new Map<string, number>();
+  for (const t of tickets) ticketsByEntity.set(String(t.entity_id), int0(t.open_tickets));
 
   return master.map((r): AccountRow => {
     const id = String(r.entity_id);
@@ -168,6 +172,7 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
       daysOverdue: num(r.days_overdue),
       failedPayments: int0(r.failed_payments),
       tenureDays: num(r.tenure_days),
+      openTickets: ticketsByEntity.get(id) ?? 0,
       avgReceivedToOpenedMs: t ? secToMs(t.recv_to_open_s) : null,
       avgReceivedToContactedMs: t ? secToMs(t.recv_to_contact_s) : null,
       avgOpenedToContactedMs: t ? secToMs(t.open_to_contact_s) : null,

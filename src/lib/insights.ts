@@ -18,18 +18,27 @@ export async function getSupportTickets(entityId: string) {
   try {
     // location_entity_id is the ACCOUNT the ticket is about (user_entity_id is
     // the person who raised it — a different entity, so we don't match on it).
-    const rows = await queryAurora(`
-      select subject, status, priority, hubspot_owner_name, created_at::date d,
-             count(*) over()::int total
-      from hubspot.tickets
-      where location_entity_id = '${id}'
-      order by created_at desc
-      limit 12`);
-    const total = rows.length ? Number(rows[0].total) || rows.length : 0;
+    const [rows, cats] = await Promise.all([
+      queryAurora(`
+        select subject, status, priority, hubspot_owner_name, created_at::date d,
+               count(*) over()::int total
+        from hubspot.tickets
+        where location_entity_id = '${id}'
+        order by created_at desc
+        limit 12`),
+      queryAurora(`
+        select substring(subject from '^[A-Z_]+') category, count(*)::int n
+        from hubspot.tickets
+        where location_entity_id = '${id}'
+        group by 1 order by 2 desc`),
+    ]);
+    const total = cats.reduce((s, c) => s + (Number(c.n) || 0), 0);
     return {
       total_open: total,
+      by_category: cats.map((c) => ({ category: c.category || "OTHER", count: Number(c.n) || 0 })),
+      category_note: "Categories are the ticket subject prefix, e.g. WEBSITE_* (website), SUBSCIPTION_SUPPORT (billing/finance/subscription), GOOGLE_SUPPORT + GBP_* (Google profile), REVIEWS_SUPPORT, LEADS_SUPPORT, SOCIAL_MEDIA_SUPPORT, ADS_SUPPORT, APP_SUPPORT. Sum the matching ones for grouped questions.",
       showing: rows.length,
-      tickets: rows.map((r) => ({
+      recent: rows.map((r) => ({
         subject: r.subject, status: r.status, priority: r.priority,
         owner: r.hubspot_owner_name || null, created: r.d,
       })),
