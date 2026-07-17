@@ -135,15 +135,19 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
     runDataset(cfg, masterSql(rangeArg.from, rangeArg.to)),
     runDataset(cfg, timingSql()),
     runDataset(cfg, trendsSql(rangeArg.from, rangeArg.to, rangeArg.days)),
-    runDataset(cfg, ticketsSql()).catch(() => [] as Row[]),
+    runDataset(cfg, ticketsSql(rangeArg.from)).catch(() => [] as Row[]),
   ]);
 
   const timingByEntity = new Map<string, Row>();
   for (const t of timing) timingByEntity.set(String(t.entity_id), t);
   const trendsByEntity = new Map<string, Row>();
   for (const t of trends) trendsByEntity.set(String(t.entity_id), t);
-  const ticketsByEntity = new Map<string, number>();
-  for (const t of tickets) ticketsByEntity.set(String(t.entity_id), int0(t.open_tickets));
+  const activeTixByEntity = new Map<string, number>();
+  const closedTixByEntity = new Map<string, number>();
+  for (const t of tickets) {
+    activeTixByEntity.set(String(t.entity_id), int0(t.active_tickets));
+    closedTixByEntity.set(String(t.entity_id), int0(t.closed_in_window));
+  }
 
   return master.map((r): AccountRow => {
     const id = String(r.entity_id);
@@ -172,7 +176,8 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
       daysOverdue: num(r.days_overdue),
       failedPayments: int0(r.failed_payments),
       tenureDays: num(r.tenure_days),
-      openTickets: ticketsByEntity.get(id) ?? 0,
+      openTickets: activeTixByEntity.get(id) ?? 0,
+      closedTicketsWindow: closedTixByEntity.get(id) ?? 0,
       avgReceivedToOpenedMs: t ? secToMs(t.recv_to_open_s) : null,
       avgReceivedToContactedMs: t ? secToMs(t.recv_to_contact_s) : null,
       avgOpenedToContactedMs: t ? secToMs(t.open_to_contact_s) : null,

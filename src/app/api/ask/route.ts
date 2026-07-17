@@ -136,7 +136,7 @@ function slim(a: AccountRow) {
     bookOnlineActive: a.bookOnlineActive,
     keywordsTop3Pct: r1(a.keywordsTop3Pct), avgRank: r1(a.avgCurrentRank), keywordImpressions: a.keywordImpressions,
     daysToInvoice: a.daysToInvoice, daysOverdue: a.daysOverdue, failedPayments: a.failedPayments,
-    openTickets: a.openTickets, tenureDays: a.tenureDays, activeProducts: a.activeProducts, entityId: a.entityId,
+    openTickets: a.openTickets, closedTicketsWindow: a.closedTicketsWindow, tenureDays: a.tenureDays, activeProducts: a.activeProducts, entityId: a.entityId,
   });
 }
 
@@ -150,7 +150,7 @@ const TOOLS = [
   { name: "explain_health", description: "Explain how one account's composite health score is built: the sub-scores (engagement/value/product), the exact weighting, the driving reason, the primary risk driver, and the recommended action.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "billing", description: "Live billing state for one account from Chargebee (ground truth, beats the health-score payment proxy): subscription status & MRR, auto-collection, next renewal, unpaid invoices + total due, recent failed transactions with the error. Use for 'are they paid up?', 'any failed payments?', 'when do they renew?', 'what's their MRR?'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "customer_facts", description: "Curated facts and history for one account from the Keeper (Bat Cave Memory) — owner details, preferences, past issues, notes captured over time. Use for 'what do we know about them?', 'any history / context?', 'who's the owner?', background before a call.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
-  { name: "support_tickets", description: "HubSpot support tickets for one account (only tickets associated with this account via location_entity_id). Returns the total count, a breakdown BY CATEGORY (website, subscription/billing, google/GBP, reviews, leads, social, ads, app, etc.), and recent ticket detail. Use for 'how many tickets does X have?', 'how many website / finance / google tickets for X?', 'what have they raised?'. For a category question, read by_category and sum the matching prefixes.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+  { name: "support_tickets", description: "HubSpot tickets for one account (associated via location_entity_id). Returns ACTIVE (open) counts and tickets CLOSED within a window (days: 7/30/90/180, default 30), each broken down BY CATEGORY (website, billing/subscription, google/GBP, reviews, leads, social, ads, app…), plus recent active tickets. Use for 'how many active/open tickets does X have?', 'how many website / finance tickets?', 'how many tickets did we close for X in the last 90 days?'. For a category question, read by_category and sum the matching prefixes.", input_schema: { type: "object", properties: { name: { type: "string" }, days: { type: "integer" } }, required: ["name"] } },
   { name: "reviews_detail", description: "Review-level detail for one account from Google reviews: total count, average star rating, rating distribution, review velocity (last 30/90 days), and the most recent reviews. Use for 'how are their reviews?', 'rating trend?', 'are reviews slowing down?'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "cohort_benchmark", description: "Benchmark one account against its peer cohort (same state, else the whole book): for composite, leads, reviews, profile clicks, keyword top-3%, avg rank and MRR it returns the account's value, the cohort median, and the percentile. Use for 'is X doing well for their market?', 'how do they compare to peers?'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "segment_analysis", description: "Health/metrics by segment across the whole book. groupBy: state | tier | color | accountManager | product. Returns per-segment count, avg composite, % at-risk, avg leads/reviews and total MRR. Use for 'which state is healthiest?', 'how do accounts on Discovery-only compare?', 'which AM's book is weakest?'.", input_schema: { type: "object", properties: { groupBy: { type: "string" } }, required: ["groupBy"] } },
@@ -264,7 +264,7 @@ async function execTool(name: string, input: Record<string, unknown>, ctx: Ctx) 
       const hits = findAccounts(list, String(input.name || ""));
       if (!hits.length) return { error: `no account named "${input.name}"` };
       if (hits.length > 1 && hits.length <= 8) return { ambiguous: hits.map((a) => ({ name: a.name, am: a.accountManager, city: a.city, entityId: a.entityId })) };
-      const tk = await getSupportTickets(hits[0].entityId);
+      const tk = await getSupportTickets(hits[0].entityId, Number(input.days) || 30);
       return { account: hits[0].name, ...tk, as_of: asOf };
     }
     if (name === "reviews_detail") {

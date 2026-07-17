@@ -12,36 +12,42 @@ const RATING_MAP: Record<string, number> = { FIVE: 5, FOUR: 4, THREE: 3, TWO: 2,
 // single quotes defensively before interpolation.
 const esc = (id: string) => String(id || "").replace(/'/g, "''");
 
-export async function getSupportTickets(entityId: string) {
+export async function getSupportTickets(entityId: string, windowDays = 30) {
   const id = esc(entityId);
   if (!id) return { available: false as const, reason: "no entity_id" };
+  const days = Math.min(Math.max(windowDays, 1), 365);
   try {
-    // location_entity_id is the ACCOUNT the ticket is about (user_entity_id is
-    // the person who raised it — a different entity, so we don't match on it).
-    const [rows, cats] = await Promise.all([
+    // location_entity_id is the ACCOUNT the ticket is about. The curated
+    // hubspot.tickets status is unreliable, so join hubspot_stitch.tickets for
+    // the real open/closed state (property_hs_is_closed) and close date.
+    const [cats, recent] = await Promise.all([
       queryAurora(`
-        select subject, status, priority, hubspot_owner_name, created_at::date d,
-               count(*) over()::int total
-        from hubspot.tickets
-        where location_entity_id = '${id}'
-        order by created_at desc
-        limit 12`),
+        select substring(ht.subject from '^[A-Z_]+') category,
+          count(*) filter (where st.property_hs_is_closed::text='false')::int active,
+          count(*) filter (where st.property_hs_is_closed::text='true'
+                             and st.property_closed_date::timestamptz >= now() - interval '${days} days')::int closed
+        from hubspot.tickets ht
+        join hubspot_stitch.tickets st on st.id = ht.hubspot_ticket_id
+        where ht.location_entity_id = '${id}'
+        group by 1`),
       queryAurora(`
-        select substring(subject from '^[A-Z_]+') category, count(*)::int n
-        from hubspot.tickets
-        where location_entity_id = '${id}'
-        group by 1 order by 2 desc`),
+        select ht.subject, ht.priority, ht.hubspot_owner_name, ht.created_at::date d
+        from hubspot.tickets ht
+        join hubspot_stitch.tickets st on st.id = ht.hubspot_ticket_id
+        where ht.location_entity_id = '${id}' and st.property_hs_is_closed::text='false'
+        order by ht.created_at desc limit 10`),
     ]);
-    const total = cats.reduce((s, c) => s + (Number(c.n) || 0), 0);
+    const byCat = cats
+      .map((c) => ({ category: c.category || "OTHER", active: Number(c.active) || 0, closed: Number(c.closed) || 0 }))
+      .filter((c) => c.active > 0 || c.closed > 0)
+      .sort((a, b) => (b.active + b.closed) - (a.active + a.closed));
     return {
-      total_open: total,
-      by_category: cats.map((c) => ({ category: c.category || "OTHER", count: Number(c.n) || 0 })),
-      category_note: "Categories are the ticket subject prefix, e.g. WEBSITE_* (website), SUBSCIPTION_SUPPORT (billing/finance/subscription), GOOGLE_SUPPORT + GBP_* (Google profile), REVIEWS_SUPPORT, LEADS_SUPPORT, SOCIAL_MEDIA_SUPPORT, ADS_SUPPORT, APP_SUPPORT. Sum the matching ones for grouped questions.",
-      showing: rows.length,
-      recent: rows.map((r) => ({
-        subject: r.subject, status: r.status, priority: r.priority,
-        owner: r.hubspot_owner_name || null, created: r.d,
-      })),
+      active_total: byCat.reduce((s, c) => s + c.active, 0),
+      closed_in_window_total: byCat.reduce((s, c) => s + c.closed, 0),
+      window_days: days,
+      by_category: byCat,
+      category_note: "category = ticket subject prefix. website = WEBSITE_*; billing/finance = SUBSCIPTION_SUPPORT; google/GBP = GOOGLE_SUPPORT + GBP_*; also REVIEWS_/LEADS_/SOCIAL_MEDIA_/ADS_/APP_/LOYALTY_SUPPORT, *_OFFBOARDING, DELETE_MEDIA. Sum the matching prefixes for a grouped question. 'closed' counts tickets closed within the window_days only; 'active' is current open.",
+      recent_active: recent.map((r) => ({ subject: r.subject, priority: r.priority, owner: r.hubspot_owner_name || null, created: r.d })),
     };
   } catch (e) {
     return { available: false as const, reason: `tickets query failed: ${String((e as Error)?.message || e).slice(0, 140)}` };
