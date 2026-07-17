@@ -1,10 +1,11 @@
 import "server-only";
-import { getSql, neonUrl } from "@/lib/neon";
+import { getSql, neonUrl, getEntityCustomerId } from "@/lib/neon";
 
 // Keeper facts client for Alfred (Batch 2). Reads the curated customer facts
 // in Neon (beacon_brain_facts) — the "Bat Cave Memory". Facts are keyed by
-// customer_id, which is the Zoca entity UUID. Read-only; Alfred never writes
-// to the production Keeper. Same Neon instance beacon uses (DATABASE_URL).
+// the Chargebee customer_id (NOT the dashboard entity UUID), so we resolve
+// entity_id → customer_id via the shared snapshot map first. Read-only;
+// Alfred never writes to the production Keeper.
 
 export type KeeperFact = { topic: string; field: string; value: string; confidence: string | null };
 
@@ -18,10 +19,12 @@ export async function getFactsByEntityId(entityId: string, limit = 60): Promise<
   if (!neonUrl())
     return { available: false, reason: "Keeper (Neon) is not configured (DATABASE_URL missing)." };
   try {
+    const customerId = await getEntityCustomerId(eid);
+    if (!customerId) return { count: 0, facts: [] };
     const rows = (await getSql()`
       SELECT topic_subcategory, field_name, value, confidence_state
       FROM beacon_brain_facts
-      WHERE customer_id = ${eid}
+      WHERE customer_id = ${customerId}
         AND soft_deleted_at IS NULL
       ORDER BY topic_subcategory, field_name
       LIMIT ${Math.min(limit, 120)}

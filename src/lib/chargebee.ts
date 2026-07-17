@@ -1,18 +1,16 @@
 import "server-only";
-import { getSql, neonUrl } from "@/lib/neon";
+import { getEntityCustomerId } from "@/lib/neon";
 
 // Chargebee billing client for Alfred (Batch 2). Zoca's Chargebee does NOT
 // expose cf_entity_id as a filterable field, so we resolve entity_id →
-// Chargebee customer_id from beacon's Neon snapshot (dashboard_snapshots —
-// the same map beacon's own billing tool uses), cached module-level with a
-// TTL. Then we pull the subscription/invoices/transactions per customer from
+// Chargebee customer_id from beacon's Neon snapshot (shared getEntityCustomerId),
+// then pull the subscriptions/invoices/transactions per customer from
 // Chargebee on demand. Read-only.
 
 const SITE = process.env.CHARGEBEE_SITE || "zoca";
 const KEY = process.env.CHARGEBEE_API_KEY || "";
 const BASE = `https://${SITE}.chargebee.com/api/v2`;
 const TIMEOUT_MS = 12_000;
-const MAP_TTL_MS = 60 * 60 * 1000; // 1h
 
 function authHeader() {
   return { Authorization: "Basic " + Buffer.from(`${KEY}:`).toString("base64") };
@@ -34,34 +32,6 @@ async function cbGet<T = Record<string, unknown>>(path: string, params: Record<s
 
 const dollars = (c: number | null | undefined) => (c && Number.isFinite(c) ? Math.round(c) / 100 : 0);
 const isoDate = (t: number | null | undefined) => (t && Number.isFinite(t) ? new Date(t * 1000).toISOString().slice(0, 10) : null);
-
-// entity_id → Chargebee customer_id, from beacon's latest Neon snapshot.
-let cache: { map: Map<string, string>; builtAt: number } | null = null;
-let building: Promise<Map<string, string>> | null = null;
-
-async function buildMap(): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
-  if (!neonUrl()) return map;
-  const rows = (await getSql()`
-    SELECT customer_data FROM dashboard_snapshots ORDER BY snapshot_date DESC LIMIT 1
-  `) as Array<{ customer_data: unknown }>;
-  const raw = rows?.[0]?.customer_data;
-  const snap = (typeof raw === "string" ? JSON.parse(raw) : raw) as { customers?: Array<{ entity_id?: string; customer_id?: string }> } | null;
-  for (const c of snap?.customers || []) {
-    const eid = (c.entity_id || "").trim();
-    if (eid && c.customer_id) map.set(eid, c.customer_id);
-  }
-  return map;
-}
-
-async function ensureMap(): Promise<Map<string, string>> {
-  if (cache && Date.now() - cache.builtAt < MAP_TTL_MS) return cache.map;
-  if (building) return building;
-  building = buildMap()
-    .then((map) => { cache = { map, builtAt: Date.now() }; return map; })
-    .finally(() => { building = null; });
-  return building;
-}
 
 export type BillingResult =
   | { found: false; reason: string }
@@ -87,8 +57,7 @@ export async function getBillingByEntityId(entityId: string): Promise<BillingRes
   const eid = (entityId || "").trim();
   if (!eid) return { found: false, reason: "no entity_id" };
 
-  const map = await ensureMap();
-  const cid = map.get(eid);
+  const cid = await getEntityCustomerId(eid);
   if (!cid) return { found: false, reason: "no Chargebee customer bound to this account (entity not on the latest snapshot)." };
 
   // A Chargebee customer can hold several subscriptions (one per location).
