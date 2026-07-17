@@ -37,11 +37,12 @@ ACCURACY (non-negotiable)
 
 STYLE
 - Address the user as "sir". Be concise and scale depth to the question: a lookup earns a sentence, an analysis earns a tight brief.
+- Answer the question directly. Do NOT narrate which tools you called, and never remark on whether two records look like the same account or a duplicate — just give the answer.
 - Lead with the claim, then the specific figures that support it.
 - Dates as DD/MM/YY, money in USD; when listing invoices or items, newest first.
 
 TOOLS
-- book_summary — whole-book tier counts. at_risk_accounts — worst-first list with root drivers. account_health — one account's full metrics. account_detail — time-series behind a row. accounts_by_manager — an account manager's roster plus best/worst. book_aggregate — deterministic roll-ups (totals and group-bys: use it for 'total MRR at risk', 'reviews by AM', counts). explain_health — how an account's composite score is built. billing — LIVE Chargebee billing (subscription MRR/status, auto-collection, next renewal, unpaid invoices, failed transactions). Chargebee is ground truth for payments and revenue; prefer it over the health row's failedPayments proxy when a question is about money, renewals, or payment failures. customer_facts — curated history/notes about an account from the Keeper (Bat Cave Memory); use it for background and context on a customer. support_tickets — open HubSpot CX/support tickets for an account. reviews_detail — Google review count, average rating, distribution, velocity (last 30/90 days) and recent reviews.
+- book_summary — whole-book tier counts. at_risk_accounts — worst-first list with root drivers. account_health — one account's full metrics. account_detail — time-series behind a row. accounts_by_manager — an account manager's roster plus best/worst. book_aggregate — deterministic roll-ups (totals and group-bys: use it for 'total MRR at risk', 'reviews by AM', counts). explain_health — how an account's composite score is built. billing — LIVE Chargebee billing (subscription MRR/status, auto-collection, next renewal, unpaid invoices, failed transactions). Chargebee is ground truth for payments and revenue; prefer it over the health row's failedPayments proxy when a question is about money, renewals, or payment failures. customer_facts — curated history/notes about an account from the Keeper (Bat Cave Memory); use it for background and context on a customer. support_tickets — open HubSpot CX/support tickets for an account. reviews_detail — Google review count, average rating, distribution, velocity (last 30/90 days) and recent reviews. cohort_benchmark — one account vs its peer cohort (percentiles + medians). segment_analysis — health/metrics by segment (state/tier/product/AM). movers — biggest gainers/decliners period-over-period. expansion_radar — healthy single-product accounts ripe for upsell. revenue_at_risk — MRR at risk, ranked by revenue exposure.
 - Call tools as needed; you may call several at once. If a tool errors or returns nothing, adjust the arguments and retry once before concluding.`;
 
 // ---- small utils: compression keeps tool payloads (and tokens) tight ----
@@ -75,6 +76,22 @@ function primaryDriver(a: AccountRow): string | null {
   if ((a.leadsReceived || 0) <= 2) return "Low lead volume";
   return "Below-par engagement";
 }
+
+function median(nums: number[]): number | null {
+  const a = nums.filter((n) => Number.isFinite(n)).sort((x, y) => x - y);
+  if (!a.length) return null;
+  const m = Math.floor(a.length / 2);
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+const COHORT_METRICS: Array<{ k: string; get: (a: AccountRow) => number | null | undefined; hib: boolean }> = [
+  { k: "composite", get: (a) => a.health?.composite, hib: true },
+  { k: "leads", get: (a) => a.leadsReceived, hib: true },
+  { k: "reviews", get: (a) => a.reviewsReceived, hib: true },
+  { k: "profileClicks", get: (a) => a.profileClicks, hib: true },
+  { k: "keywordsTop3Pct", get: (a) => a.keywordsTop3Pct, hib: true },
+  { k: "avgRank", get: (a) => a.avgCurrentRank, hib: false },
+  { k: "mrr", get: (a) => a.mrr, hib: true },
+];
 
 function findAccounts(list: AccountRow[], name: string): AccountRow[] {
   const nq = " " + norm(name) + " ";
@@ -112,7 +129,12 @@ const TOOLS = [
   { name: "billing", description: "Live billing state for one account from Chargebee (ground truth, beats the health-score payment proxy): subscription status & MRR, auto-collection, next renewal, unpaid invoices + total due, recent failed transactions with the error. Use for 'are they paid up?', 'any failed payments?', 'when do they renew?', 'what's their MRR?'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "customer_facts", description: "Curated facts and history for one account from the Keeper (Bat Cave Memory) — owner details, preferences, past issues, notes captured over time. Use for 'what do we know about them?', 'any history / context?', 'who's the owner?', background before a call.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "support_tickets", description: "Open HubSpot support/CX tickets for one account (subject, status, priority, owner, date). Use for 'any open tickets?', 'CX issues?', 'what have they raised?', support load before a call.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
-  { name: "reviews_detail", description: "Review-level detail for one account from Google reviews: total count, average star rating, rating distribution, review velocity (last 30/90 days), and the most recent reviews. Use for 'how are their reviews?', 'rating trend?', 'are reviews slowing down?'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] }, cache_control: { type: "ephemeral" } },
+  { name: "reviews_detail", description: "Review-level detail for one account from Google reviews: total count, average star rating, rating distribution, review velocity (last 30/90 days), and the most recent reviews. Use for 'how are their reviews?', 'rating trend?', 'are reviews slowing down?'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+  { name: "cohort_benchmark", description: "Benchmark one account against its peer cohort (same state, else the whole book): for composite, leads, reviews, profile clicks, keyword top-3%, avg rank and MRR it returns the account's value, the cohort median, and the percentile. Use for 'is X doing well for their market?', 'how do they compare to peers?'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+  { name: "segment_analysis", description: "Health/metrics by segment across the whole book. groupBy: state | tier | color | accountManager | product. Returns per-segment count, avg composite, % at-risk, avg leads/reviews and total MRR. Use for 'which state is healthiest?', 'how do accounts on Discovery-only compare?', 'which AM's book is weakest?'.", input_schema: { type: "object", properties: { groupBy: { type: "string" } }, required: ["groupBy"] } },
+  { name: "movers", description: "Biggest period-over-period movers (current vs previous window) for a metric — the on-demand 'what changed / who's declining' view. metric: leads | reviews | clicks. direction: down (decliners, default) | up (gainers). Optional limit. Use for 'who dropped off?', 'biggest decliners this period', 'who's picking up?'.", input_schema: { type: "object", properties: { metric: { type: "string" }, direction: { type: "string" }, limit: { type: "integer" } } } },
+  { name: "expansion_radar", description: "Healthy, high-engagement accounts on a single product — ripe for an upsell/expansion conversation. Optional limit. Use for 'who can we upsell?', 'expansion opportunities'.", input_schema: { type: "object", properties: { limit: { type: "integer" } } } },
+  { name: "revenue_at_risk", description: "Revenue exposure: non-healthy accounts ranked by MRR at risk, with total MRR at risk, each account's tier, root driver and recommended action. Use for 'how much revenue is at risk?', 'churn radar', 'which at-risk accounts are worth most?'.", input_schema: { type: "object", properties: { limit: { type: "integer" } } }, cache_control: { type: "ephemeral" } },
 ];
 
 type Ctx = { list: AccountRow[]; payload: AccountsPayload; asOf: string | undefined };
@@ -224,6 +246,74 @@ async function execTool(name: string, input: Record<string, unknown>, ctx: Ctx) 
       if (hits.length > 1 && hits.length <= 8) return { ambiguous: hits.map((a) => ({ name: a.name, am: a.accountManager, city: a.city, entityId: a.entityId })) };
       const rv = await getReviewsDetail(hits[0].entityId);
       return { account: hits[0].name, ...rv, as_of: asOf };
+    }
+    if (name === "cohort_benchmark") {
+      const hits = findAccounts(list, String(input.name || ""));
+      if (!hits.length) return { error: `no account named "${input.name}"` };
+      if (hits.length > 1 && hits.length <= 8) return { ambiguous: hits.map((a) => ({ name: a.name, am: a.accountManager, city: a.city, entityId: a.entityId })) };
+      const a0 = hits[0];
+      const sameState = a0.state ? list.filter((a) => a.state === a0.state) : [];
+      const cohort = sameState.length >= 8 ? sameState : list;
+      const basis = cohort === list ? "whole book" : `state: ${a0.state}`;
+      const metrics = COHORT_METRICS.map((m) => {
+        const v = Number(m.get(a0));
+        const vals = cohort.map((a) => Number(m.get(a))).filter((n) => Number.isFinite(n));
+        const med = median(vals);
+        let pct: number | null = null;
+        if (Number.isFinite(v) && vals.length) {
+          const better = m.hib ? vals.filter((x) => x <= v).length : vals.filter((x) => x >= v).length;
+          pct = Math.round((better / vals.length) * 100);
+        }
+        return { metric: m.k, value: Number.isFinite(v) ? r1(v) : null, cohort_median: med == null ? null : r1(med), percentile: pct };
+      });
+      return { account: a0.name, accountManager: a0.accountManager || "Unassigned", cohort: { basis, size: cohort.length }, metrics, as_of: asOf };
+    }
+    if (name === "segment_analysis") {
+      const gb = String(input.groupBy || "state");
+      const keyOf = (a: AccountRow) => gb === "tier" ? (a.health?.tier || "—") : gb === "color" ? (a.health?.color || "—") : gb === "accountManager" ? (a.accountManager || "Unassigned") : gb === "product" ? (a.activeProducts?.[0] || "none") : (a.state || "—");
+      const g: Record<string, { n: number; comp: number[]; leads: number; reviews: number; mrr: number; atRisk: number }> = {};
+      for (const a of list) {
+        const k = keyOf(a);
+        (g[k] ||= { n: 0, comp: [], leads: 0, reviews: 0, mrr: 0, atRisk: 0 });
+        g[k].n++;
+        if (Number.isFinite(a.health?.composite as number)) g[k].comp.push(a.health!.composite as number);
+        g[k].leads += a.leadsReceived || 0;
+        g[k].reviews += a.reviewsReceived || 0;
+        g[k].mrr += a.mrr || 0;
+        if (a.health?.color !== "green") g[k].atRisk++;
+      }
+      const groups = Object.entries(g).map(([group, v]) => ({
+        group, count: v.n,
+        avg_composite: v.comp.length ? Math.round((v.comp.reduce((s, x) => s + x, 0) / v.comp.length) * 10) / 10 : null,
+        at_risk_pct: Math.round((v.atRisk / v.n) * 100),
+        avg_leads: Math.round(v.leads / v.n), avg_reviews: Math.round(v.reviews / v.n), total_mrr: r0(v.mrr),
+      })).sort((a, b) => b.count - a.count);
+      return { groupBy: gb, groupCount: groups.length, groups: groups.slice(0, 40), as_of: asOf };
+    }
+    if (name === "movers") {
+      const metric = String(input.metric || "leads");
+      const pick = (a: AccountRow) => metric === "reviews" ? a.reviewsDelta : metric === "clicks" ? a.clicksDelta : a.leadsDelta;
+      const dir = String(input.direction || "down");
+      const limit = Math.min(Number(input.limit) || 10, 25);
+      let rows = list.map((a) => { const d = pick(a); if (!d) return null; const delta = (d.cur || 0) - (d.prev || 0); return { name: a.name, am: a.accountManager || "Unassigned", cur: d.cur || 0, prev: d.prev || 0, delta, pct: Math.round((delta / Math.max(d.prev || 0, 1)) * 100) }; }).filter(Boolean) as Array<{ name: string; am: string; cur: number; prev: number; delta: number; pct: number }>;
+      rows = dir === "up" ? rows.filter((r) => r.delta > 0).sort((a, b) => b.delta - a.delta) : rows.filter((r) => r.delta < 0).sort((a, b) => a.delta - b.delta);
+      return { metric, direction: dir, window_days: payload.windowDays, count: rows.length, top: rows.slice(0, limit), note: "cur = current window, prev = prior window", as_of: asOf };
+    }
+    if (name === "expansion_radar") {
+      const limit = Math.min(Number(input.limit) || 12, 25);
+      const cand = list.filter((a) => a.health?.color === "green" && (a.health?.engagement ?? 0) >= 65 && (a.activeProducts?.length ?? 0) <= 1)
+        .sort((a, b) => (b.mrr ?? 0) - (a.mrr ?? 0) || (b.health?.engagement ?? 0) - (a.health?.engagement ?? 0));
+      return { criteria: "healthy + engagement>=65 + <=1 active product", count: cand.length, top: cand.slice(0, limit).map((a) => compact({ name: a.name, am: a.accountManager || "Unassigned", composite: r1(a.health?.composite), engagement: r1(a.health?.engagement), mrr: r0(a.mrr), activeProducts: a.activeProducts, leads: a.leadsReceived, reviews: a.reviewsReceived })), as_of: asOf };
+    }
+    if (name === "revenue_at_risk") {
+      const limit = Math.min(Number(input.limit) || 15, 30);
+      const atRisk = list.filter((a) => a.health?.color !== "green");
+      const total = atRisk.reduce((s, a) => s + (a.mrr || 0), 0);
+      const ranked = atRisk.slice().sort((a, b) => (b.mrr ?? 0) - (a.mrr ?? 0));
+      return {
+        total_mrr_at_risk: r0(total), at_risk_count: atRisk.length, window_days: payload.windowDays, as_of: asOf,
+        top: ranked.slice(0, limit).map((a) => compact({ name: a.name, am: a.accountManager || "Unassigned", mrr: r0(a.mrr), composite: r1(a.health?.composite), tier: a.health?.tier, primary_driver: primaryDriver(a), recommendedAction: a.health?.recommendedAction })),
+      };
     }
     return { error: "unknown tool " + name };
   } catch (e) {
