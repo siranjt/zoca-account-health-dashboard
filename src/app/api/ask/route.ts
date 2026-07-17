@@ -3,7 +3,7 @@ import { getAccountsPayload, getAccountDetail } from "@/lib/data";
 import { getBillingByEntityId } from "@/lib/chargebee";
 import { getFactsByEntityId } from "@/lib/keeper";
 import { getSupportTickets, getReviewsDetail } from "@/lib/insights";
-import { logInteraction, recall } from "@/lib/memory";
+import { logInteraction, recall, rememberFact, getSavedNotes } from "@/lib/memory";
 import { HEALTH_WEIGHTS } from "@/lib/health";
 import type { AccountRow, AccountsPayload } from "@/lib/types";
 
@@ -43,9 +43,9 @@ STYLE
 - Dates as DD/MM/YY, money in USD; when listing invoices or items, newest first.
 
 TOOLS
-- book_summary — whole-book tier counts. at_risk_accounts — worst-first list with root drivers. account_health — one account's full metrics. account_detail — time-series behind a row. accounts_by_manager — an account manager's roster plus best/worst. book_aggregate — deterministic roll-ups (totals and group-bys: use it for 'total MRR at risk', 'reviews by AM', counts). explain_health — how an account's composite score is built. billing — LIVE Chargebee billing (subscription MRR/status, auto-collection, next renewal, unpaid invoices, failed transactions). Chargebee is ground truth for payments and revenue; prefer it over the health row's failedPayments proxy when a question is about money, renewals, or payment failures. customer_facts — curated history/notes about an account from the Keeper (Bat Cave Memory); use it for background and context on a customer. support_tickets — open HubSpot CX/support tickets for an account. reviews_detail — Google review count, average rating, distribution, velocity (last 30/90 days) and recent reviews. cohort_benchmark — one account vs its peer cohort (percentiles + medians). segment_analysis — health/metrics by segment (state/tier/product/AM). movers — biggest gainers/decliners period-over-period. expansion_radar — healthy single-product accounts ripe for upsell. revenue_at_risk — MRR at risk, ranked by revenue exposure. gather_360 — one-shot full dossier (health + billing + tickets + reviews + Keeper history) for briefings and drafts. recall — search your own durable memory of past conversations (across sessions).
+- book_summary — whole-book tier counts. at_risk_accounts — worst-first list with root drivers. account_health — one account's full metrics. account_detail — time-series behind a row. accounts_by_manager — an account manager's roster plus best/worst. book_aggregate — deterministic roll-ups (totals and group-bys: use it for 'total MRR at risk', 'reviews by AM', counts). explain_health — how an account's composite score is built. billing — LIVE Chargebee billing (subscription MRR/status, auto-collection, next renewal, unpaid invoices, failed transactions). Chargebee is ground truth for payments and revenue; prefer it over the health row's failedPayments proxy when a question is about money, renewals, or payment failures. customer_facts — curated history/notes about an account from the Keeper (Bat Cave Memory); use it for background and context on a customer. support_tickets — open HubSpot CX/support tickets for an account. reviews_detail — Google review count, average rating, distribution, velocity (last 30/90 days) and recent reviews. cohort_benchmark — one account vs its peer cohort (percentiles + medians). segment_analysis — health/metrics by segment (state/tier/product/AM). movers — biggest gainers/decliners period-over-period. expansion_radar — healthy single-product accounts ripe for upsell. revenue_at_risk — MRR at risk, ranked by revenue exposure. gather_360 — one-shot full dossier (health + billing + tickets + reviews + Keeper history) for briefings and drafts. recall — search your own durable memory of past conversations (across sessions). remember — save a fact the user asks you to keep.
 - Call tools as needed; you may call several at once. If a tool errors or returns nothing, adjust the arguments and retry once before concluding.
-- You have a DURABLE MEMORY of past conversations: when the user refers to something discussed earlier or in a previous session ("what did we say about…", "last week", "have we looked at…"), use the recall tool before answering.
+- You have a DURABLE MEMORY: when the user refers to something discussed earlier or in a previous session ("what did we say about…", "last week", "have we looked at…"), use recall before answering. When the user explicitly tells you to remember / note / keep a fact, use the remember tool (tie it to the account when there is one) and confirm what you saved — your saved notes resurface automatically in account_facts and the 360 dossier. Only save on an explicit request, and never delete.
 
 DRAFTS — you draft, a human sends
 - On request you can DRAFT outward artifacts: an account-manager outreach message, a QBR / health brief, a churn-save playbook, or an escalation note. Pull real context first (gather_360 gives the full picture), address the real account and account manager, and be specific and grounded — no invented details.
@@ -158,7 +158,8 @@ const TOOLS = [
   { name: "expansion_radar", description: "Healthy, high-engagement accounts on a single product — ripe for an upsell/expansion conversation. Optional limit. Use for 'who can we upsell?', 'expansion opportunities'.", input_schema: { type: "object", properties: { limit: { type: "integer" } } } },
   { name: "revenue_at_risk", description: "Revenue exposure: non-healthy accounts ranked by MRR at risk, with total MRR at risk, each account's tier, root driver and recommended action. Use for 'how much revenue is at risk?', 'churn radar', 'which at-risk accounts are worth most?'.", input_schema: { type: "object", properties: { limit: { type: "integer" } } } },
   { name: "gather_360", description: "One-shot 360° dossier for an account — health metrics, live Chargebee billing, open support tickets, review detail, and Keeper history, gathered together. Use this when you need the full picture: preparing a briefing, a QBR, an outreach draft, a churn-save plan, or answering a broad 'tell me everything about X'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
-  { name: "recall", description: "Search your OWN durable memory of past conversations (persists across sessions). Use when the user refers to something discussed before — 'what did we say about X?', 'what did I ask earlier / last week?', 'have we looked at this account before?'. Filter by entity (an account name) or by text; omit both for the most recent interactions.", input_schema: { type: "object", properties: { entity: { type: "string" }, text: { type: "string" } } }, cache_control: { type: "ephemeral" } },
+  { name: "recall", description: "Search your OWN durable memory of past conversations (persists across sessions). Use when the user refers to something discussed before — 'what did we say about X?', 'what did I ask earlier / last week?', 'have we looked at this account before?'. Filter by entity (an account name) or by text; omit both for the most recent interactions.", input_schema: { type: "object", properties: { entity: { type: "string" }, text: { type: "string" } } } },
+  { name: "remember", description: "Save a fact to your durable memory when the user EXPLICITLY asks you to remember / note / keep something ('remember that…', 'note that…', 'keep in mind…'). Optionally tie it to an account so it resurfaces whenever that account comes up. Do NOT use this to auto-save on your own — only on an explicit request. You can save; you never delete.", input_schema: { type: "object", properties: { fact: { type: "string" }, account: { type: "string" } }, required: ["fact"] }, cache_control: { type: "ephemeral" } },
 ];
 
 type Ctx = { list: AccountRow[]; payload: AccountsPayload; asOf: string | undefined };
@@ -254,8 +255,8 @@ async function execTool(name: string, input: Record<string, unknown>, ctx: Ctx) 
       const hits = findAccounts(list, String(input.name || ""));
       if (!hits.length) return { error: `no account named "${input.name}"` };
       if (hits.length > 1 && hits.length <= 8) return { ambiguous: hits.map((a) => ({ name: a.name, am: a.accountManager, city: a.city, entityId: a.entityId })) };
-      const facts = await getFactsByEntityId(hits[0].entityId);
-      return { account: hits[0].name, ...facts };
+      const [facts, saved_notes] = await Promise.all([getFactsByEntityId(hits[0].entityId), getSavedNotes(hits[0].entityId)]);
+      return { account: hits[0].name, ...facts, saved_notes };
     }
     if (name === "support_tickets") {
       const hits = findAccounts(list, String(input.name || ""));
@@ -345,16 +346,29 @@ async function execTool(name: string, input: Record<string, unknown>, ctx: Ctx) 
       if (hits.length > 1 && hits.length <= 8) return { ambiguous: hits.map((a) => ({ name: a.name, am: a.accountManager, city: a.city, entityId: a.entityId })) };
       const a = hits[0];
       const settle = <T>(p: Promise<T>) => p.then((v) => v).catch((e) => ({ error: String((e as Error)?.message || e) }) as unknown as T);
-      const [billing, facts, tickets, reviews] = await Promise.all([
+      const [billing, facts, tickets, reviews, saved_notes] = await Promise.all([
         settle(getBillingByEntityId(a.entityId)),
         settle(getFactsByEntityId(a.entityId)),
         settle(getSupportTickets(a.entityId)),
         settle(getReviewsDetail(a.entityId)),
+        settle(getSavedNotes(a.entityId)),
       ]);
-      return { account: a.name, as_of: asOf, health: slim(a), billing, facts, support_tickets: tickets, reviews };
+      return { account: a.name, as_of: asOf, health: slim(a), billing, facts, support_tickets: tickets, reviews, saved_notes };
     }
     if (name === "recall") {
       return await recall({ entity: input.entity ? String(input.entity) : undefined, text: input.text ? String(input.text) : undefined });
+    }
+    if (name === "remember") {
+      const fact = String(input.fact || "").trim();
+      if (!fact) return { error: "nothing to remember — provide the fact to save" };
+      let entityId: string | undefined, entityName: string | undefined;
+      if (input.account) {
+        const hits = findAccounts(list, String(input.account));
+        if (hits.length > 1 && hits.length <= 8) return { ambiguous: hits.map((a) => ({ name: a.name, am: a.accountManager, city: a.city, entityId: a.entityId })) };
+        if (hits.length === 1) { entityId = hits[0].entityId; entityName = hits[0].name; }
+      }
+      const res = await rememberFact({ fact, entityId, entityName });
+      return res.ok ? { saved: true, fact, account: entityName || null, note: entityName ? "will resurface when this account comes up" : "saved as a general note" } : { error: res.reason };
     }
     return { error: "unknown tool " + name };
   } catch (e) {

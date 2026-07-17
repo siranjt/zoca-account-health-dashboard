@@ -24,6 +24,35 @@ export async function logInteraction(r: LogRec): Promise<void> {
   } catch { /* memory logging must never break a reply */ }
 }
 
+// --- Alfred's own remembered facts (Bat Cave Memory, append-only) ---
+
+export async function rememberFact(r: { fact: string; entityId?: string; entityName?: string; source?: string }): Promise<{ ok: boolean; reason?: string }> {
+  if (!neonUrl()) return { ok: false, reason: "memory store not configured" };
+  const fact = (r.fact || "").trim();
+  if (!fact) return { ok: false, reason: "empty fact" };
+  try {
+    await getSql()`
+      INSERT INTO alfred.facts (entity_id, entity_name, fact, source)
+      VALUES (${r.entityId || null}, ${r.entityName || null}, ${fact}, ${r.source || "user"})`;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: String((e as Error)?.message || e).slice(0, 140) };
+  }
+}
+
+export async function getSavedNotes(entityId: string, limit = 20): Promise<Array<{ date: string; fact: string }>> {
+  if (!neonUrl() || !entityId) return [];
+  try {
+    const rows = (await getSql()`
+      SELECT to_char(ts,'DD/MM/YY') d, fact FROM alfred.facts
+      WHERE entity_id = ${entityId} AND soft_deleted_at IS NULL
+      ORDER BY ts DESC LIMIT ${Math.min(limit, 30)}`) as Array<{ d: string; fact: string }>;
+    return rows.map((r) => ({ date: r.d, fact: r.fact }));
+  } catch {
+    return [];
+  }
+}
+
 export type RecallResult =
   | { available: false; reason: string }
   | { count: number; interactions: Array<{ date: string; question: string; reply_excerpt: string }> };
