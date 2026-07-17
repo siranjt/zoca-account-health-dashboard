@@ -54,6 +54,39 @@ export async function getSupportTickets(entityId: string, windowDays = 30) {
   }
 }
 
+// Ticket totals across MANY accounts (a whole account-manager's book) in ONE
+// query — so Alfred never loops support_tickets per account.
+export async function getManagerTickets(entityIds: string[], windowDays = 30) {
+  const ids = entityIds.map((e) => esc(e)).filter(Boolean);
+  if (!ids.length) return { available: false as const, reason: "no accounts for this manager" };
+  const days = Math.min(Math.max(windowDays, 1), 365);
+  const inList = ids.map((e) => `'${e}'`).join(",");
+  try {
+    const cats = await queryAurora(`
+      select substring(ht.subject from '^[A-Z_]+') category,
+        count(*) filter (where st.property_hs_is_closed::text='false')::int active,
+        count(*) filter (where st.property_hs_is_closed::text='true'
+                           and st.property_closed_date::timestamptz >= now() - interval '${days} days')::int closed
+      from hubspot.tickets ht
+      join hubspot_stitch.tickets st on st.id = ht.hubspot_ticket_id
+      where ht.location_entity_id in (${inList})
+      group by 1`);
+    const byCat = cats
+      .map((c) => ({ category: c.category || "OTHER", active: Number(c.active) || 0, closed: Number(c.closed) || 0 }))
+      .filter((c) => c.active > 0 || c.closed > 0)
+      .sort((a, b) => (b.active + b.closed) - (a.active + a.closed));
+    return {
+      active_total: byCat.reduce((s, c) => s + c.active, 0),
+      closed_in_window_total: byCat.reduce((s, c) => s + c.closed, 0),
+      window_days: days,
+      by_category: byCat,
+      category_note: "category = subject prefix. website = WEBSITE_*; billing/finance = SUBSCIPTION_SUPPORT; google/GBP = GOOGLE_SUPPORT + GBP_*; also REVIEWS_/LEADS_/SOCIAL_MEDIA_/ADS_/APP_/LOYALTY_SUPPORT. Sum matching prefixes for a grouped question.",
+    };
+  } catch (e) {
+    return { available: false as const, reason: `manager tickets query failed: ${String((e as Error)?.message || e).slice(0, 140)}` };
+  }
+}
+
 export async function getReviewsDetail(entityId: string) {
   const id = esc(entityId);
   if (!id) return { available: false as const, reason: "no entity_id" };

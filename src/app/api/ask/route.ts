@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAccountsPayload, getAccountDetail } from "@/lib/data";
 import { getBillingByEntityId } from "@/lib/chargebee";
 import { getFactsByEntityId } from "@/lib/keeper";
-import { getSupportTickets, getReviewsDetail } from "@/lib/insights";
+import { getSupportTickets, getReviewsDetail, getManagerTickets } from "@/lib/insights";
 import { logInteraction, recall, rememberFact, getSavedNotes, getUsageStats, setFocus, clearFocus, getFocus } from "@/lib/memory";
 import { HEALTH_WEIGHTS } from "@/lib/health";
 import type { AccountRow, AccountsPayload } from "@/lib/types";
@@ -18,6 +18,7 @@ export const maxDuration = 60;
 
 const MODEL = process.env.ANTHROPIC_ASK_MODEL || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 const MAX_ITERS = 5;
+const MAX_TOOLS_PER_TURN = 8; // hard cap so Alfred can't explode into N per-account calls
 const TOOL_TIMEOUT_MS = 15000;
 
 const ALFRED_SYS =
@@ -45,6 +46,7 @@ STYLE
 TOOLS
 - book_summary — whole-book tier counts. at_risk_accounts — worst-first list with root drivers. account_health — one account's full metrics. account_detail — time-series behind a row. accounts_by_manager — an account manager's roster plus best/worst. book_aggregate — deterministic roll-ups (totals and group-bys: use it for 'total MRR at risk', 'reviews by AM', counts). explain_health — how an account's composite score is built. billing — LIVE Chargebee billing (subscription MRR/status, auto-collection, next renewal, unpaid invoices, failed transactions). Chargebee is ground truth for payments and revenue; prefer it over the health row's failedPayments proxy when a question is about money, renewals, or payment failures. customer_facts — curated history/notes about an account from the Keeper (Bat Cave Memory); use it for background and context on a customer. support_tickets — open HubSpot CX/support tickets for an account. reviews_detail — Google review count, average rating, distribution, velocity (last 30/90 days) and recent reviews. cohort_benchmark — one account vs its peer cohort (percentiles + medians). segment_analysis — health/metrics by segment (state/tier/product/AM). movers — biggest gainers/decliners period-over-period. expansion_radar — healthy single-product accounts ripe for upsell. revenue_at_risk — MRR at risk, ranked by revenue exposure. gather_360 — one-shot full dossier (health + billing + tickets + reviews + Keeper history) for briefings and drafts. recall — search your own durable memory of past conversations (across sessions). remember — save a fact the user asks you to keep. usage_stats — analytics over your own history (most-asked accounts/tools). pin_focus — pin an account as the session subject so follow-ups need no re-naming.
 - Call tools as needed; you may call several at once. If a tool errors or returns nothing, adjust the arguments and retry once before concluding.
+- For a question about a WHOLE account-manager's book or a segment (e.g. "tickets for X's customers", "MRR across X's book"), use ONE aggregate tool — manager_tickets, accounts_by_manager, book_aggregate, or segment_analysis. NEVER call a per-account tool (support_tickets, billing, account_health) once per account across a whole book — that is too slow and will fail. If the needed aggregate doesn't exist, say so plainly instead of looping.
 - You have a DURABLE MEMORY: when the user refers to something discussed earlier or in a previous session ("what did we say about…", "last week", "have we looked at…"), use recall before answering. When the user explicitly tells you to remember / note / keep a fact, use the remember tool (tie it to the account when there is one) and confirm what you saved — your saved notes resurface automatically in account_facts and the 360 dossier. Only save on an explicit request, and never delete.
 
 DRAFTS — you draft, a human sends
@@ -151,6 +153,7 @@ const TOOLS = [
   { name: "billing", description: "Live billing state for one account from Chargebee (ground truth, beats the health-score payment proxy): subscription status & MRR, auto-collection, next renewal, unpaid invoices + total due, recent failed transactions with the error. Use for 'are they paid up?', 'any failed payments?', 'when do they renew?', 'what's their MRR?'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "customer_facts", description: "Curated facts and history for one account from the Keeper (Bat Cave Memory) — owner details, preferences, past issues, notes captured over time. Use for 'what do we know about them?', 'any history / context?', 'who's the owner?', background before a call.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "support_tickets", description: "HubSpot tickets for one account (associated via location_entity_id). Returns ACTIVE (open) counts and tickets CLOSED within a window (days: 7/30/90/180, default 30), each broken down BY CATEGORY (website, billing/subscription, google/GBP, reviews, leads, social, ads, app…), plus recent active tickets. Use for 'how many active/open tickets does X have?', 'how many website / finance tickets?', 'how many tickets did we close for X in the last 90 days?'. For a category question, read by_category and sum the matching prefixes.", input_schema: { type: "object", properties: { name: { type: "string" }, days: { type: "integer" } }, required: ["name"] } },
+  { name: "manager_tickets", description: "Ticket totals across an ENTIRE account manager's book in ONE call — active (open) and closed-in-window counts, by category (website, billing/finance, google, reviews, leads…), summed over ALL of that manager's accounts. Use for 'how many finance / website tickets are active for X's customers?', 'ticket load across X's book'. ALWAYS use this for a whole-manager ticket question — never call support_tickets account-by-account.", input_schema: { type: "object", properties: { manager: { type: "string" }, days: { type: "integer" } }, required: ["manager"] } },
   { name: "reviews_detail", description: "Review-level detail for one account from Google reviews: total count, average star rating, rating distribution, review velocity (last 30/90 days), and the most recent reviews. Use for 'how are their reviews?', 'rating trend?', 'are reviews slowing down?'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "cohort_benchmark", description: "Benchmark one account against its peer cohort (same state, else the whole book): for composite, leads, reviews, profile clicks, keyword top-3%, avg rank and MRR it returns the account's value, the cohort median, and the percentile. Use for 'is X doing well for their market?', 'how do they compare to peers?'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "segment_analysis", description: "Health/metrics by segment across the whole book. groupBy: state | tier | color | accountManager | product. Returns per-segment count, avg composite, % at-risk, avg leads/reviews and total MRR. Use for 'which state is healthiest?', 'how do accounts on Discovery-only compare?', 'which AM's book is weakest?'.", input_schema: { type: "object", properties: { groupBy: { type: "string" } }, required: ["groupBy"] } },
@@ -266,6 +269,17 @@ async function execTool(name: string, input: Record<string, unknown>, ctx: Ctx) 
       if (hits.length > 1 && hits.length <= 8) return { ambiguous: hits.map((a) => ({ name: a.name, am: a.accountManager, city: a.city, entityId: a.entityId })) };
       const tk = await getSupportTickets(hits[0].entityId, Number(input.days) || 30);
       return { account: hits[0].name, ...tk, as_of: asOf };
+    }
+    if (name === "manager_tickets") {
+      const qn = norm(String(input.manager || ""));
+      if (qn.length < 2) return { error: "manager name too short" };
+      const nq = " " + qn + " ";
+      const hits = list.filter((a) => { const m = norm(a.accountManager || ""); return (" " + m + " ").includes(nq) || m.includes(qn); });
+      if (!hits.length) return { error: `no accounts found for manager "${input.manager}"` };
+      const managers = Array.from(new Set(hits.map((a) => a.accountManager).filter(Boolean)));
+      if (managers.length > 1) return { ambiguous_managers: managers.slice(0, 15) };
+      const tk = await getManagerTickets(hits.map((a) => a.entityId), Number(input.days) || 30);
+      return { manager: managers[0], account_count: hits.length, ...tk, as_of: asOf };
     }
     if (name === "reviews_detail") {
       const hits = findAccounts(list, String(input.name || ""));
@@ -454,12 +468,20 @@ export async function POST(req: Request) {
       if (resp.stop_reason === "tool_use") {
         messages.push({ role: "assistant", content: resp.content });
         const blocks = (resp.content || []).filter((b: any) => b.type === "tool_use");
-        // Run all tool calls for this turn in parallel, each with a timeout.
-        const results = await Promise.all(blocks.map(async (blk: any) => {
+        // Cap concurrent tool calls per turn: run the first N in parallel; any
+        // beyond that are skipped with guidance to use an aggregate tool. This
+        // stops a "call support_tickets for all 113 accounts" explosion (which
+        // would blow past maxDuration and never return).
+        const toRun = blocks.slice(0, MAX_TOOLS_PER_TURN);
+        const skipped = blocks.slice(MAX_TOOLS_PER_TURN);
+        const results: unknown[] = await Promise.all(toRun.map(async (blk: any) => {
           toolsUsed.push(blk.name);
           const r = await withTimeout(execTool(blk.name, blk.input || {}, ctx), TOOL_TIMEOUT_MS, { error: "tool timed out" });
           return { type: "tool_result", tool_use_id: blk.id, content: JSON.stringify(r).slice(0, 12000) };
         }));
+        for (const blk of skipped) {
+          results.push({ type: "tool_result", tool_use_id: blk.id, content: JSON.stringify({ error: "skipped — too many tool calls at once. For a whole account manager's book or a segment, use ONE aggregate tool (manager_tickets, book_aggregate, segment_analysis, accounts_by_manager), not many per-account calls." }) });
+        }
         messages.push({ role: "user", content: results });
         continue;
       }
