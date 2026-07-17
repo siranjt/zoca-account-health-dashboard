@@ -117,6 +117,9 @@ export interface AccountDetail {
   comms?: { wk: string; sms: number; call: number }[];
   mediaCadence?: { wk: string; live: number }[];
   forecast?: { predicted: number | null; actual: number } | null;
+  // Row-level records (Retool "Reviews List" / "Lead Table")
+  reviewsList?: { reviewer: string | null; rating: number | null; platform: string | null; text: string | null; date: string | null }[];
+  leadsList?: { date: string | null; source: string | null; service: string | null; status: string | null; price: number | null; currency: string | null; utm: string | null }[];
 }
 
 export interface PaymentInvoice {

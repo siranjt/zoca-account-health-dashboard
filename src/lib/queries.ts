@@ -171,7 +171,7 @@ export function detailBookingsSql(id: string): string {
 export function detailKeywordRankSql(id: string): string {
   return `WITH base AS (SELECT keyword, floor(avg_rank) avg_rank, floor(min_rank) min_rank, search_volume,
       rank() over(partition by keyword order by created_at::date desc) rnk FROM local_seo.rank WHERE entity_id='${id}')
-    SELECT keyword, avg_rank, min_rank, search_volume FROM base WHERE rnk=1 AND avg_rank IS NOT NULL ORDER BY avg_rank ASC LIMIT 10`;
+    SELECT keyword, avg_rank, min_rank, search_volume FROM base WHERE rnk=1 AND avg_rank IS NOT NULL ORDER BY avg_rank ASC LIMIT 60`;
 }
 
 /** Monthly Google search impressions (summed across keywords). */
@@ -213,4 +213,30 @@ export function detailForecastSql(id: string): string {
   return `SELECT
       (SELECT predicted_6_month_leads FROM entities.location_insights WHERE entity_id::text='${id}' ORDER BY created_at DESC LIMIT 1) AS predicted,
       (SELECT count(*) FROM website.booking_enquiries WHERE entity_id='${id}'::uuid AND is_test_lead=false AND created_at >= current_date - interval '6 months') AS actual`;
+}
+
+// ============================================================================
+// Row-level detail (the Retool "Reviews List" / "Lead Table" widgets) — the
+// actual records, not just aggregates.
+// ============================================================================
+
+/** Every non-deleted review with its text, author, rating, platform, date. */
+export function detailReviewsListSql(id: string): string {
+  return `SELECT reviewer_name, rating::text rating, platform, review_text,
+      to_char(COALESCE(review_time, created_at),'YYYY-MM-DD') d
+    FROM reviews.reviews
+    WHERE entity_id='${id}'::uuid AND is_deleted=false
+    ORDER BY COALESCE(review_time, created_at) DESC NULLS LAST
+    LIMIT 300`;
+}
+
+/** Individual lead rows (booking enquiries) within the selected window. */
+export function detailLeadsListSql(id: string, windowDays: number): string {
+  return `SELECT to_char(created_at,'YYYY-MM-DD') d, source, status,
+      COALESCE(service, service_variation_name) service, price, currency, utm_source
+    FROM website.booking_enquiries
+    WHERE entity_id='${id}'::uuid AND is_test_lead=false
+      AND created_at >= now() - interval '${windowDays} days'
+    ORDER BY created_at DESC
+    LIMIT 500`;
 }

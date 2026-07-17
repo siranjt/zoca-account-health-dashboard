@@ -254,6 +254,12 @@ export default function AccountDossier({
             <ChartCard title="Leads Vs Reviews" subtitle="monthly, last 12 months">
               {detail ? <LeadsReviewsChart data={detail.leadsReviews} /> : skel}
             </ChartCard>
+
+            <div className="md:col-span-2 xl:col-span-3">
+              <ChartCard title="Reviews List" subtitle="every review · what customers actually said (reviews.reviews)">
+                {detail ? <ReviewsList reviews={detail.reviewsList ?? []} /> : skel}
+              </ChartCard>
+            </div>
           </>
         )}
 
@@ -267,7 +273,7 @@ export default function AccountDossier({
               {detail ? <LeadForecastChart data={detail.forecast} /> : skel}
             </ChartCard>
 
-            <ChartCard title="Lead Table" subtitle="response timing across leads in window">
+            <ChartCard title="Lead Response Time" subtitle="average across leads in window">
               <div className="space-y-1.5 py-2 text-sm">
                 <Row l="Received → Opened" v={formatDuration(account.avgReceivedToOpenedMs)} />
                 <Row l="Received → Contacted" v={formatDuration(account.avgReceivedToContactedMs)} />
@@ -283,13 +289,19 @@ export default function AccountDossier({
                 ]} />
               ) : <NoData />) : skel}
             </ChartCard>
+
+            <div className="md:col-span-2 xl:col-span-3">
+              <ChartCard title="Lead Table" subtitle="individual lead records in window (website.booking_enquiries)">
+                {detail ? <LeadsTable leads={detail.leadsList ?? []} /> : skel}
+              </ChartCard>
+            </div>
           </>
         )}
 
         {tab === "Rankings" && (
           <>
-            <ChartCard title="Keyword Rankings" subtitle="current avg rank per keyword (local SEO)">
-              {detail ? <KeywordRankingsChart data={detail.keywordRankings} /> : skel}
+            <ChartCard title="Keyword Rankings" subtitle="best-ranking keywords (local SEO)">
+              {detail ? <KeywordRankingsChart data={detail.keywordRankings?.slice(0, 12)} /> : skel}
             </ChartCard>
 
             <ChartCard title="Rank Trend" subtitle="avg current rank per extraction">
@@ -304,6 +316,12 @@ export default function AccountDossier({
                 <Stat label="KW Impressions" value={formatNumber(account.keywordImpressions)} />
               </div>
             </ChartCard>
+
+            <div className="md:col-span-2 xl:col-span-3">
+              <ChartCard title="Keyword Table" subtitle="every tracked keyword · rank & search volume (local_seo.rank)">
+                {detail ? <KeywordTable rows={detail.keywordRankings ?? []} /> : skel}
+              </ChartCard>
+            </div>
           </>
         )}
 
@@ -438,6 +456,109 @@ function InvoiceTable({ invoices }: { invoices: PaymentInvoice[] }) {
               </tr>
             );
           })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Stars({ n }: { n: number | null }) {
+  if (n == null) return <span className="text-slate-400">—</span>;
+  const full = Math.max(0, Math.min(5, n));
+  return (
+    <span className="tracking-tight" title={`${n}/5`}>
+      <span style={{ color: "#f59e0b" }}>{"★".repeat(full)}</span>
+      <span className="text-slate-300">{"★".repeat(5 - full)}</span>
+    </span>
+  );
+}
+
+function ReviewsList({ reviews }: { reviews: NonNullable<AccountDetail["reviewsList"]> }) {
+  if (!reviews.length) return <NoData />;
+  return (
+    <div className="table-scroll max-h-[540px] space-y-2 overflow-auto pr-1">
+      <div className="pb-1 text-xs text-slate-400">{reviews.length} review{reviews.length === 1 ? "" : "s"}</div>
+      {reviews.map((r, i) => (
+        <div key={i} className="rounded-lg border border-slate-100 bg-white p-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Stars n={r.rating} />
+            <span className="font-medium text-slate-700">{r.reviewer || "Anonymous"}</span>
+            {r.platform && (
+              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{r.platform}</span>
+            )}
+            <span className="ml-auto tabular-nums text-slate-400">{ddmmyy(r.date)}</span>
+          </div>
+          {r.text ? (
+            <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{r.text}</p>
+          ) : (
+            <p className="mt-1.5 text-xs italic text-slate-400">No text — rating only.</p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LeadsTable({ leads }: { leads: NonNullable<AccountDetail["leadsList"]> }) {
+  if (!leads.length) return <NoData />;
+  return (
+    <div className="table-scroll -mx-1 max-h-[540px] overflow-auto">
+      <div className="px-1 pb-1 text-xs text-slate-400">{leads.length} lead{leads.length === 1 ? "" : "s"}</div>
+      <table className="w-full border-collapse text-xs">
+        <thead className="sticky top-0 bg-slate-50 text-left uppercase tracking-wide text-slate-400">
+          <tr>
+            <th className="px-2 py-1.5 font-semibold">Date</th>
+            <th className="px-2 py-1.5 font-semibold">Source</th>
+            <th className="px-2 py-1.5 font-semibold">Service</th>
+            <th className="px-2 py-1.5 font-semibold">Status</th>
+            <th className="px-2 py-1.5 text-right font-semibold">Price</th>
+            <th className="px-2 py-1.5 font-semibold">UTM</th>
+          </tr>
+        </thead>
+        <tbody>
+          {leads.map((l, i) => (
+            <tr key={i} className="border-t border-slate-100">
+              <td className="px-2 py-1.5 tabular-nums text-slate-700">{ddmmyy(l.date)}</td>
+              <td className="px-2 py-1.5 text-slate-600">{l.source || "—"}</td>
+              <td className="px-2 py-1.5 text-slate-600">{l.service || "—"}</td>
+              <td className="px-2 py-1.5">
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{l.status || "—"}</span>
+              </td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">
+                {l.price != null ? `${!l.currency || l.currency === "USD" ? "$" : ""}${formatNumber(l.price)}` : "—"}
+              </td>
+              <td className="px-2 py-1.5 text-slate-500">{l.utm || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function KeywordTable({ rows }: { rows: NonNullable<AccountDetail["keywordRankings"]> }) {
+  if (!rows.length) return <NoData />;
+  return (
+    <div className="table-scroll -mx-1 max-h-[540px] overflow-auto">
+      <div className="px-1 pb-1 text-xs text-slate-400">{rows.length} keyword{rows.length === 1 ? "" : "s"}</div>
+      <table className="w-full border-collapse text-xs">
+        <thead className="sticky top-0 bg-slate-50 text-left uppercase tracking-wide text-slate-400">
+          <tr>
+            <th className="px-2 py-1.5 font-semibold">Keyword</th>
+            <th className="px-2 py-1.5 text-right font-semibold">Avg rank</th>
+            <th className="px-2 py-1.5 text-right font-semibold">Best rank</th>
+            <th className="px-2 py-1.5 text-right font-semibold">Search vol</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((k, i) => (
+            <tr key={i} className="border-t border-slate-100">
+              <td className="px-2 py-1.5 text-slate-700">{k.keyword}</td>
+              <td className={`px-2 py-1.5 text-right tabular-nums ${k.avgRank <= 3 ? "font-semibold text-emerald-600" : "text-slate-700"}`}>#{k.avgRank}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">#{k.minRank}</td>
+              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{k.searchVolume != null ? formatNumber(k.searchVolume) : "—"}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

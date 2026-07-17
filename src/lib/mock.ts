@@ -205,5 +205,40 @@ export function getMockAccountDetail(id: string): AccountDetail {
     comms: mkSpark(Math.max(3, Math.round(s.leads / 6)), id + "cm").map((v, i) => ({ wk: new Date(2026, 4, 1 + i * 7).toISOString().slice(0, 10), sms: v, call: Math.round(v * 0.4) })),
     mediaCadence: (() => { let live = 3; return mkSpark(2, id + "md").map((v, i) => { live += v; return { wk: new Date(2026, 4, 1 + i * 7).toISOString().slice(0, 10), live }; }); })(),
     forecast: { predicted: Math.max(20, s.leads * 2), actual: s.leads * 6 },
+    reviewsList: (() => {
+      const authors = ["Melinda G", "Zipporah S", "Fareeha K", "J. Rivera", "Dana P", "Chris M", "Aisha N", "Tom B"];
+      const texts = [
+        "Great experience as always! The team is fantastic and always on time.",
+        "First time getting a treatment here — such a relaxing experience, highly recommend.",
+        "The best as always, I've been coming here for years and never disappointed.",
+        "Booking was easy and the staff were super friendly. Will be back!",
+        "Good service but the wait was a little long this visit.",
+        "Absolutely love this place, clean and professional.",
+      ];
+      const plats = ["Google", "Fresha", "Google", "Yelp"];
+      const n = Math.min(8, Math.max(3, Math.round((s.reviews || 3) / 4)));
+      return Array.from({ length: n }, (_, i) => ({
+        reviewer: authors[i % authors.length],
+        rating: i % 7 === 0 ? 4 : 5,
+        platform: plats[i % plats.length],
+        text: texts[i % texts.length],
+        date: new Date(2026, 6, 15 - i * 3).toISOString().slice(0, 10),
+      }));
+    })(),
+    leadsList: (() => {
+      const svcs = ["Full Body Massage", "Box Braids", "Lash Extensions", "Haircut & Style", null, "Facial"];
+      const srcs = ["WEBSITE", "ZOCA_EMBED", "WEBSITE", "GBP"];
+      const stats = ["UNMARKED", "BOOKED", "CONTACTED", "UNMARKED"];
+      const n = Math.min(12, Math.max(4, s.leads));
+      return Array.from({ length: n }, (_, i) => ({
+        date: new Date(2026, 6, 17 - i).toISOString().slice(0, 10),
+        source: srcs[i % srcs.length],
+        service: svcs[i % svcs.length],
+        status: stats[i % stats.length],
+        price: i % 3 === 0 ? 249 : null,
+        currency: i % 3 === 0 ? "USD" : null,
+        utm: i % 4 === 0 ? "instagram" : null,
+      }));
+    })(),
   };
 }

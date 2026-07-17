@@ -24,6 +24,8 @@ import {
   detailCommsSql,
   detailMediaSql,
   detailForecastSql,
+  detailReviewsListSql,
+  detailLeadsListSql,
 } from "./queries";
 import { labelAgent } from "./types";
 import { mapTier } from "./health";
@@ -216,7 +218,7 @@ export async function getAccountDetailFromMetabase(
   const cfg = readMetabaseConfig();
   if (!cfg) throw new Error("Metabase not configured");
   const safe = (sql: string) => runDataset(cfg, sql).catch(() => [] as Row[]);
-  const [pw, lr, rt, fn, au, bk, kr, im, rd, cm, md, fc] = await Promise.all([
+  const [pw, lr, rt, fn, au, bk, kr, im, rd, cm, md, fc, rl, ll] = await Promise.all([
     runDataset(cfg, detailProfileWeeklySql(id)),
     runDataset(cfg, detailLeadsReviewsMonthlySql(id)),
     runDataset(cfg, detailRankTrendSql(id)),
@@ -229,6 +231,8 @@ export async function getAccountDetailFromMetabase(
     safe(detailCommsSql(id)),
     safe(detailMediaSql(id)),
     safe(detailForecastSql(id)),
+    safe(detailReviewsListSql(id)),
+    safe(detailLeadsListSql(id, Math.max(windowDays, 90))),
   ]);
   const f = fn[0] ?? {};
   const RATING = { FIVE: 5, FOUR: 4, THREE: 3, TWO: 2, ONE: 1, ZERO: 0 } as Record<string, number>;
@@ -274,5 +278,21 @@ export async function getAccountDetailFromMetabase(
     comms: cm.map((r) => ({ wk: String(r.wk), sms: int0(r.sms), call: int0(r.call) })),
     mediaCadence,
     forecast: fcRow.predicted != null || fcRow.actual != null ? { predicted: num(fcRow.predicted), actual: int0(fcRow.actual) } : null,
+    reviewsList: rl.map((r) => ({
+      reviewer: (r.reviewer_name as string) || null,
+      rating: RATING[String(r.rating ?? "")] ?? null,
+      platform: (r.platform as string) || null,
+      text: (r.review_text as string) || null,
+      date: (r.d as string) || null,
+    })),
+    leadsList: ll.map((r) => ({
+      date: (r.d as string) || null,
+      source: (r.source as string) || null,
+      service: (r.service as string) || null,
+      status: (r.status as string) || null,
+      price: num(r.price),
+      currency: (r.currency as string) || null,
+      utm: (r.utm_source as string) || null,
+    })),
   };
 }
