@@ -1,20 +1,10 @@
 import "server-only";
-import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import { getSql, neonUrl } from "@/lib/neon";
 
 // Keeper facts client for Alfred (Batch 2). Reads the curated customer facts
 // in Neon (beacon_brain_facts) — the "Bat Cave Memory". Facts are keyed by
 // customer_id, which is the Zoca entity UUID. Read-only; Alfred never writes
 // to the production Keeper. Same Neon instance beacon uses (DATABASE_URL).
-
-let _sql: NeonQueryFunction<false, false> | null = null;
-function sql() {
-  if (!_sql) {
-    const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
-    if (!url) throw new Error("DATABASE_URL not set");
-    _sql = neon(url);
-  }
-  return _sql;
-}
 
 export type KeeperFact = { topic: string; field: string; value: string; confidence: string | null };
 
@@ -25,10 +15,10 @@ export type KeeperResult =
 export async function getFactsByEntityId(entityId: string, limit = 60): Promise<KeeperResult> {
   const eid = (entityId || "").trim();
   if (!eid) return { available: false, reason: "no entity_id" };
-  if (!(process.env.DATABASE_URL || process.env.POSTGRES_URL))
+  if (!neonUrl())
     return { available: false, reason: "Keeper (Neon) is not configured (DATABASE_URL missing)." };
   try {
-    const rows = (await sql()`
+    const rows = (await getSql()`
       SELECT topic_subcategory, field_name, value, confidence_state
       FROM beacon_brain_facts
       WHERE customer_id = ${eid}

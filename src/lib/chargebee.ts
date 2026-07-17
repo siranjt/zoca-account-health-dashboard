@@ -1,17 +1,18 @@
 import "server-only";
+import { getSql, neonUrl } from "@/lib/neon";
 
 // Chargebee billing client for Alfred (Batch 2). Zoca's Chargebee does NOT
-// expose cf_entity_id as a filterable field, and it lives on the SUBSCRIPTION
-// (not the customer). So we page all subscriptions once to build an
-// entity_id → {subscription, customer_id} map, cache it module-level with a
-// TTL, then pull invoices/transactions per customer on demand. Read-only.
+// expose cf_entity_id as a filterable field, so we resolve entity_id →
+// Chargebee customer_id from beacon's Neon snapshot (dashboard_snapshots —
+// the same map beacon's own billing tool uses), cached module-level with a
+// TTL. Then we pull the subscription/invoices/transactions per customer from
+// Chargebee on demand. Read-only.
 
 const SITE = process.env.CHARGEBEE_SITE || "zoca";
 const KEY = process.env.CHARGEBEE_API_KEY || "";
 const BASE = `https://${SITE}.chargebee.com/api/v2`;
 const TIMEOUT_MS = 12_000;
 const MAP_TTL_MS = 60 * 60 * 1000; // 1h
-const MAX_PAGES = 40;
 
 function authHeader() {
   return { Authorization: "Basic " + Buffer.from(`${KEY}:`).toString("base64") };
@@ -34,37 +35,26 @@ async function cbGet<T = Record<string, unknown>>(path: string, params: Record<s
 const dollars = (c: number | null | undefined) => (c && Number.isFinite(c) ? Math.round(c) / 100 : 0);
 const isoDate = (t: number | null | undefined) => (t && Number.isFinite(t) ? new Date(t * 1000).toISOString().slice(0, 10) : null);
 
-type SubEntry = { sub_id: string; customer_id: string; status: string; mrr?: number; plan_amount?: number; plan_id?: string; current_term_end?: number };
+// entity_id → Chargebee customer_id, from beacon's latest Neon snapshot.
+let cache: { map: Map<string, string>; builtAt: number } | null = null;
+let building: Promise<Map<string, string>> | null = null;
 
-type CbSub = { id: string; customer_id: string; status: string; cf_entity_id?: string; mrr?: number; plan_amount?: number; plan_id?: string; current_term_end?: number };
-
-let cache: { map: Map<string, SubEntry>; builtAt: number } | null = null;
-let building: Promise<Map<string, SubEntry>> | null = null;
-
-async function buildMap(): Promise<Map<string, SubEntry>> {
-  const map = new Map<string, SubEntry>();
-  let offset: string | undefined;
-  let pages = 0;
-  do {
-    const params: Record<string, string> = { limit: "100", "sort_by[asc]": "created_at" };
-    if (offset) params.offset = offset;
-    const j = await cbGet<{ list: Array<{ subscription: CbSub }>; next_offset?: string }>("/subscriptions", params);
-    for (const { subscription: s } of j.list || []) {
-      const eid = (s.cf_entity_id || "").trim();
-      if (!eid) continue;
-      const prev = map.get(eid);
-      // Prefer an active subscription over trial/cancelled/future.
-      if (!prev || (s.status === "active" && prev.status !== "active")) {
-        map.set(eid, { sub_id: s.id, customer_id: s.customer_id, status: s.status, mrr: s.mrr, plan_amount: s.plan_amount, plan_id: s.plan_id, current_term_end: s.current_term_end });
-      }
-    }
-    offset = j.next_offset;
-    pages++;
-  } while (offset && pages < MAX_PAGES);
+async function buildMap(): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (!neonUrl()) return map;
+  const rows = (await getSql()`
+    SELECT customer_data FROM dashboard_snapshots ORDER BY snapshot_date DESC LIMIT 1
+  `) as Array<{ customer_data: unknown }>;
+  const raw = rows?.[0]?.customer_data;
+  const snap = (typeof raw === "string" ? JSON.parse(raw) : raw) as { customers?: Array<{ entity_id?: string; customer_id?: string }> } | null;
+  for (const c of snap?.customers || []) {
+    const eid = (c.entity_id || "").trim();
+    if (eid && c.customer_id) map.set(eid, c.customer_id);
+  }
   return map;
 }
 
-async function ensureMap(): Promise<Map<string, SubEntry>> {
+async function ensureMap(): Promise<Map<string, string>> {
   if (cache && Date.now() - cache.builtAt < MAP_TTL_MS) return cache.map;
   if (building) return building;
   building = buildMap()
@@ -95,17 +85,19 @@ export async function getBillingByEntityId(entityId: string): Promise<BillingRes
   if (!eid) return { found: false, reason: "no entity_id" };
 
   const map = await ensureMap();
-  const entry = map.get(eid);
-  if (!entry) return { found: false, reason: "no Chargebee subscription bound to this account (cf_entity_id not found)." };
+  const cid = map.get(eid);
+  if (!cid) return { found: false, reason: "no Chargebee customer bound to this account (entity not on the latest snapshot)." };
 
-  const cid = entry.customer_id;
-  const [custRes, invRes, txnRes] = await Promise.all([
+  const [custRes, subRes, invRes, txnRes] = await Promise.all([
     cbGet<{ customer: { email?: string; auto_collection?: string; net_term_days?: number } }>(`/customers/${cid}`),
+    cbGet<{ list: Array<{ subscription: { status: string; mrr?: number; plan_amount?: number; plan_id?: string; current_term_end?: number } }> }>("/subscriptions", { "customer_id[is]": cid, limit: "10" }),
     cbGet<{ list: Array<{ invoice: { status: string; total?: number; amount_due?: number; date?: number; due_date?: number } }> }>("/invoices", { "customer_id[is]": cid, limit: "12", "sort_by[desc]": "date" }),
     cbGet<{ list: Array<{ transaction: { status: string; amount?: number; date?: number; error_text?: string } }> }>("/transactions", { "customer_id[is]": cid, limit: "12", "sort_by[desc]": "date" }),
   ]);
 
   const cust = custRes.customer || {};
+  const allSubs = (subRes.list || []).map((x) => x.subscription);
+  const sub = allSubs.find((s) => s.status === "active") || allSubs[0] || null;
   const invoices = (invRes.list || []).map(({ invoice: i }) => {
     const dueMs = i.due_date ? i.due_date * 1000 : null;
     const daysOverdue = dueMs && i.status !== "paid" ? Math.max(0, Math.floor((Date.now() - dueMs) / 86400000)) : 0;
@@ -119,7 +111,7 @@ export async function getBillingByEntityId(entityId: string): Promise<BillingRes
   return {
     found: true,
     customer_id: cid,
-    subscription: { status: entry.status, mrr_usd: dollars(entry.mrr), plan_amount_usd: dollars(entry.plan_amount), plan_id: entry.plan_id || null, next_renewal: isoDate(entry.current_term_end) },
+    subscription: { status: sub?.status || "none", mrr_usd: dollars(sub?.mrr), plan_amount_usd: dollars(sub?.plan_amount), plan_id: sub?.plan_id || null, next_renewal: isoDate(sub?.current_term_end) },
     auto_collection: cust.auto_collection || null,
     net_term_days: cust.net_term_days ?? null,
     email: cust.email || null,

@@ -16,7 +16,7 @@ export const maxDuration = 60;
 
 const MODEL = process.env.ANTHROPIC_ASK_MODEL || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 const MAX_ITERS = 5;
-const TOOL_TIMEOUT_MS = 25000; // billing's first call pages the Chargebee subscription map
+const TOOL_TIMEOUT_MS = 15000;
 
 const ALFRED_SYS =
   `You are Alfred — the razor-sharp butler and account-health analyst for Zoca, a SaaS that runs Google Business Profile, reviews, and lead-gen for local salons/spas/med-spas. You reason over the live Account Health data through tools.
