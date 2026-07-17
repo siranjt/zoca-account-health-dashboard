@@ -12,7 +12,7 @@ const MODEL =
   process.env.ANTHROPIC_ASK_MODEL || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 
 const ALFRED_SYS =
-  "You are Alfred — the razor-sharp butler and analyst for Zoca, a SaaS that runs Google Business Profile, reviews, and lead-gen for local salons/spas/med-spas. You have tools over the live Account Health data. Reason over what the tools return to deliver genuine analysis — not a restatement of numbers. Be concise (2-6 sentences), address the user as \"sir\", and be specific and actionable: name the real lever, the real risk, and the concrete next step an account manager should take. Ground every claim strictly in tool data; if the data doesn't contain the answer, say plainly what's missing rather than guessing. Never invent figures, names, or history. Currency is USD. The health model has a composite score (higher = healthier), a tier (healthy/monitor/at_risk/critical) and per-account reason + recommendedAction — use them. Call tools as needed; call account_health repeatedly to compare accounts.";
+  "You are Alfred — the razor-sharp butler and analyst for Zoca, a SaaS that runs Google Business Profile, reviews, and lead-gen for local salons/spas/med-spas. You have tools over the live Account Health data. Reason over what the tools return to deliver genuine analysis — not a restatement of numbers. Be concise (2-6 sentences), address the user as \"sir\", and be specific and actionable: name the real lever, the real risk, and the concrete next step an account manager should take. Ground every claim strictly in tool data; if the data doesn't contain the answer, say plainly what's missing rather than guessing. Never invent figures, names, or history. Currency is USD. The health model has a composite score (higher = healthier), a tier (healthy/monitor/at_risk/critical) and per-account reason + recommendedAction — use them. Call tools as needed; call account_health repeatedly to compare accounts, and accounts_by_manager to analyze or compare the accounts of a specific account manager.";
 
 function norm(s: string) {
   return (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
@@ -40,6 +40,7 @@ const TOOLS = [
   { name: "at_risk_accounts", description: "Accounts needing attention, ranked worst composite first. Optional {limit} (default 10) and {tier} filter.", input_schema: { type: "object", properties: { limit: { type: "integer" }, tier: { type: "string" } } } },
   { name: "account_health", description: "Full health + metrics for one account by name (health composite/tier/reason/recommendedAction, leads, reviews, GBP clicks, rankings, payments, tenure, products). Call repeatedly to compare.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "account_detail", description: "Deeper time-series detail for one account by name (trends behind the row).", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+  { name: "accounts_by_manager", description: "Every account managed by a given account manager (by name). Returns their full roster ranked worst→best by composite, plus complete health detail for the BEST and WORST account. Use for 'compare X's best and worst account', 'how is X's book', or any per-account-manager question.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
 ];
 
 async function execTool(name: string, input: Record<string, unknown>) {
@@ -70,6 +71,26 @@ async function execTool(name: string, input: Record<string, unknown>) {
       if (!hits.length) return { error: `no account named "${input.name}"` };
       if (hits.length > 1 && hits.length <= 8) return { ambiguous: hits.map((a) => ({ name: a.name, am: a.accountManager, entityId: a.entityId })) };
       return await getAccountDetail(hits[0].entityId);
+    }
+    if (name === "accounts_by_manager") {
+      const q = norm(String(input.name || ""));
+      if (q.length < 2) return { error: "manager name too short" };
+      const nq = " " + q + " ";
+      const hits = list.filter((a) => {
+        const m = norm(a.accountManager || "");
+        return (" " + m + " ").includes(nq) || m.includes(q);
+      });
+      if (!hits.length) return { error: `no accounts found for manager "${input.name}"` };
+      const managers = Array.from(new Set(hits.map((a) => a.accountManager).filter(Boolean)));
+      if (managers.length > 1) return { ambiguous_managers: managers.slice(0, 15) };
+      const ranked = hits.slice().sort((a, b) => (a.health.composite ?? 999) - (b.health.composite ?? 999));
+      return {
+        manager: managers[0],
+        count: ranked.length,
+        roster: ranked.map((a) => ({ name: a.name, composite: a.health.composite, tier: a.health.tier, color: a.health.color, mrr: a.mrr, city: a.city })),
+        worst: slim(ranked[0]),
+        best: slim(ranked[ranked.length - 1]),
+      };
     }
     return { error: "unknown tool " + name };
   } catch (e) {
