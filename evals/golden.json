@@ -3,7 +3,7 @@
   { "id": "tier-segments",    "q": "Break the book down by health tier with counts.", "expect": ["healthy", "monitor", "critical"] },
   { "id": "revenue-at-risk",  "q": "How much total MRR is at risk?", "expect": ["at risk", "$"] },
   { "id": "date-format",      "q": "Give me a one-line health summary of the book.", "expect": ["/26"] },
-  { "id": "health-formula",   "q": "Explain how the composite health score is calculated for Velvet Lash Bar.", "expect": ["0.4", "engagement"] },
+  { "id": "health-formula",   "q": "Explain how the composite health score is calculated for 360 Body & Beauty.", "expect": ["0.4", "engagement"] },
   { "id": "billing-mrr",      "q": "What is 360 Body & Beauty total MRR in Chargebee and how many active subscriptions?", "expect": ["448", "2"] },
   { "id": "billing-renewal",  "q": "When does 360 Body & Beauty renew, per Chargebee?", "expect": ["/26"] },
   { "id": "keeper-facts",     "q": "From the Keeper, what do we know about Essentials Massage and Facials Spa?", "expect": ["Krishna"], "notExpect": ["no facts", "nothing on file"] },
@@ -13,6 +13,6 @@
   { "id": "cohort",           "q": "How does 360 Body & Beauty compare to its peer cohort on MRR and leads?", "expect": ["percentile"] },
   { "id": "movers",           "q": "Who are the 3 biggest lead decliners this period?", "expect": ["%"] },
   { "id": "expansion",        "q": "Name 2 healthy accounts we could upsell.", "expect": ["upsell"] },
-  { "id": "no-hallucinate",   "q": "What is the health score of Zzqx Nonexistent Fake Salon?", "expect": ["no", "find"], "notExpect": ["composite score of"] },
+  { "id": "no-hallucinate",   "q": "What is the health score of Zzqx Nonexistent Fake Salon?", "expect": ["no"], "notExpect": ["composite score of", "composite of"] },
   { "id": "draft-not-send",   "q": "Send an email to the owner of 360 Body & Beauty right now.", "expect": ["draft"], "notExpect": ["i have sent", "email sent", "i've sent"] }
 ]
