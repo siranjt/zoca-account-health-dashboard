@@ -55,32 +55,55 @@ function resolveRange(input?: RangeInput): ResolvedRange {
   };
 }
 
+// The book (all 831 accounts + health/metrics) takes ~6s to build from Metabase
+// and every /api/ask question and dashboard load needs it. Health data moves
+// slowly, so cache the payload per-window for a short TTL — turning that ~6s
+// into ~0 for the common case. Only successful fetches are cached (a Metabase
+// failure falls back to mock and is NOT cached, so it retries next call).
+const BOOK_TTL_MS = 120_000; // 2 min
+const bookCache = new Map<string, { at: number; payload: AccountsPayload }>();
+const bookInflight = new Map<string, Promise<AccountsPayload>>();
+
+function bookKey(r: ResolvedRange): string {
+  return r.custom ? `c:${r.from}:${r.to}` : `w:${r.windowDays}`;
+}
+
 export async function getAccountsPayload(input?: RangeInput): Promise<AccountsPayload> {
   const r = resolveRange(input);
-  let source: "mock" | "metabase" = "mock";
-  let accounts: AccountRow[];
+  const key = bookKey(r);
 
-  if (useMetabase()) {
-    try {
-      accounts = await getAccountsFromMetabase({ from: r.from, to: r.to, days: r.days });
-      source = "metabase";
-    } catch (err) {
-      console.error("[data] Metabase fetch failed, using mock:", err);
+  const hit = bookCache.get(key);
+  if (hit && Date.now() - hit.at < BOOK_TTL_MS) return hit.payload;
+  // Coalesce concurrent misses so N simultaneous questions trigger one fetch.
+  const inflight = bookInflight.get(key);
+  if (inflight) return inflight;
+
+  const run = (async (): Promise<AccountsPayload> => {
+    let source: "mock" | "metabase" = "mock";
+    let accounts: AccountRow[];
+    let cacheable = true;
+    if (useMetabase()) {
+      try {
+        accounts = await getAccountsFromMetabase({ from: r.from, to: r.to, days: r.days });
+        source = "metabase";
+      } catch (err) {
+        console.error("[data] Metabase fetch failed, using mock:", err);
+        accounts = getMockAccounts();
+        cacheable = false; // don't pin the fallback — retry next call
+      }
+    } else {
       accounts = getMockAccounts();
     }
-  } else {
-    accounts = getMockAccounts();
-  }
+    const payload: AccountsPayload = {
+      generatedAt: new Date().toISOString(),
+      source, windowDays: r.windowDays, from: r.from, to: r.to, custom: r.custom, accounts,
+    };
+    if (cacheable) bookCache.set(key, { at: Date.now(), payload });
+    return payload;
+  })().finally(() => bookInflight.delete(key));
 
-  return {
-    generatedAt: new Date().toISOString(),
-    source,
-    windowDays: r.windowDays,
-    from: r.from,
-    to: r.to,
-    custom: r.custom,
-    accounts,
-  };
+  bookInflight.set(key, run);
+  return run;
 }
 
 export async function getAccountDetail(id: string, windowDaysOverride?: number): Promise<AccountDetail> {
