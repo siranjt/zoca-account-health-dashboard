@@ -3,7 +3,7 @@ import { getAccountsPayload, getAccountDetail } from "@/lib/data";
 import { getBillingByEntityId } from "@/lib/chargebee";
 import { getFactsByEntityId } from "@/lib/keeper";
 import { getSupportTickets, getReviewsDetail } from "@/lib/insights";
-import { logInteraction, recall, rememberFact, getSavedNotes } from "@/lib/memory";
+import { logInteraction, recall, rememberFact, getSavedNotes, getUsageStats, setFocus, clearFocus, getFocus } from "@/lib/memory";
 import { HEALTH_WEIGHTS } from "@/lib/health";
 import type { AccountRow, AccountsPayload } from "@/lib/types";
 
@@ -43,7 +43,7 @@ STYLE
 - Dates as DD/MM/YY, money in USD; when listing invoices or items, newest first.
 
 TOOLS
-- book_summary — whole-book tier counts. at_risk_accounts — worst-first list with root drivers. account_health — one account's full metrics. account_detail — time-series behind a row. accounts_by_manager — an account manager's roster plus best/worst. book_aggregate — deterministic roll-ups (totals and group-bys: use it for 'total MRR at risk', 'reviews by AM', counts). explain_health — how an account's composite score is built. billing — LIVE Chargebee billing (subscription MRR/status, auto-collection, next renewal, unpaid invoices, failed transactions). Chargebee is ground truth for payments and revenue; prefer it over the health row's failedPayments proxy when a question is about money, renewals, or payment failures. customer_facts — curated history/notes about an account from the Keeper (Bat Cave Memory); use it for background and context on a customer. support_tickets — open HubSpot CX/support tickets for an account. reviews_detail — Google review count, average rating, distribution, velocity (last 30/90 days) and recent reviews. cohort_benchmark — one account vs its peer cohort (percentiles + medians). segment_analysis — health/metrics by segment (state/tier/product/AM). movers — biggest gainers/decliners period-over-period. expansion_radar — healthy single-product accounts ripe for upsell. revenue_at_risk — MRR at risk, ranked by revenue exposure. gather_360 — one-shot full dossier (health + billing + tickets + reviews + Keeper history) for briefings and drafts. recall — search your own durable memory of past conversations (across sessions). remember — save a fact the user asks you to keep.
+- book_summary — whole-book tier counts. at_risk_accounts — worst-first list with root drivers. account_health — one account's full metrics. account_detail — time-series behind a row. accounts_by_manager — an account manager's roster plus best/worst. book_aggregate — deterministic roll-ups (totals and group-bys: use it for 'total MRR at risk', 'reviews by AM', counts). explain_health — how an account's composite score is built. billing — LIVE Chargebee billing (subscription MRR/status, auto-collection, next renewal, unpaid invoices, failed transactions). Chargebee is ground truth for payments and revenue; prefer it over the health row's failedPayments proxy when a question is about money, renewals, or payment failures. customer_facts — curated history/notes about an account from the Keeper (Bat Cave Memory); use it for background and context on a customer. support_tickets — open HubSpot CX/support tickets for an account. reviews_detail — Google review count, average rating, distribution, velocity (last 30/90 days) and recent reviews. cohort_benchmark — one account vs its peer cohort (percentiles + medians). segment_analysis — health/metrics by segment (state/tier/product/AM). movers — biggest gainers/decliners period-over-period. expansion_radar — healthy single-product accounts ripe for upsell. revenue_at_risk — MRR at risk, ranked by revenue exposure. gather_360 — one-shot full dossier (health + billing + tickets + reviews + Keeper history) for briefings and drafts. recall — search your own durable memory of past conversations (across sessions). remember — save a fact the user asks you to keep. usage_stats — analytics over your own history (most-asked accounts/tools). pin_focus — pin an account as the session subject so follow-ups need no re-naming.
 - Call tools as needed; you may call several at once. If a tool errors or returns nothing, adjust the arguments and retry once before concluding.
 - You have a DURABLE MEMORY: when the user refers to something discussed earlier or in a previous session ("what did we say about…", "last week", "have we looked at…"), use recall before answering. When the user explicitly tells you to remember / note / keep a fact, use the remember tool (tie it to the account when there is one) and confirm what you saved — your saved notes resurface automatically in account_facts and the 360 dossier. Only save on an explicit request, and never delete.
 
@@ -159,7 +159,9 @@ const TOOLS = [
   { name: "revenue_at_risk", description: "Revenue exposure: non-healthy accounts ranked by MRR at risk, with total MRR at risk, each account's tier, root driver and recommended action. Use for 'how much revenue is at risk?', 'churn radar', 'which at-risk accounts are worth most?'.", input_schema: { type: "object", properties: { limit: { type: "integer" } } } },
   { name: "gather_360", description: "One-shot 360° dossier for an account — health metrics, live Chargebee billing, open support tickets, review detail, and Keeper history, gathered together. Use this when you need the full picture: preparing a briefing, a QBR, an outreach draft, a churn-save plan, or answering a broad 'tell me everything about X'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "recall", description: "Search your OWN durable memory of past conversations (persists across sessions). Use when the user refers to something discussed before — 'what did we say about X?', 'what did I ask earlier / last week?', 'have we looked at this account before?'. Filter by entity (an account name) or by text; omit both for the most recent interactions.", input_schema: { type: "object", properties: { entity: { type: "string" }, text: { type: "string" } } } },
-  { name: "remember", description: "Save a fact to your durable memory when the user EXPLICITLY asks you to remember / note / keep something ('remember that…', 'note that…', 'keep in mind…'). Optionally tie it to an account so it resurfaces whenever that account comes up. Do NOT use this to auto-save on your own — only on an explicit request. You can save; you never delete.", input_schema: { type: "object", properties: { fact: { type: "string" }, account: { type: "string" } }, required: ["fact"] }, cache_control: { type: "ephemeral" } },
+  { name: "remember", description: "Save a fact to your durable memory when the user EXPLICITLY asks you to remember / note / keep something ('remember that…', 'note that…', 'keep in mind…'). Optionally tie it to an account so it resurfaces whenever that account comes up. Do NOT use this to auto-save on your own — only on an explicit request. You can save; you never delete.", input_schema: { type: "object", properties: { fact: { type: "string" }, account: { type: "string" } }, required: ["fact"] } },
+  { name: "usage_stats", description: "Analytics over your own interaction history — how many questions, the accounts that come up most, and which tools/topics are used most, over an optional window (default 30 days). Use for 'what do I ask about most?', 'which accounts come up most?', 'what have we been focused on?'.", input_schema: { type: "object", properties: { days: { type: "integer" } } } },
+  { name: "pin_focus", description: "Pin an account as the session's subject so the user can ask follow-ups without re-naming it ('pin 360 Body & Beauty', then 'how are they doing?'). Pass account to set it, or clear:true to unpin. Once pinned, bare references resolve to it.", input_schema: { type: "object", properties: { account: { type: "string" }, clear: { type: "boolean" } } }, cache_control: { type: "ephemeral" } },
 ];
 
 type Ctx = { list: AccountRow[]; payload: AccountsPayload; asOf: string | undefined };
@@ -358,6 +360,17 @@ async function execTool(name: string, input: Record<string, unknown>, ctx: Ctx) 
     if (name === "recall") {
       return await recall({ entity: input.entity ? String(input.entity) : undefined, text: input.text ? String(input.text) : undefined });
     }
+    if (name === "usage_stats") {
+      return await getUsageStats(Number(input.days) || 30);
+    }
+    if (name === "pin_focus") {
+      if (input.clear) { await clearFocus(); return { cleared: true }; }
+      const hits = findAccounts(list, String(input.account || ""));
+      if (!hits.length) return { error: `no account named "${input.account}"` };
+      if (hits.length > 1 && hits.length <= 8) return { ambiguous: hits.map((a) => ({ name: a.name, am: a.accountManager, city: a.city, entityId: a.entityId })) };
+      await setFocus(hits[0].entityId, hits[0].name);
+      return { pinned: hits[0].name, note: "bare references will now resolve to this account until you unpin or pin another" };
+    }
     if (name === "remember") {
       const fact = String(input.fact || "").trim();
       if (!fact) return { error: "nothing to remember — provide the fact to save" };
@@ -412,8 +425,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ reply: "I couldn't reach the account data just now, sir — please try again in a moment." });
   }
 
+  const focus = await getFocus();
+  const focusNote = focus?.entityName
+    ? `Pinned focus this session: ${focus.entityName}. Resolve bare references ("they", "them", "this account", "how are they doing") to ${focus.entityName} unless the user names a different account. If the user asks to change or clear the focus, use pin_focus.\n\n`
+    : "";
   const recent = history.slice(-6).map((m) => (m.role === "user" ? "User: " : "Alfred: ") + m.text).join("\n");
-  const messages: unknown[] = [{ role: "user", content: (recent ? "Conversation so far:\n" + recent + "\n\n" : "") + "Question: " + q }];
+  const messages: unknown[] = [{ role: "user", content: focusNote + (recent ? "Conversation so far:\n" + recent + "\n\n" : "") + "Question: " + q }];
 
   const t0 = Date.now();
   const toolsUsed: string[] = [];

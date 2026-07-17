@@ -53,6 +53,65 @@ export async function getSavedNotes(entityId: string, limit = 20): Promise<Array
   }
 }
 
+// --- Usage stats (analytics over the interaction log) ---
+
+export async function getUsageStats(days = 30) {
+  if (!neonUrl()) return { available: false as const, reason: "memory store not configured" };
+  const d = Math.min(Math.max(days, 1), 365);
+  try {
+    const [totR, acctsR, toolsR] = await Promise.all([
+      getSql()`SELECT count(*)::int n, coalesce(round(avg(latency_ms)),0)::int avg_ms
+        FROM alfred.messages WHERE ts > now() - (${d}::int * interval '1 day')`,
+      getSql()`SELECT e->>'name' name, count(*)::int n
+        FROM alfred.messages, jsonb_array_elements(entities) e
+        WHERE ts > now() - (${d}::int * interval '1 day') AND jsonb_typeof(entities)='array'
+        GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 10`,
+      getSql()`SELECT t tool, count(*)::int n
+        FROM alfred.messages, jsonb_array_elements_text(tools) t
+        WHERE ts > now() - (${d}::int * interval '1 day') AND jsonb_typeof(tools)='array'
+        GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 12`,
+    ]);
+    const tot = totR as Array<{ n: number; avg_ms: number }>;
+    const accts = acctsR as Array<{ name: string; n: number }>;
+    const tools = toolsR as Array<{ tool: string; n: number }>;
+    return {
+      window_days: d,
+      total_interactions: tot[0]?.n ?? 0,
+      avg_latency_ms: tot[0]?.avg_ms ?? 0,
+      top_accounts: accts.map((r) => ({ account: r.name, times: r.n })),
+      top_tools: tools.map((r) => ({ tool: r.tool, times: r.n })),
+    };
+  } catch (e) {
+    return { available: false as const, reason: `usage stats failed: ${String((e as Error)?.message || e).slice(0, 140)}` };
+  }
+}
+
+// --- Pinned focus (the account Alfred treats as the current subject) ---
+
+export async function setFocus(entityId: string, entityName: string): Promise<{ ok: boolean }> {
+  if (!neonUrl()) return { ok: false };
+  try {
+    await getSql()`INSERT INTO alfred.focus (key, entity_id, entity_name, updated_at)
+      VALUES ('current', ${entityId}, ${entityName}, now())
+      ON CONFLICT (key) DO UPDATE SET entity_id=${entityId}, entity_name=${entityName}, updated_at=now()`;
+    return { ok: true };
+  } catch { return { ok: false }; }
+}
+
+export async function clearFocus(): Promise<{ ok: boolean }> {
+  if (!neonUrl()) return { ok: false };
+  try { await getSql()`DELETE FROM alfred.focus WHERE key='current'`; return { ok: true }; }
+  catch { return { ok: false }; }
+}
+
+export async function getFocus(): Promise<{ entityId: string; entityName: string } | null> {
+  if (!neonUrl()) return null;
+  try {
+    const r = (await getSql()`SELECT entity_id, entity_name FROM alfred.focus WHERE key='current'`) as Array<{ entity_id: string; entity_name: string }>;
+    return r[0]?.entity_name ? { entityId: r[0].entity_id, entityName: r[0].entity_name } : null;
+  } catch { return null; }
+}
+
 export type RecallResult =
   | { available: false; reason: string }
   | { count: number; interactions: Array<{ date: string; question: string; reply_excerpt: string }> };
