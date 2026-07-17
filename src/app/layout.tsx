@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Zoca — Account Health Dashboard",
+  title: "CAVE//OS — Account Health Command Deck",
   description:
-    "List view of all active (non-churned) Zoca accounts with per-account health markers, leads, reviews, GBP metrics, rankings and active products.",
+    "Zoca account-health command deck with Alfred — reasons over per-account health, leads, reviews, GBP metrics, rankings and active products.",
 };
 
 export default function RootLayout({
@@ -14,6 +14,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body>{children}</body>
     </html>
   );

@@ -1,5 +1,6 @@
 import { getAccountsPayload } from "@/lib/data";
 import AccountsTable from "@/components/AccountsTable";
+import AlfredChat from "@/components/AlfredChat";
 
 // Server component: initial fetch (default window) so the page renders fast;
 // the window toggle re-fetches on the client.
@@ -16,7 +17,10 @@ export default async function Home() {
   return (
     <main className="mx-auto max-w-[1600px] px-4 py-5">
       <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Account Health Dashboard</h1>
+        <div>
+          <div className="cave-brand text-xs tracking-[0.32em] text-cyan-400/80">◤◢ CAVE//OS</div>
+          <h1 className="text-2xl font-semibold tracking-tight">Account Health Dashboard</h1>
+        </div>
         <div className="flex items-center gap-4 text-sm">
           <span className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#16a34a" }} />
@@ -34,6 +38,7 @@ export default async function Home() {
       </header>
 
       <AccountsTable initial={payload} />
+      <AlfredChat />
     </main>
   );
 }

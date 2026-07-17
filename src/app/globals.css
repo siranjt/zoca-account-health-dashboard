@@ -2,16 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── CAVE//OS Command-Deck theme ─────────────────────────────────────────
+   The dashboard was authored with light Tailwind utilities (bg-white,
+   text-slate-*, etc.). Rather than rewrite every component, we remap the
+   handful of surfaces/text/borders it actually uses onto a dark Batcave
+   palette. Traffic-light health colors (inline #16a34a/#d97706/#dc2626)
+   are left untouched — they read fine on dark. */
 :root {
-  color-scheme: light;
+  color-scheme: dark;
+  --cave-bg: #04080a;
+  --cave-panel: #0a1216;
+  --cave-panel2: #0b171c;
+  --cave-line: #14343d;
+  --cave-line2: #1e4e5a;
+  --cave-cy: #35e0ff;
+  --cave-txt: #d7e7ea;
+  --cave-dim: #5e7a80;
 }
 
 html,
 body {
   padding: 0;
   margin: 0;
-  background: #f8fafc;
-  color: #0f172a;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(53, 224, 255, 0.06), transparent),
+    var(--cave-bg);
+  color: var(--cave-txt);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     Helvetica, Arial, sans-serif;
 }
@@ -20,8 +36,56 @@ body {
   box-sizing: border-box;
 }
 
+.cave-brand {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  text-shadow: 0 0 14px rgba(53, 224, 255, 0.4);
+}
+
 /* keep sticky table header crisp over scrolling rows */
 .table-scroll {
   overflow: auto;
   max-height: calc(100vh - 190px);
 }
+
+/* ── surface remap ─────────────────────────────────────────────────────── */
+.bg-white { background-color: var(--cave-panel) !important; }
+.bg-slate-50 { background-color: var(--cave-panel2) !important; }
+.bg-slate-100 { background-color: #10242b !important; }
+.bg-slate-200 { background-color: #16323a !important; }
+.hover\:bg-slate-50:hover,
+.hover\:bg-slate-100:hover { background-color: #10242b !important; }
+.bg-indigo-50 { background-color: rgba(53, 224, 255, 0.08) !important; }
+.hover\:bg-indigo-50:hover { background-color: rgba(53, 224, 255, 0.1) !important; }
+.bg-indigo-600 { background-color: #1899b4 !important; }
+.hover\:bg-indigo-700:hover { background-color: #35e0ff !important; }
+
+/* ── text remap ────────────────────────────────────────────────────────── */
+.text-slate-900,
+.text-slate-800 { color: var(--cave-txt) !important; }
+.text-slate-700,
+.text-slate-600 { color: #a7c3c8 !important; }
+.text-slate-500,
+.text-slate-400 { color: var(--cave-dim) !important; }
+.text-indigo-600,
+.text-indigo-700 { color: var(--cave-cy) !important; }
+
+/* ── border remap ──────────────────────────────────────────────────────── */
+.border,
+.border-slate-200,
+.border-slate-300,
+.border-b,
+.border-t,
+.border-r,
+.border-l { border-color: var(--cave-line) !important; }
+.divide-slate-100 > * + *,
+.divide-slate-200 > * + * { border-color: var(--cave-line) !important; }
+.ring-slate-200,
+.ring-1 { --tw-ring-color: var(--cave-line) !important; }
+
+/* scrollbars in the deck */
+.table-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.table-scroll::-webkit-scrollbar-thumb {
+  background: var(--cave-line2);
+  border-radius: 8px;
+}
+.table-scroll::-webkit-scrollbar-track { background: var(--cave-panel); }
