@@ -1,91 +1,14 @@
 import "server-only";
 import { queryAurora } from "@/lib/metabase";
 
-// Alfred Batch 2 pt.2 — HubSpot support tickets and review-level detail, both
-// read directly from Zoca Aurora (read-only), keyed by entity_id:
-//   hubspot.tickets.location_entity_id / user_entity_id
-//   reviews.reviews.entity_id  (rating is an enum: FIVE..ZERO)
+// Review-level detail from Aurora (reviews.reviews.entity_id; rating enum
+// FIVE..ZERO). Tickets moved to src/lib/tickets.ts (Linear, Beacon parity).
 
 const RATING_MAP: Record<string, number> = { FIVE: 5, FOUR: 4, THREE: 3, TWO: 2, ONE: 1, ZERO: 0 };
 
 // entity_ids come from our own account list (not user free-text), but escape
 // single quotes defensively before interpolation.
 const esc = (id: string) => String(id || "").replace(/'/g, "''");
-
-export async function getSupportTickets(entityId: string, windowDays = 30) {
-  const id = esc(entityId);
-  if (!id) return { available: false as const, reason: "no entity_id" };
-  const days = Math.min(Math.max(windowDays, 1), 365);
-  try {
-    // location_entity_id is the ACCOUNT the ticket is about. The curated
-    // hubspot.tickets status is unreliable, so join hubspot_stitch.tickets for
-    // the real open/closed state (property_hs_is_closed) and close date.
-    const [cats, recent] = await Promise.all([
-      queryAurora(`
-        select substring(ht.subject from '^[A-Z_]+') category,
-          count(*) filter (where st.property_hs_is_closed::text='false')::int active,
-          count(*) filter (where st.property_hs_is_closed::text='true'
-                             and st.property_closed_date::timestamptz >= now() - interval '${days} days')::int closed
-        from hubspot.tickets ht
-        join hubspot_stitch.tickets st on st.id = ht.hubspot_ticket_id
-        where ht.location_entity_id = '${id}'
-        group by 1`),
-      queryAurora(`
-        select ht.subject, ht.priority, ht.hubspot_owner_name, ht.created_at::date d
-        from hubspot.tickets ht
-        join hubspot_stitch.tickets st on st.id = ht.hubspot_ticket_id
-        where ht.location_entity_id = '${id}' and st.property_hs_is_closed::text='false'
-        order by ht.created_at desc limit 10`),
-    ]);
-    const byCat = cats
-      .map((c) => ({ category: c.category || "OTHER", active: Number(c.active) || 0, closed: Number(c.closed) || 0 }))
-      .filter((c) => c.active > 0 || c.closed > 0)
-      .sort((a, b) => (b.active + b.closed) - (a.active + a.closed));
-    return {
-      active_total: byCat.reduce((s, c) => s + c.active, 0),
-      closed_in_window_total: byCat.reduce((s, c) => s + c.closed, 0),
-      window_days: days,
-      by_category: byCat,
-      category_note: "category = ticket subject prefix. website = WEBSITE_*; billing/finance = SUBSCIPTION_SUPPORT; google/GBP = GOOGLE_SUPPORT + GBP_*; also REVIEWS_/LEADS_/SOCIAL_MEDIA_/ADS_/APP_/LOYALTY_SUPPORT, *_OFFBOARDING, DELETE_MEDIA. Sum the matching prefixes for a grouped question. 'closed' counts tickets closed within the window_days only; 'active' is current open.",
-      recent_active: recent.map((r) => ({ subject: r.subject, priority: r.priority, owner: r.hubspot_owner_name || null, created: r.d })),
-    };
-  } catch (e) {
-    return { available: false as const, reason: `tickets query failed: ${String((e as Error)?.message || e).slice(0, 140)}` };
-  }
-}
-
-// Ticket totals across MANY accounts (a whole account-manager's book) in ONE
-// query — so Alfred never loops support_tickets per account.
-export async function getManagerTickets(entityIds: string[], windowDays = 30) {
-  const ids = entityIds.map((e) => esc(e)).filter(Boolean);
-  if (!ids.length) return { available: false as const, reason: "no accounts for this manager" };
-  const days = Math.min(Math.max(windowDays, 1), 365);
-  const inList = ids.map((e) => `'${e}'`).join(",");
-  try {
-    const cats = await queryAurora(`
-      select substring(ht.subject from '^[A-Z_]+') category,
-        count(*) filter (where st.property_hs_is_closed::text='false')::int active,
-        count(*) filter (where st.property_hs_is_closed::text='true'
-                           and st.property_closed_date::timestamptz >= now() - interval '${days} days')::int closed
-      from hubspot.tickets ht
-      join hubspot_stitch.tickets st on st.id = ht.hubspot_ticket_id
-      where ht.location_entity_id in (${inList})
-      group by 1`);
-    const byCat = cats
-      .map((c) => ({ category: c.category || "OTHER", active: Number(c.active) || 0, closed: Number(c.closed) || 0 }))
-      .filter((c) => c.active > 0 || c.closed > 0)
-      .sort((a, b) => (b.active + b.closed) - (a.active + a.closed));
-    return {
-      active_total: byCat.reduce((s, c) => s + c.active, 0),
-      closed_in_window_total: byCat.reduce((s, c) => s + c.closed, 0),
-      window_days: days,
-      by_category: byCat,
-      category_note: "category = subject prefix. website = WEBSITE_*; billing/finance = SUBSCIPTION_SUPPORT; google/GBP = GOOGLE_SUPPORT + GBP_*; also REVIEWS_/LEADS_/SOCIAL_MEDIA_/ADS_/APP_/LOYALTY_SUPPORT. Sum matching prefixes for a grouped question.",
-    };
-  } catch (e) {
-    return { available: false as const, reason: `manager tickets query failed: ${String((e as Error)?.message || e).slice(0, 140)}` };
-  }
-}
 
 export async function getReviewsDetail(entityId: string) {
   const id = esc(entityId);

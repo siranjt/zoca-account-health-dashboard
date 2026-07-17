@@ -67,9 +67,9 @@ export interface AccountRow {
   failedPayments: number; // count of failed payment attempts (all time)
   tenureDays: number | null; // days since onboarding (how long with Zoca)
 
-  // --- support (HubSpot tickets, associated via location_entity_id) ---
-  openTickets: number; // currently ACTIVE (open) tickets
-  closedTicketsWindow: number; // tickets CLOSED within the selected window
+  // --- support (Linear tickets, joined by entity_id — Beacon parity) ---
+  openTickets: number; // ACTIVE Linear tickets (state Todo/In Progress/In Review)
+  closedTicketsWindow: number; // Linear tickets closed (Done) within the selected window
 
   avgReceivedToOpenedMs: number | null;
   avgReceivedToContactedMs: number | null;

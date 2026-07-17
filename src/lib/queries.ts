@@ -85,21 +85,8 @@ SELECT entity_id,
 FROM j GROUP BY entity_id`;
 }
 
-// HubSpot tickets per account. The curated hubspot.tickets carries the account
-// link (location_entity_id) but its status is unreliable — real open/closed is
-// hubspot_stitch.tickets.property_hs_is_closed (joined on the ticket id).
-//   active_tickets   = currently open (not closed)
-//   closed_in_window = closed on/after `fromISO` (the dashboard's window start)
-export function ticketsSql(fromISO: string): string {
-  return `SELECT ht.location_entity_id AS entity_id,
-  COUNT(*) FILTER (WHERE st.property_hs_is_closed::text = 'false')::int AS active_tickets,
-  COUNT(*) FILTER (WHERE st.property_hs_is_closed::text = 'true'
-                     AND st.property_closed_date::timestamptz >= '${fromISO}'::timestamptz)::int AS closed_in_window
-FROM hubspot.tickets ht
-JOIN hubspot_stitch.tickets st ON st.id = ht.hubspot_ticket_id
-WHERE ht.location_entity_id IS NOT NULL
-GROUP BY ht.location_entity_id`;
-}
+// (Tickets now come from the Linear Metabase CSV via src/lib/tickets.ts — the
+// Beacon-parity source — not from hubspot.tickets. Removed the HubSpot query.)
 
 /** current-vs-previous deltas + 12-week sparklines. prev = [from-lenDays, from). */
 export function trendsSql(from: string, to: string, lenDays: number): string {

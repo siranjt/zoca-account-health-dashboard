@@ -12,7 +12,6 @@ import {
   masterSql,
   timingSql,
   trendsSql,
-  ticketsSql,
   detailProfileWeeklySql,
   detailLeadsReviewsMonthlySql,
   detailRankTrendSql,
@@ -20,6 +19,7 @@ import {
 } from "./queries";
 import { labelAgent } from "./types";
 import { mapTier } from "./health";
+import { getTicketCountsByEntity } from "./tickets";
 import type { AccountDetail, AccountRow, HealthScore } from "./types";
 
 export interface MetabaseConfig {
@@ -131,23 +131,17 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
   const cfg = readMetabaseConfig();
   if (!cfg) throw new Error("Metabase not configured (METABASE_BASE_URL / METABASE_API_KEY)");
 
-  const [master, timing, trends, tickets] = await Promise.all([
+  const [master, timing, trends, ticketCounts] = await Promise.all([
     runDataset(cfg, masterSql(rangeArg.from, rangeArg.to)),
     runDataset(cfg, timingSql()),
     runDataset(cfg, trendsSql(rangeArg.from, rangeArg.to, rangeArg.days)),
-    runDataset(cfg, ticketsSql(rangeArg.from)).catch(() => [] as Row[]),
+    getTicketCountsByEntity(rangeArg.from), // Linear tickets (Beacon logic), keyed by lowercased entity_id
   ]);
 
   const timingByEntity = new Map<string, Row>();
   for (const t of timing) timingByEntity.set(String(t.entity_id), t);
   const trendsByEntity = new Map<string, Row>();
   for (const t of trends) trendsByEntity.set(String(t.entity_id), t);
-  const activeTixByEntity = new Map<string, number>();
-  const closedTixByEntity = new Map<string, number>();
-  for (const t of tickets) {
-    activeTixByEntity.set(String(t.entity_id), int0(t.active_tickets));
-    closedTixByEntity.set(String(t.entity_id), int0(t.closed_in_window));
-  }
 
   return master.map((r): AccountRow => {
     const id = String(r.entity_id);
@@ -176,8 +170,8 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
       daysOverdue: num(r.days_overdue),
       failedPayments: int0(r.failed_payments),
       tenureDays: num(r.tenure_days),
-      openTickets: activeTixByEntity.get(id) ?? 0,
-      closedTicketsWindow: closedTixByEntity.get(id) ?? 0,
+      openTickets: ticketCounts.get(id.toLowerCase())?.active ?? 0,
+      closedTicketsWindow: ticketCounts.get(id.toLowerCase())?.closed ?? 0,
       avgReceivedToOpenedMs: t ? secToMs(t.recv_to_open_s) : null,
       avgReceivedToContactedMs: t ? secToMs(t.recv_to_contact_s) : null,
       avgOpenedToContactedMs: t ? secToMs(t.open_to_contact_s) : null,

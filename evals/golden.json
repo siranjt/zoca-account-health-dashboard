@@ -7,7 +7,7 @@
   { "id": "billing-mrr",      "q": "What is 360 Body & Beauty total MRR in Chargebee and how many active subscriptions?", "expect": ["448", "2"] },
   { "id": "billing-renewal",  "q": "When does 360 Body & Beauty renew, per Chargebee?", "expect": ["/26"] },
   { "id": "keeper-facts",     "q": "From the Keeper, what do we know about Essentials Massage and Facials Spa?", "expect": ["Krishna"], "notExpect": ["no facts", "nothing on file"] },
-  { "id": "support-tickets",  "q": "How many active (open) support tickets does Glow Esthetics Skincare and Wellness By Dhin have?", "expect": ["7"] },
+  { "id": "support-tickets",  "q": "What active Linear tickets does Glow Esthetics Skincare and Wellness By Dhin have and their classification?", "expect": ["churn"], "notExpect": ["WEBSITE_SUPPORT", "SUBSCIPTION_SUPPORT"] },
   { "id": "reviews-detail",   "q": "Review detail for Glow Esthetics Skincare and Wellness By Dhin: total and average rating.", "expect": ["54", "5"] },
   { "id": "am-compare",       "q": "Compare the best and worst account of Bikash Mishra.", "expect": ["best", "worst"] },
   { "id": "cohort",           "q": "How does 360 Body & Beauty compare to its peer cohort on MRR and leads?", "expect": ["percentile"] },
