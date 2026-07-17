@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAccountsPayload, getAccountDetail } from "@/lib/data";
+import { getBillingByEntityId } from "@/lib/chargebee";
+import { getFactsByEntityId } from "@/lib/keeper";
 import { HEALTH_WEIGHTS } from "@/lib/health";
 import type { AccountRow, AccountsPayload } from "@/lib/types";
 
@@ -14,7 +16,7 @@ export const maxDuration = 60;
 
 const MODEL = process.env.ANTHROPIC_ASK_MODEL || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 const MAX_ITERS = 5;
-const TOOL_TIMEOUT_MS = 15000;
+const TOOL_TIMEOUT_MS = 25000; // billing's first call pages the Chargebee subscription map
 
 const ALFRED_SYS =
   `You are Alfred — the razor-sharp butler and account-health analyst for Zoca, a SaaS that runs Google Business Profile, reviews, and lead-gen for local salons/spas/med-spas. You reason over the live Account Health data through tools.
@@ -38,7 +40,7 @@ STYLE
 - Dates as DD/MM/YY, money in USD; when listing invoices or items, newest first.
 
 TOOLS
-- book_summary — whole-book tier counts. at_risk_accounts — worst-first list with root drivers. account_health — one account's full metrics. account_detail — time-series behind a row. accounts_by_manager — an account manager's roster plus best/worst. book_aggregate — deterministic roll-ups (totals and group-bys: use it for 'total MRR at risk', 'reviews by AM', counts). explain_health — how an account's composite score is built.
+- book_summary — whole-book tier counts. at_risk_accounts — worst-first list with root drivers. account_health — one account's full metrics. account_detail — time-series behind a row. accounts_by_manager — an account manager's roster plus best/worst. book_aggregate — deterministic roll-ups (totals and group-bys: use it for 'total MRR at risk', 'reviews by AM', counts). explain_health — how an account's composite score is built. billing — LIVE Chargebee billing (subscription MRR/status, auto-collection, next renewal, unpaid invoices, failed transactions). Chargebee is ground truth for payments and revenue; prefer it over the health row's failedPayments proxy when a question is about money, renewals, or payment failures. customer_facts — curated history/notes about an account from the Keeper (Bat Cave Memory); use it for background and context on a customer.
 - Call tools as needed; you may call several at once. If a tool errors or returns nothing, adjust the arguments and retry once before concluding.`;
 
 // ---- small utils: compression keeps tool payloads (and tokens) tight ----
@@ -105,7 +107,9 @@ const TOOLS = [
   { name: "account_detail", description: "Deeper time-series detail for one account by name (trends behind the row).", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "accounts_by_manager", description: "Every account managed by a given account manager (by name). Returns their full roster ranked worst→best by composite, plus complete health detail for the BEST and WORST account. Use for 'compare X's best and worst account', 'how is X's book', or any per-account-manager question.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "book_aggregate", description: "Deterministic roll-ups over the whole book — numbers computed in code, never estimated. groupBy: tier | color | accountManager | state | none. metric: count | mrr | leads | reviews. Optional filterTier / filterColor. Use for 'total MRR at risk', 'reviews collected by AM', 'how many critical accounts', 'MRR by state', etc.", input_schema: { type: "object", properties: { groupBy: { type: "string" }, metric: { type: "string" }, filterTier: { type: "string" }, filterColor: { type: "string" } } } },
-  { name: "explain_health", description: "Explain how one account's composite health score is built: the sub-scores (engagement/value/product), the exact weighting, the driving reason, the primary risk driver, and the recommended action.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] }, cache_control: { type: "ephemeral" } },
+  { name: "explain_health", description: "Explain how one account's composite health score is built: the sub-scores (engagement/value/product), the exact weighting, the driving reason, the primary risk driver, and the recommended action.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+  { name: "billing", description: "Live billing state for one account from Chargebee (ground truth, beats the health-score payment proxy): subscription status & MRR, auto-collection, next renewal, unpaid invoices + total due, recent failed transactions with the error. Use for 'are they paid up?', 'any failed payments?', 'when do they renew?', 'what's their MRR?'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+  { name: "customer_facts", description: "Curated facts and history for one account from the Keeper (Bat Cave Memory) — owner details, preferences, past issues, notes captured over time. Use for 'what do we know about them?', 'any history / context?', 'who's the owner?', background before a call.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] }, cache_control: { type: "ephemeral" } },
 ];
 
 type Ctx = { list: AccountRow[]; payload: AccountsPayload; asOf: string | undefined };
@@ -189,6 +193,20 @@ async function execTool(name: string, input: Record<string, unknown>, ctx: Ctx) 
         weighted_contribution: { engagement: r1((h.engagement || 0) * w.engagement), value: r1((h.value || 0) * w.value), product: r1((h.product || 0) * w.product) },
         reason: h.reason, primary_driver: primaryDriver(a), recommendedAction: h.recommendedAction, as_of: asOf,
       });
+    }
+    if (name === "billing") {
+      const hits = findAccounts(list, String(input.name || ""));
+      if (!hits.length) return { error: `no account named "${input.name}"` };
+      if (hits.length > 1 && hits.length <= 8) return { ambiguous: hits.map((a) => ({ name: a.name, am: a.accountManager, city: a.city, entityId: a.entityId })) };
+      const bill = await getBillingByEntityId(hits[0].entityId);
+      return { account: hits[0].name, ...bill, as_of: asOf };
+    }
+    if (name === "customer_facts") {
+      const hits = findAccounts(list, String(input.name || ""));
+      if (!hits.length) return { error: `no account named "${input.name}"` };
+      if (hits.length > 1 && hits.length <= 8) return { ambiguous: hits.map((a) => ({ name: a.name, am: a.accountManager, city: a.city, entityId: a.entityId })) };
+      const facts = await getFactsByEntityId(hits[0].entityId);
+      return { account: hits[0].name, ...facts };
     }
     return { error: "unknown tool " + name };
   } catch (e) {
