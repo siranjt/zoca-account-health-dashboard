@@ -68,7 +68,10 @@ export type BillingResult =
   | {
       found: true;
       customer_id: string;
-      subscription: { status: string; mrr_usd: number; plan_amount_usd: number; plan_id: string | null; next_renewal: string | null };
+      total_mrr_usd: number;
+      active_subscription_count: number;
+      subscriptions: Array<{ status: string; mrr_usd: number; plan_amount_usd: number; plan_id: string | null; next_renewal: string | null }>;
+      next_renewal: string | null;
       auto_collection: string | null;
       net_term_days: number | null;
       email: string | null;
@@ -96,14 +99,21 @@ export async function getBillingByEntityId(entityId: string): Promise<BillingRes
   ]);
   const cust = custRes.customer || {};
   const allSubs = (subRes.list || []).map((x) => x.subscription);
-  const sub =
-    allSubs.find((s) => (s.cf_entity_id || "").trim() === eid) ||
-    allSubs.find((s) => s.status === "active") ||
-    allSubs[0] || null;
+  // An entity can hold MORE THAN ONE subscription (multiple products/plans),
+  // all tagged with the same cf_entity_id — sum them for the true MRR.
+  let entitySubs = allSubs.filter((s) => (s.cf_entity_id || "").trim() === eid);
+  if (!entitySubs.length) entitySubs = allSubs; // fallback: whole customer
+  const activeSubs = entitySubs.filter((s) => s.status === "active");
+  const forMrr = activeSubs.length ? activeSubs : entitySubs;
+  const totalMrr = forMrr.reduce((s, x) => s + dollars(x.mrr), 0);
+  const nextRenewal = forMrr
+    .map((s) => s.current_term_end)
+    .filter((t): t is number => !!t)
+    .sort((a, b) => a - b)[0];
 
-  // Scope invoices/transactions to this entity's subscription when we have it;
-  // otherwise fall back to the whole customer.
-  const scope: Record<string, string> = sub?.id ? { "subscription_id[is]": sub.id } : { "customer_id[is]": cid };
+  // Scope invoices/transactions to this entity's subscriptions (subscription_id[in]).
+  const subIds = entitySubs.map((s) => s.id).filter(Boolean);
+  const scope: Record<string, string> = subIds.length ? { "subscription_id[in]": JSON.stringify(subIds) } : { "customer_id[is]": cid };
   const [invRes, txnRes] = await Promise.all([
     cbGet<{ list: Array<{ invoice: { status: string; total?: number; amount_due?: number; date?: number; due_date?: number } }> }>("/invoices", { ...scope, limit: "12", "sort_by[desc]": "date" }),
     cbGet<{ list: Array<{ transaction: { status: string; amount?: number; date?: number; error_text?: string } }> }>("/transactions", { ...scope, limit: "12", "sort_by[desc]": "date" }),
@@ -121,7 +131,10 @@ export async function getBillingByEntityId(entityId: string): Promise<BillingRes
   return {
     found: true,
     customer_id: cid,
-    subscription: { status: sub?.status || "none", mrr_usd: dollars(sub?.mrr), plan_amount_usd: dollars(sub?.plan_amount), plan_id: sub?.plan_id || null, next_renewal: isoDate(sub?.current_term_end) },
+    total_mrr_usd: Math.round(totalMrr * 100) / 100,
+    active_subscription_count: activeSubs.length,
+    subscriptions: entitySubs.map((s) => ({ status: s.status, mrr_usd: dollars(s.mrr), plan_amount_usd: dollars(s.plan_amount), plan_id: s.plan_id || null, next_renewal: isoDate(s.current_term_end) })),
+    next_renewal: isoDate(nextRenewal),
     auto_collection: cust.auto_collection || null,
     net_term_days: cust.net_term_days ?? null,
     email: cust.email || null,
