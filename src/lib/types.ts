@@ -108,6 +108,15 @@ export interface AccountDetail {
   rankTrend: { d: string; top3: number | null; avgRank: number | null }[];
   funnel: { enquiries: number; opened: number; contacted: number; booked: number };
   payments?: PaymentDetail | null; // Chargebee billing for the payment charts
+  // Extra Retool-derived charts (all optional — degrade to empty if a source fails)
+  appUsage?: { wk: string; appOpen: number; leads: number; reviews: number; photos: number }[];
+  bookings?: { label: string; leads: number; bookings: number }[];
+  keywordRankings?: { keyword: string; avgRank: number; minRank: number; searchVolume: number | null }[];
+  impressions?: { ym: string; impressions: number }[];
+  reviewsDist?: { total: number; avg: number | null; last30: number; last90: number; dist: Record<string, number> } | null;
+  comms?: { wk: string; sms: number; call: number }[];
+  mediaCadence?: { wk: string; live: number }[];
+  forecast?: { predicted: number | null; actual: number } | null;
 }
 
 export interface PaymentInvoice {

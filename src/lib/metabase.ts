@@ -16,6 +16,14 @@ import {
   detailLeadsReviewsMonthlySql,
   detailRankTrendSql,
   detailFunnelSql,
+  detailAppUsageSql,
+  detailBookingsSql,
+  detailKeywordRankSql,
+  detailImpressionsSql,
+  detailReviewsDistSql,
+  detailCommsSql,
+  detailMediaSql,
+  detailForecastSql,
 } from "./queries";
 import { labelAgent } from "./types";
 import { mapTier } from "./health";
@@ -207,13 +215,32 @@ export async function getAccountDetailFromMetabase(
 ): Promise<AccountDetail> {
   const cfg = readMetabaseConfig();
   if (!cfg) throw new Error("Metabase not configured");
-  const [pw, lr, rt, fn] = await Promise.all([
+  const safe = (sql: string) => runDataset(cfg, sql).catch(() => [] as Row[]);
+  const [pw, lr, rt, fn, au, bk, kr, im, rd, cm, md, fc] = await Promise.all([
     runDataset(cfg, detailProfileWeeklySql(id)),
     runDataset(cfg, detailLeadsReviewsMonthlySql(id)),
     runDataset(cfg, detailRankTrendSql(id)),
     runDataset(cfg, detailFunnelSql(id, Math.max(windowDays, 90))),
+    safe(detailAppUsageSql(id)),
+    safe(detailBookingsSql(id)),
+    safe(detailKeywordRankSql(id)),
+    safe(detailImpressionsSql(id)),
+    safe(detailReviewsDistSql(id)),
+    safe(detailCommsSql(id)),
+    safe(detailMediaSql(id)),
+    safe(detailForecastSql(id)),
   ]);
   const f = fn[0] ?? {};
+  const RATING = { FIVE: 5, FOUR: 4, THREE: 3, TWO: 2, ONE: 1, ZERO: 0 } as Record<string, number>;
+  let rTot = 0, rSum = 0, rRated = 0, r30 = 0, r90 = 0; const rDist: Record<string, number> = {};
+  for (const r of rd) {
+    const n = int0(r.n), key = String(r.rating ?? "");
+    rTot += n; r30 += int0(r.n30); r90 += int0(r.n90);
+    if (key) rDist[String(RATING[key] ?? key)] = n;
+    if (RATING[key] != null) { rSum += RATING[key] * n; rRated += n; }
+  }
+  let live = 0; const mediaCadence = md.map((r) => { live += int0(r.delta); return { wk: String(r.wk), live }; });
+  const fcRow = fc[0] ?? {};
   return {
     entityId: id,
     profileWeekly: pw.map((r) => ({
@@ -239,5 +266,13 @@ export async function getAccountDetailFromMetabase(
       contacted: int0(f.contacted),
       booked: int0(f.booked),
     },
+    appUsage: au.map((r) => ({ wk: String(r.wk), appOpen: int0(r.app_open), leads: int0(r.leads_view), reviews: int0(r.reviews_view), photos: int0(r.photos_view) })),
+    bookings: bk.map((r) => ({ label: String(r.label), leads: int0(r.leads), bookings: int0(r.bookings) })),
+    keywordRankings: kr.map((r) => ({ keyword: String(r.keyword), avgRank: int0(r.avg_rank), minRank: int0(r.min_rank), searchVolume: num(r.search_volume) })),
+    impressions: im.map((r) => ({ ym: String(r.ym), impressions: int0(r.impressions) })),
+    reviewsDist: rTot ? { total: rTot, avg: rRated ? Math.round((rSum / rRated) * 100) / 100 : null, last30: r30, last90: r90, dist: rDist } : null,
+    comms: cm.map((r) => ({ wk: String(r.wk), sms: int0(r.sms), call: int0(r.call) })),
+    mediaCadence,
+    forecast: fcRow.predicted != null || fcRow.actual != null ? { predicted: num(fcRow.predicted), actual: int0(fcRow.actual) } : null,
   };
 }

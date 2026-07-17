@@ -406,3 +406,70 @@ export function PaymentDetailsChart({ payments }: { payments?: PaymentDetail | n
     </div>
   );
 }
+
+// ---- Keyword rankings: current avg rank per keyword (lower = better) --------
+export function KeywordRankingsChart({ data }: { data?: { keyword: string; avgRank: number; minRank: number; searchVolume: number | null }[] }) {
+  if (!data?.length) return <div className="py-8 text-center text-sm text-slate-400">No keyword rankings on file.</div>;
+  const maxR = Math.max(20, ...data.map((d) => d.avgRank));
+  const col = (r: number) => (r <= 3 ? "#16a34a" : r <= 10 ? "#d97706" : "#dc2626");
+  return (
+    <div className="space-y-1.5">
+      {data.slice(0, 8).map((d) => (
+        <div key={d.keyword} className="flex items-center gap-2 text-xs" title={d.searchVolume ? `vol ${d.searchVolume} · best #${d.minRank}` : `best #${d.minRank}`}>
+          <span className="w-40 shrink-0 truncate text-slate-500">{d.keyword}</span>
+          <div className="h-3 flex-1 rounded bg-slate-100"><div className="h-3 rounded" style={{ width: `${Math.max(4, (1 - (d.avgRank - 1) / maxR) * 100)}%`, background: col(d.avgRank) }} /></div>
+          <span className="w-9 shrink-0 text-right font-medium tabular-nums text-slate-700">#{d.avgRank}</span>
+        </div>
+      ))}
+      <div className="pt-0.5 text-[10px] text-slate-400">bar longer = ranking better · # = current avg rank</div>
+    </div>
+  );
+}
+
+// ---- Review rating distribution + velocity ---------------------------------
+export function ReviewsDistChart({ data }: { data?: { total: number; avg: number | null; last30: number; last90: number; dist: Record<string, number> } | null }) {
+  if (!data?.total) return <div className="py-8 text-center text-sm text-slate-400">No reviews on file.</div>;
+  const rows = [5, 4, 3, 2, 1].map((s) => ({ star: s, n: data.dist[String(s)] || 0 }));
+  const max = Math.max(1, ...rows.map((r) => r.n));
+  const col = (s: number) => (s >= 4 ? "#16a34a" : s === 3 ? "#d97706" : "#dc2626");
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-slate-500">
+        <span className="text-2xl font-semibold tabular-nums text-slate-900">{data.avg != null ? data.avg.toFixed(2) : "—"}</span>
+        <span className="text-slate-400">★ avg · {data.total} total</span>
+        <span>{data.last30} in 30d</span><span>{data.last90} in 90d</span>
+      </div>
+      <div className="space-y-1">
+        {rows.map((r) => (
+          <div key={r.star} className="flex items-center gap-2 text-xs">
+            <span className="w-6 shrink-0 text-slate-500">{r.star}★</span>
+            <div className="h-3 flex-1 rounded bg-slate-100"><div className="h-3 rounded" style={{ width: `${(r.n / max) * 100}%`, background: col(r.star), minWidth: r.n ? 2 : 0 }} /></div>
+            <span className="w-10 shrink-0 text-right font-medium tabular-nums text-slate-700">{r.n}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---- Lead forecast vs actual (ICP predicted vs delivered) ------------------
+export function LeadForecastChart({ data }: { data?: { predicted: number | null; actual: number } | null }) {
+  if (!data || data.predicted == null) return <div className="py-8 text-center text-sm text-slate-400">No lead forecast on file.</div>;
+  const pred = data.predicted || 0, act = data.actual || 0, max = Math.max(1, pred, act);
+  const pct = pred ? Math.round((act / pred) * 100) : null;
+  const rows = [{ l: "Predicted (6mo)", v: pred, c: "#4A7C59" }, { l: "Actual (6mo)", v: act, c: act >= pred ? "#16a34a" : "#d97706" }];
+  return (
+    <div>
+      <div className="mb-2 text-xs text-slate-400">Attainment: <span className="font-semibold text-slate-700">{pct != null ? pct + "%" : "—"}</span> of ICP-predicted leads</div>
+      <div className="space-y-2">
+        {rows.map((r) => (
+          <div key={r.l} className="flex items-center gap-2 text-xs">
+            <span className="w-28 shrink-0 text-slate-500">{r.l}</span>
+            <div className="h-4 flex-1 rounded bg-slate-100"><div className="h-4 rounded" style={{ width: `${(r.v / max) * 100}%`, background: r.c, minWidth: r.v ? 2 : 0 }} /></div>
+            <span className="w-10 shrink-0 text-right font-medium tabular-nums text-slate-700">{r.v}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

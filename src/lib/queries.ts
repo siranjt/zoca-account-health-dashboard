@@ -140,3 +140,77 @@ SELECT COUNT(*) enquiries,
   COUNT(*) FILTER (WHERE be.status='BOOKED') booked
 FROM be`;
 }
+
+// ============================================================================
+// Extra per-account detail charts (ported from the Retool Customer Dashboard).
+// Each is parameterized on `id` (a UUID, validated by the /api/account route).
+// ============================================================================
+
+/** Weekly app engagement (Mixpanel) — home/leads/reviews/photos screen opens. */
+export function detailAppUsageSql(id: string): string {
+  return `SELECT date_trunc('week', time::date)::date AS wk,
+    SUM((event = 'Home-View-Home')::int) AS app_open,
+    SUM((event LIKE 'Leads-%')::int)     AS leads_view,
+    SUM((event LIKE 'Review-%')::int)    AS reviews_view,
+    SUM((event LIKE 'Photos-%')::int)    AS photos_view
+  FROM mixpanelzocaappdata.export
+  WHERE "locationEntityId" = '${id}' AND time >= (CURRENT_DATE - INTERVAL '140 days')
+  GROUP BY 1 ORDER BY 1`;
+}
+
+/** Weekly unique leads vs unique bookings (last 3 months). */
+export function detailBookingsSql(id: string): string {
+  return `WITH weeks AS (SELECT generate_series(date_trunc('week',current_date-interval '3 months'),date_trunc('week',current_date),'1 week'::interval)::date ws),
+    lw AS (SELECT date_trunc('week',created_at)::date ws, count(distinct client_id) leads FROM website.booking_enquiries WHERE entity_id='${id}'::uuid AND is_test_lead=false AND created_at>=current_date-interval '3 months' GROUP BY 1),
+    bw AS (SELECT date_trunc('week',created_at)::date ws, count(distinct client_id) bookings FROM scheduling.bookings WHERE entity_id='${id}'::uuid AND created_at>=current_date-interval '3 months' GROUP BY 1)
+    SELECT to_char(w.ws,'YYYY-MM-DD') label, coalesce(lw.leads,0) leads, coalesce(bw.bookings,0) bookings
+    FROM weeks w LEFT JOIN lw ON lw.ws=w.ws LEFT JOIN bw ON bw.ws=w.ws ORDER BY w.ws`;
+}
+
+/** Latest rank per keyword (top by best avg rank). */
+export function detailKeywordRankSql(id: string): string {
+  return `WITH base AS (SELECT keyword, floor(avg_rank) avg_rank, floor(min_rank) min_rank, search_volume,
+      rank() over(partition by keyword order by created_at::date desc) rnk FROM local_seo.rank WHERE entity_id='${id}')
+    SELECT keyword, avg_rank, min_rank, search_volume FROM base WHERE rnk=1 AND avg_rank IS NOT NULL ORDER BY avg_rank ASC LIMIT 10`;
+}
+
+/** Monthly Google search impressions (summed across keywords). */
+export function detailImpressionsSql(id: string): string {
+  return `WITH loc AS (SELECT entity_id, name FROM gbp.locations)
+    SELECT ki.year||'-'||lpad(ki.month::text,2,'0') ym, sum(ki.value) impressions
+    FROM gbp.keyword_impressions ki JOIN loc ON loc.name::text = ki.location_name::text
+    WHERE loc.entity_id='${id}' GROUP BY 1 ORDER BY 1`;
+}
+
+/** Review rating distribution + 30/90-day velocity. */
+export function detailReviewsDistSql(id: string): string {
+  return `SELECT rating::text rating, count(*)::int n,
+      count(*) filter (where created_at > now() - interval '30 days')::int n30,
+      count(*) filter (where created_at > now() - interval '90 days')::int n90
+    FROM reviews.reviews WHERE entity_id='${id}' GROUP BY 1`;
+}
+
+/** Weekly comms activity (SMS / calls) joined via enquiry → entity. */
+export function detailCommsSql(id: string): string {
+  return `SELECT date_trunc('week', cl.created_at)::date wk,
+      sum((cl.type='SMS')::int) sms, sum((cl.type='CALL')::int) call
+    FROM clients.communication_logs cl
+    JOIN website.booking_enquiries be ON be.id::text = cl.enquiry_id::text
+    WHERE be.entity_id='${id}'::uuid AND cl.created_at >= current_date - interval '3 months'
+    GROUP BY 1 ORDER BY 1`;
+}
+
+/** Weekly net media (photos) delta on the GBP — cumulate in JS for "live" count. */
+export function detailMediaSql(id: string): string {
+  return `WITH base AS (SELECT create_time::timestamptz cat, deleted_at, is_deleted FROM gbp.media_items WHERE entity_id='${id}'),
+    s AS (SELECT date_trunc('week', cat)::date wk, 1 p FROM base WHERE cat IS NOT NULL
+          UNION ALL SELECT date_trunc('week', deleted_at::timestamptz)::date wk, -1 p FROM base WHERE is_deleted=true AND deleted_at IS NOT NULL)
+    SELECT wk, sum(p)::int delta FROM s WHERE wk IS NOT NULL GROUP BY 1 ORDER BY 1`;
+}
+
+/** ICP-predicted 6-month leads vs actual leads delivered. */
+export function detailForecastSql(id: string): string {
+  return `SELECT
+      (SELECT predicted_6_month_leads FROM entities.location_insights WHERE entity_id::text='${id}' ORDER BY created_at DESC LIMIT 1) AS predicted,
+      (SELECT count(*) FROM website.booking_enquiries WHERE entity_id='${id}'::uuid AND is_test_lead=false AND created_at >= current_date - interval '6 months') AS actual`;
+}

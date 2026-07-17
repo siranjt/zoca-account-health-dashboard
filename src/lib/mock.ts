@@ -192,5 +192,18 @@ export function getMockAccountDetail(id: string): AccountDetail {
       avg_days_late: paidInv.length ? Math.round((paidInv.reduce((x, i) => x + (i.days_late ?? 0), 0) / paidInv.length) * 10) / 10 : null,
       invoices,
     },
+    appUsage: mkSpark(20, id + "au").map((v, i) => ({ wk: new Date(2026, 3, 5 + i * 7).toISOString().slice(0, 10), appOpen: v, leads: Math.round(v * 0.5), reviews: Math.round(v * 0.2), photos: Math.round(v * 0.15) })),
+    bookings: mkSpark(Math.max(2, Math.round(s.leads / 4)), id + "bk").map((v, i) => ({ label: new Date(2026, 3, 5 + i * 7).toISOString().slice(0, 10), leads: v, bookings: Math.round(v * 0.35) })),
+    keywordRankings: [
+      { keyword: "best salon near me", avgRank: Math.max(1, 20 - Math.round((s.top3 ?? 0) / 5)), minRank: 1, searchVolume: 480 },
+      { keyword: `${s.name.split(" ")[0].toLowerCase()} services`, avgRank: 3, minRank: 1, searchVolume: 210 },
+      { keyword: "walk in appointments", avgRank: 8, minRank: 4, searchVolume: 90 },
+      { keyword: "spa deals", avgRank: 14, minRank: 9, searchVolume: 60 },
+    ],
+    impressions: mkSpark(Math.max(50, s.profileClicks), id + "im").map((v, i) => ({ ym: `2026-${String(i + 1).padStart(2, "0")}`, impressions: v * 20 })),
+    reviewsDist: s.reviews ? { total: s.reviews + 40, avg: 4.7, last30: Math.round(s.reviews / 3), last90: s.reviews, dist: { "5": s.reviews + 30, "4": 6, "3": 2, "2": 1, "1": 1 } } : null,
+    comms: mkSpark(Math.max(3, Math.round(s.leads / 6)), id + "cm").map((v, i) => ({ wk: new Date(2026, 4, 1 + i * 7).toISOString().slice(0, 10), sms: v, call: Math.round(v * 0.4) })),
+    mediaCadence: (() => { let live = 3; return mkSpark(2, id + "md").map((v, i) => { live += v; return { wk: new Date(2026, 4, 1 + i * 7).toISOString().slice(0, 10), live }; }); })(),
+    forecast: { predicted: Math.max(20, s.leads * 2), actual: s.leads * 6 },
   };
 }

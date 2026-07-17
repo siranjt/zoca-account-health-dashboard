@@ -12,6 +12,9 @@ import {
   HealthBars,
   PaymentTrendsChart,
   PaymentDetailsChart,
+  KeywordRankingsChart,
+  ReviewsDistChart,
+  LeadForecastChart,
 } from "./Charts";
 
 export default function DetailPanel({ account, windowDays }: { account: AccountRow; windowDays: number }) {
@@ -110,6 +113,63 @@ export default function DetailPanel({ account, windowDays }: { account: AccountR
         <ChartCard title="Billing & payments" subtitle="auto-collection · MRR · what they've paid (Chargebee)">
           {detail ? <PaymentDetailsChart payments={detail.payments} /> : <Skeleton error={error} />}
         </ChartCard>
+
+        <ChartCard title="App engagement" subtitle="weekly in-app screen opens (Mixpanel)">
+          {detail ? (detail.appUsage?.length ? (
+            <MultiLineChart xLabels={detail.appUsage.map((w) => w.wk)} series={[
+              { name: "App opens", color: VIZ.series[0], values: detail.appUsage.map((w) => w.appOpen) },
+              { name: "Leads", color: VIZ.series[1], values: detail.appUsage.map((w) => w.leads) },
+              { name: "Reviews", color: VIZ.series[2], values: detail.appUsage.map((w) => w.reviews) },
+              { name: "Photos", color: VIZ.series[3], values: detail.appUsage.map((w) => w.photos) },
+            ]} />
+          ) : <NoData />) : <Skeleton error={error} />}
+        </ChartCard>
+
+        <ChartCard title="Leads vs bookings" subtitle="weekly unique, last 3 months (scheduling)">
+          {detail ? (detail.bookings?.length ? (
+            <MultiLineChart xLabels={detail.bookings.map((b) => b.label)} series={[
+              { name: "Leads", color: VIZ.series[0], values: detail.bookings.map((b) => b.leads) },
+              { name: "Bookings", color: VIZ.series[3], values: detail.bookings.map((b) => b.bookings) },
+            ]} />
+          ) : <NoData />) : <Skeleton error={error} />}
+        </ChartCard>
+
+        <ChartCard title="Keyword rankings" subtitle="current avg rank per keyword (local SEO)">
+          {detail ? <KeywordRankingsChart data={detail.keywordRankings} /> : <Skeleton error={error} />}
+        </ChartCard>
+
+        <ChartCard title="Search impressions" subtitle="monthly Google search impressions (GBP)">
+          {detail ? (detail.impressions?.length ? (
+            <MultiLineChart xLabels={detail.impressions.map((m) => m.ym)} series={[
+              { name: "Impressions", color: VIZ.series[0], values: detail.impressions.map((m) => m.impressions) },
+            ]} />
+          ) : <NoData />) : <Skeleton error={error} />}
+        </ChartCard>
+
+        <ChartCard title="Reviews detail" subtitle="rating distribution + velocity (Google reviews)">
+          {detail ? <ReviewsDistChart data={detail.reviewsDist} /> : <Skeleton error={error} />}
+        </ChartCard>
+
+        <ChartCard title="Comms activity" subtitle="weekly SMS · calls, last 3 months">
+          {detail ? (detail.comms?.length ? (
+            <MultiLineChart xLabels={detail.comms.map((c) => c.wk)} series={[
+              { name: "SMS", color: VIZ.series[0], values: detail.comms.map((c) => c.sms) },
+              { name: "Calls", color: VIZ.series[1], values: detail.comms.map((c) => c.call) },
+            ]} />
+          ) : <NoData />) : <Skeleton error={error} />}
+        </ChartCard>
+
+        <ChartCard title="GBP content" subtitle="live photos on the profile over time">
+          {detail ? (detail.mediaCadence?.length ? (
+            <MultiLineChart xLabels={detail.mediaCadence.map((m) => m.wk)} series={[
+              { name: "Live photos", color: VIZ.series[2], values: detail.mediaCadence.map((m) => m.live) },
+            ]} />
+          ) : <NoData />) : <Skeleton error={error} />}
+        </ChartCard>
+
+        <ChartCard title="Lead forecast vs actual" subtitle="ICP-predicted vs delivered, 6 months">
+          {detail ? <LeadForecastChart data={detail.forecast} /> : <Skeleton error={error} />}
+        </ChartCard>
       </div>
     </div>
   );
@@ -121,6 +181,10 @@ function Skeleton({ error }: { error: boolean }) {
       {error ? "Couldn't load charts." : "Loading charts…"}
     </div>
   );
+}
+
+function NoData() {
+  return <div className="py-8 text-center text-sm text-slate-400">No data for this account.</div>;
 }
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
