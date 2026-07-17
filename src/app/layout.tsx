@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import AlfredChat from "@/components/AlfredChat";
 
 export const metadata: Metadata = {
   title: "CAVE//OS — Account Health Command Deck",
@@ -22,7 +23,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <AlfredChat />
+      </body>
     </html>
   );
 }

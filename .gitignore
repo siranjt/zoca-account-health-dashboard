@@ -32,3 +32,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.env*
+
+# private engineering references — never commit (public repo)
+.reference/

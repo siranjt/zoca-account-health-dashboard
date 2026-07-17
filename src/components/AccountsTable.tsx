@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { AccountRow, AccountsPayload, Delta, HealthColor } from "@/lib/types";
 import { otherProducts } from "@/lib/types";
@@ -262,7 +263,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
           <div className="mt-1"><R l="Engagement" v={a.health.engagement?.toFixed(0) ?? "—"} /><R l="Value" v={a.health.value?.toFixed(0) ?? "—"} /><R l="Product" v={a.health.product?.toFixed(0) ?? "—"} /></div>
           {a.health.reason && <div className="mt-1 text-xs text-slate-500">Watch: {a.health.reason}</div>}
           {a.health.recommendedAction && <div className="mt-1 text-xs text-slate-500">Action: {a.health.recommendedAction}</div>}
-          <button onClick={(e) => { e.stopPropagation(); setPop(null); if (!expanded.has(a.entityId)) toggleExpand(a.entityId); }} className="mt-2 w-full rounded bg-slate-800 px-2 py-1 text-xs font-medium text-white hover:bg-slate-700">Open full charts →</button>
+          <Link href={`/account/${a.entityId}`} onClick={(e) => { e.stopPropagation(); setPop(null); }} className="mt-2 block w-full rounded bg-slate-800 px-2 py-1 text-center text-xs font-medium text-white no-underline hover:bg-slate-700">Open detailed page →</Link>
         </div>
       );
       default: return null;
@@ -540,6 +541,14 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
                               </>
                             ) : ""}
                           </div>
+                          <Link
+                            href={`/account/${a.entityId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="mt-1.5 inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700 no-underline hover:bg-indigo-100"
+                            title="Open the full Retool-style account dossier"
+                          >
+                            Open in detail →
+                          </Link>
                         </div>
                       </div>
                     </td>
