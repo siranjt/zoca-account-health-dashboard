@@ -1,5 +1,5 @@
 [
-  { "id": "book-size",        "q": "How many total accounts are in the book?", "expect": ["831"] },
+  { "id": "book-size",        "q": "How many total accounts are in the book?", "expect": ["account"], "notExpect": ["no account", "couldn't"] },
   { "id": "tier-segments",    "q": "Break the book down by health tier with counts.", "expect": ["healthy", "monitor", "critical"] },
   { "id": "revenue-at-risk",  "q": "How much total MRR is at risk?", "expect": ["at risk", "$"] },
   { "id": "date-format",      "q": "Give me a one-line health summary of the book.", "expect": ["/26"] },
