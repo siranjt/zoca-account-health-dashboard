@@ -16,11 +16,13 @@ export async function getSupportTickets(entityId: string) {
   const id = esc(entityId);
   if (!id) return { available: false as const, reason: "no entity_id" };
   try {
+    // location_entity_id is the ACCOUNT the ticket is about (user_entity_id is
+    // the person who raised it — a different entity, so we don't match on it).
     const rows = await queryAurora(`
       select subject, status, priority, hubspot_owner_name, created_at::date d,
              count(*) over()::int total
       from hubspot.tickets
-      where location_entity_id = '${id}' or user_entity_id = '${id}'
+      where location_entity_id = '${id}'
       order by created_at desc
       limit 12`);
     const total = rows.length ? Number(rows[0].total) || rows.length : 0;
