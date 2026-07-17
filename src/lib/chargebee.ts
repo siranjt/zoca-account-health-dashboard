@@ -88,16 +88,26 @@ export async function getBillingByEntityId(entityId: string): Promise<BillingRes
   const cid = map.get(eid);
   if (!cid) return { found: false, reason: "no Chargebee customer bound to this account (entity not on the latest snapshot)." };
 
-  const [custRes, subRes, invRes, txnRes] = await Promise.all([
+  // A Chargebee customer can hold several subscriptions (one per location).
+  // Pick the one bound to THIS entity by its cf_entity_id, not just any active.
+  const [custRes, subRes] = await Promise.all([
     cbGet<{ customer: { email?: string; auto_collection?: string; net_term_days?: number } }>(`/customers/${cid}`),
-    cbGet<{ list: Array<{ subscription: { status: string; mrr?: number; plan_amount?: number; plan_id?: string; current_term_end?: number } }> }>("/subscriptions", { "customer_id[is]": cid, limit: "10" }),
-    cbGet<{ list: Array<{ invoice: { status: string; total?: number; amount_due?: number; date?: number; due_date?: number } }> }>("/invoices", { "customer_id[is]": cid, limit: "12", "sort_by[desc]": "date" }),
-    cbGet<{ list: Array<{ transaction: { status: string; amount?: number; date?: number; error_text?: string } }> }>("/transactions", { "customer_id[is]": cid, limit: "12", "sort_by[desc]": "date" }),
+    cbGet<{ list: Array<{ subscription: { id: string; status: string; cf_entity_id?: string; mrr?: number; plan_amount?: number; plan_id?: string; current_term_end?: number } }> }>("/subscriptions", { "customer_id[is]": cid, limit: "20" }),
   ]);
-
   const cust = custRes.customer || {};
   const allSubs = (subRes.list || []).map((x) => x.subscription);
-  const sub = allSubs.find((s) => s.status === "active") || allSubs[0] || null;
+  const sub =
+    allSubs.find((s) => (s.cf_entity_id || "").trim() === eid) ||
+    allSubs.find((s) => s.status === "active") ||
+    allSubs[0] || null;
+
+  // Scope invoices/transactions to this entity's subscription when we have it;
+  // otherwise fall back to the whole customer.
+  const scope: Record<string, string> = sub?.id ? { "subscription_id[is]": sub.id } : { "customer_id[is]": cid };
+  const [invRes, txnRes] = await Promise.all([
+    cbGet<{ list: Array<{ invoice: { status: string; total?: number; amount_due?: number; date?: number; due_date?: number } }> }>("/invoices", { ...scope, limit: "12", "sort_by[desc]": "date" }),
+    cbGet<{ list: Array<{ transaction: { status: string; amount?: number; date?: number; error_text?: string } }> }>("/transactions", { ...scope, limit: "12", "sort_by[desc]": "date" }),
+  ]);
   const invoices = (invRes.list || []).map(({ invoice: i }) => {
     const dueMs = i.due_date ? i.due_date * 1000 : null;
     const daysOverdue = dueMs && i.status !== "paid" ? Math.max(0, Math.floor((Date.now() - dueMs) / 86400000)) : 0;
