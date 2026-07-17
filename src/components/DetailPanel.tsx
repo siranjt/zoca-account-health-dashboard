@@ -10,6 +10,8 @@ import {
   RankTrendChart,
   FunnelChart,
   HealthBars,
+  PaymentTrendsChart,
+  PaymentDetailsChart,
 } from "./Charts";
 
 export default function DetailPanel({ account, windowDays }: { account: AccountRow; windowDays: number }) {
@@ -99,6 +101,14 @@ export default function DetailPanel({ account, windowDays }: { account: AccountR
 
         <ChartCard title="Keyword rank trend" subtitle="avg current rank per extraction">
           {detail ? <RankTrendChart data={detail.rankTrend} /> : <Skeleton error={error} />}
+        </ChartCard>
+
+        <ChartCard title="Payment punctuality" subtitle="days paid after due · on-time vs late (Chargebee)">
+          {detail ? <PaymentTrendsChart payments={detail.payments} /> : <Skeleton error={error} />}
+        </ChartCard>
+
+        <ChartCard title="Billing & payments" subtitle="auto-collection · MRR · what they've paid (Chargebee)">
+          {detail ? <PaymentDetailsChart payments={detail.payments} /> : <Skeleton error={error} />}
         </ChartCard>
       </div>
     </div>

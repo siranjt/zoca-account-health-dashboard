@@ -148,6 +148,26 @@ export function getMockAccountDetail(id: string): AccountDetail {
       avgRank: (s.avgRank ?? 15) + Math.sin(i) * 1.5,
     };
   });
+  // Mock payment history — a few monthly invoices with varying punctuality.
+  const amt = s.mrr || 199;
+  const latePattern = [0, 2, 0, -1, 5, 12, 0, 3]; // days late per invoice (neg = early)
+  const invoices = Array.from({ length: 8 }, (_, i) => {
+    const inv = new Date(2025, 10 + i, 5);
+    const due = new Date(inv); due.setDate(due.getDate() + 7);
+    const isLast = i === 7;
+    const late = latePattern[i];
+    const unpaid = isLast && s.mrr === 0;
+    const paidAt = unpaid ? null : new Date(due.getTime() + late * 86400000);
+    return {
+      date: inv.toISOString().slice(0, 10),
+      due_date: due.toISOString().slice(0, 10),
+      paid_at: paidAt ? paidAt.toISOString().slice(0, 10) : null,
+      total_usd: amt, amount_paid_usd: unpaid ? 0 : amt, amount_due_usd: unpaid ? amt : 0,
+      status: unpaid ? "payment_due" : "paid", paid: !unpaid,
+      days_late: unpaid ? 12 : late,
+    };
+  });
+  const paidInv = invoices.filter((i) => i.paid);
   return {
     entityId: id,
     profileWeekly,
@@ -158,6 +178,19 @@ export function getMockAccountDetail(id: string): AccountDetail {
       opened: Math.round(s.leads * 0.4),
       contacted: Math.round(s.leads * 0.25),
       booked: Math.round(s.leads * 0.15),
+    },
+    payments: {
+      found: true,
+      auto_collection: s.leads % 3 === 0 ? "off" : "on",
+      net_term_days: 0,
+      total_mrr_usd: amt,
+      active_subscription_count: s.mrr === 0 ? 0 : 1,
+      total_paid_usd: paidInv.reduce((x, i) => x + i.amount_paid_usd, 0),
+      unpaid_total_usd: invoices.filter((i) => !i.paid).reduce((x, i) => x + i.amount_due_usd, 0),
+      failed_txn_count: s.leads % 4,
+      on_time_rate: paidInv.length ? Math.round((paidInv.filter((i) => (i.days_late ?? 0) <= 0).length / paidInv.length) * 100) : null,
+      avg_days_late: paidInv.length ? Math.round((paidInv.reduce((x, i) => x + (i.days_late ?? 0), 0) / paidInv.length) * 10) / 10 : null,
+      invoices,
     },
   };
 }

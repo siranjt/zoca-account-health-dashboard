@@ -107,6 +107,32 @@ export interface AccountDetail {
   leadsReviews: { mon: string; leads: number; reviews: number }[];
   rankTrend: { d: string; top3: number | null; avgRank: number | null }[];
   funnel: { enquiries: number; opened: number; contacted: number; booked: number };
+  payments?: PaymentDetail | null; // Chargebee billing for the payment charts
+}
+
+export interface PaymentInvoice {
+  date: string | null;
+  due_date: string | null;
+  paid_at: string | null;
+  total_usd: number;
+  amount_paid_usd: number;
+  amount_due_usd: number;
+  status: string;
+  paid: boolean;
+  days_late: number | null;
+}
+export interface PaymentDetail {
+  found: boolean;
+  auto_collection: string | null;
+  net_term_days: number | null;
+  total_mrr_usd: number;
+  active_subscription_count: number;
+  total_paid_usd: number;
+  unpaid_total_usd: number;
+  failed_txn_count: number;
+  on_time_rate: number | null;
+  avg_days_late: number | null;
+  invoices: PaymentInvoice[];
 }
 
 export interface AccountsPayload {

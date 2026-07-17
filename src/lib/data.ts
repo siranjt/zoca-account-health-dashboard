@@ -5,6 +5,7 @@
 
 import { getAccountsFromMetabase, getAccountDetailFromMetabase } from "./metabase";
 import { getMockAccounts, getMockAccountDetail } from "./mock";
+import { getPaymentDetail } from "./chargebee";
 import type { AccountDetail, AccountsPayload, AccountRow } from "./types";
 
 export const ALLOWED_WINDOWS = [7, 30, 90, 180];
@@ -108,12 +109,17 @@ export async function getAccountsPayload(input?: RangeInput): Promise<AccountsPa
 
 export async function getAccountDetail(id: string, windowDaysOverride?: number): Promise<AccountDetail> {
   const windowDays = windowDaysOverride && windowDaysOverride > 0 ? windowDaysOverride : getWindowDays();
-  if (useMetabase()) {
-    try {
-      return await getAccountDetailFromMetabase(id, windowDays);
-    } catch (err) {
+  if (!useMetabase()) return getMockAccountDetail(id); // mock includes its own payments
+
+  // Real source: fetch the Metabase time-series and the Chargebee payment
+  // detail in parallel; a failure in either degrades gracefully.
+  const [base, payments] = await Promise.all([
+    getAccountDetailFromMetabase(id, windowDays).catch((err) => {
       console.error("[data] account detail fetch failed, using mock:", err);
-    }
-  }
-  return getMockAccountDetail(id);
+      return getMockAccountDetail(id);
+    }),
+    getPaymentDetail(id).catch(() => null),
+  ]);
+  base.payments = payments;
+  return base;
 }

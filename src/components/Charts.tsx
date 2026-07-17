@@ -3,6 +3,10 @@
 import { useRef, useState } from "react";
 import { VIZ, scoreColor } from "@/lib/theme";
 import { formatNumber } from "@/lib/format";
+import type { PaymentDetail } from "@/lib/types";
+
+// semantic payment colors (readable on the dark Command-Deck theme)
+const PAY_GREEN = "#16a34a", PAY_AMBER = "#d97706", PAY_RED = "#dc2626", PAY_PAID = "#4A7C59", PAY_PART = "#c2410c";
 
 // ---- shared helpers --------------------------------------------------------
 function niceMax(v: number): number {
@@ -269,6 +273,135 @@ export function HealthBars({ engagement, value, product, composite, tier, reason
             <span className="w-8 shrink-0 text-right font-medium tabular-nums text-slate-700">{b.v != null ? b.v.toFixed(0) : "—"}</span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ---- Payment trends: are invoices paid on time, and by how many days late ----
+export function PaymentTrendsChart({ payments }: { payments?: PaymentDetail | null }) {
+  const inv = payments?.invoices ?? [];
+  const hv = useIndexHover(inv.length || 1, 520, 30, 8);
+  if (!payments?.found || !inv.length)
+    return <div className="py-8 text-center text-sm text-slate-400">No billing history on file.</div>;
+  const W = 520, H = 168, PL = 30, PR = 8, PT = 18, PB = 24;
+  const n = inv.length;
+  const maxLate = niceMax(Math.max(3, ...inv.map((i) => Math.max(0, i.days_late ?? 0))));
+  const bw = (W - PL - PR) / n;
+  const xc = (i: number) => PL + bw * (i + 0.5);
+  const yBase = H - PB;
+  const yFor = (v: number) => yBase - (Math.max(0, v) / maxLate) * (H - PT - PB);
+  const colOf = (iv: (typeof inv)[number]) => (!iv.paid ? PAY_RED : (iv.days_late ?? 0) <= 0 ? PAY_GREEN : (iv.days_late as number) <= 7 ? PAY_AMBER : PAY_RED);
+  const ticks = [0, Math.round(maxLate / 2), maxLate];
+  return (
+    <div className="relative">
+      <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+        <span>On-time: <b className="text-slate-700">{payments.on_time_rate != null ? `${payments.on_time_rate}%` : "—"}</b></span>
+        <span>Avg delay: <b className="text-slate-700">{payments.avg_days_late != null ? `${payments.avg_days_late}d` : "—"}</b></span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm" style={{ background: PAY_GREEN }} />on&nbsp;time</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm" style={{ background: PAY_AMBER }} />≤7d late</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm" style={{ background: PAY_RED }} />late&nbsp;/&nbsp;unpaid</span>
+      </div>
+      <svg ref={hv.ref} viewBox={`0 0 ${W} ${H}`} className="w-full cursor-pointer" style={{ maxHeight: 200 }} role="img" onMouseMove={hv.onMove} onMouseLeave={hv.onLeave} onClick={hv.onClick}>
+        {ticks.map((t, i) => (
+          <g key={i}>
+            <line x1={PL} x2={W - PR} y1={yFor(t)} y2={yFor(t)} stroke={VIZ.grid} strokeWidth={1} />
+            <text x={PL - 4} y={yFor(t) + 3} textAnchor="end" fontSize={9} fill={VIZ.muted}>{t}d</text>
+          </g>
+        ))}
+        {inv.map((iv, i) => {
+          const v = Math.max(0, iv.days_late ?? 0);
+          const top = yFor(v);
+          return v > 0
+            ? <rect key={i} x={xc(i) - bw * 0.3} y={top} width={bw * 0.6} height={Math.max(1, yBase - top)} rx={1.5} fill={colOf(iv)} opacity={hv.active === i ? 1 : 0.85} />
+            : <circle key={i} cx={xc(i)} cy={yBase} r={hv.active === i ? 4.5 : 3.5} fill={colOf(iv)} />;
+        })}
+        {[0, n - 1].map((i) => <text key={i} x={xc(i)} y={H - 6} textAnchor={i === 0 ? "start" : "end"} fontSize={9} fill={VIZ.muted}>{inv[i].date?.slice(5)}</text>)}
+        {hv.active != null && <line x1={xc(hv.active)} x2={xc(hv.active)} y1={PT} y2={yBase} stroke={VIZ.baseline} strokeWidth={1} strokeDasharray="3 3" />}
+      </svg>
+      {hv.active != null && inv[hv.active] && (
+        <Tooltip
+          leftPct={(xc(hv.active) / W) * 100}
+          title={inv[hv.active].date || "invoice"}
+          rows={[
+            { name: "Status", value: inv[hv.active].paid ? "Paid" : inv[hv.active].status },
+            { name: "Due", value: inv[hv.active].due_date || "—" },
+            ...(inv[hv.active].paid ? [{ name: "Paid on", value: inv[hv.active].paid_at || "—" }] : []),
+            { name: inv[hv.active].paid ? "Days late" : "Overdue", value: inv[hv.active].days_late != null ? `${inv[hv.active].days_late}d` : "—" },
+            { name: "Amount", value: `$${inv[hv.active].paid ? inv[hv.active].amount_paid_usd : inv[hv.active].amount_due_usd}` },
+          ]}
+          pinned={hv.pinned != null}
+          onClose={hv.clear}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---- Payment details: auto-collection, MRR, and what they actually paid ------
+function PayStat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded bg-white px-2 py-1">
+      <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
+      <div className="font-semibold tabular-nums text-slate-700">{value}</div>
+    </div>
+  );
+}
+export function PaymentDetailsChart({ payments }: { payments?: PaymentDetail | null }) {
+  const inv = payments?.invoices ?? [];
+  const hv = useIndexHover(inv.length || 1, 520, 30, 8);
+  if (!payments?.found)
+    return <div className="py-8 text-center text-sm text-slate-400">No Chargebee billing on file.</div>;
+  const auto = (payments.auto_collection || "").toLowerCase();
+  const pill = auto === "on"
+    ? { bg: "rgba(74,124,89,.16)", fg: "#4ade80", bd: "rgba(74,124,89,.45)", t: "ON" }
+    : auto === "off"
+    ? { bg: "rgba(220,38,38,.14)", fg: "#f87171", bd: "rgba(220,38,38,.45)", t: "OFF" }
+    : { bg: "rgba(148,163,184,.12)", fg: "#94a3b8", bd: "rgba(148,163,184,.3)", t: "—" };
+  const W = 520, H = 108, PL = 32, PR = 8, PT = 10, PB = 18;
+  const n = inv.length || 1;
+  const max = niceMax(Math.max(1, ...inv.map((i) => Math.max(i.amount_paid_usd, i.total_usd))));
+  const bw = (W - PL - PR) / n;
+  const xc = (i: number) => PL + bw * (i + 0.5);
+  const yBase = H - PB;
+  const yFor = (v: number) => yBase - (v / max) * (H - PT - PB);
+  return (
+    <div>
+      <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs">
+        <span className="rounded px-2 py-1 font-medium" style={{ background: pill.bg, color: pill.fg, border: `1px solid ${pill.bd}` }}>Auto-collect: {pill.t}</span>
+        <PayStat label="MRR" value={`$${payments.total_mrr_usd}`} />
+        <PayStat label="Active subs" value={payments.active_subscription_count} />
+        <PayStat label="Net terms" value={payments.net_term_days != null ? `${payments.net_term_days}d` : "—"} />
+      </div>
+      <div className="mb-1 text-xs text-slate-400">Collected per invoice</div>
+      <div className="relative">
+        <svg ref={hv.ref} viewBox={`0 0 ${W} ${H}`} className="w-full cursor-pointer" style={{ maxHeight: 128 }} role="img" onMouseMove={hv.onMove} onMouseLeave={hv.onLeave} onClick={hv.onClick}>
+          <line x1={PL} x2={W - PR} y1={yBase} y2={yBase} stroke={VIZ.baseline} strokeWidth={1} />
+          <text x={PL - 4} y={yFor(max) + 3} textAnchor="end" fontSize={9} fill={VIZ.muted}>${max}</text>
+          {inv.map((iv, i) => {
+            const top = yFor(iv.amount_paid_usd);
+            return <rect key={i} x={xc(i) - bw * 0.3} y={top} width={bw * 0.6} height={Math.max(1, yBase - top)} rx={1.5} fill={iv.paid ? PAY_PAID : PAY_PART} opacity={hv.active === i ? 1 : 0.85} />;
+          })}
+          {inv.length ? [0, n - 1].map((i) => <text key={i} x={xc(i)} y={H - 5} textAnchor={i === 0 ? "start" : "end"} fontSize={9} fill={VIZ.muted}>{inv[i]?.date?.slice(5)}</text>) : null}
+        </svg>
+        {hv.active != null && inv[hv.active] && (
+          <Tooltip
+            leftPct={(xc(hv.active) / W) * 100}
+            title={inv[hv.active].date || "invoice"}
+            rows={[
+              { name: "Paid", value: `$${inv[hv.active].amount_paid_usd}` },
+              { name: "Total", value: `$${inv[hv.active].total_usd}` },
+              { name: "Status", value: inv[hv.active].paid ? "Paid" : inv[hv.active].status },
+            ]}
+            pinned={hv.pinned != null}
+            onClose={hv.clear}
+          />
+        )}
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+        <PayStat label="Total paid" value={`$${payments.total_paid_usd}`} />
+        <PayStat label="Outstanding" value={`$${payments.unpaid_total_usd}`} />
+        <PayStat label="Failed txns" value={payments.failed_txn_count} />
       </div>
     </div>
   );
