@@ -17,13 +17,16 @@ export async function getSupportTickets(entityId: string) {
   if (!id) return { available: false as const, reason: "no entity_id" };
   try {
     const rows = await queryAurora(`
-      select subject, status, priority, hubspot_owner_name, created_at::date d
+      select subject, status, priority, hubspot_owner_name, created_at::date d,
+             count(*) over()::int total
       from hubspot.tickets
       where location_entity_id = '${id}' or user_entity_id = '${id}'
       order by created_at desc
       limit 12`);
+    const total = rows.length ? Number(rows[0].total) || rows.length : 0;
     return {
-      open_count: rows.length,
+      total_open: total,
+      showing: rows.length,
       tickets: rows.map((r) => ({
         subject: r.subject, status: r.status, priority: r.priority,
         owner: r.hubspot_owner_name || null, created: r.d,
