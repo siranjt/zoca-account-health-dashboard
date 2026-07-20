@@ -137,14 +137,21 @@ export default function AlfredChat() {
     );
   }
 
+  function go(href: string) {
+    setOpen(false);
+    router.push(href);
+    // hard fallback in case the client router doesn't navigate for any reason
+    setTimeout(() => { if (typeof window !== "undefined" && !window.location.pathname.startsWith(href.split("?")[0])) window.location.assign(href); }, 250);
+  }
+
   function runAction(action: any) {
     if (!action || typeof action !== "object") return;
-    if (action.type === "open" && action.name) {
-      const hit = resolveAccount(String(action.name));
-      if (hit) {
-        window.dispatchEvent(new CustomEvent("cave-toast", { detail: { message: `Opening ${hit.name}` } }));
-        setOpen(false);
-        router.push(`/account/${hit.id}`);
+    if (action.type === "open") {
+      // prefer the server-resolved entityId; fall back to client name-matching
+      const id = action.entityId || resolveAccount(String(action.name || ""))?.id;
+      if (id) {
+        window.dispatchEvent(new CustomEvent("cave-toast", { detail: { message: `Opening ${action.name || "account"}` } }));
+        go(`/account/${id}`);
       } else {
         window.dispatchEvent(new CustomEvent("cave-toast", { detail: { message: `Couldn't find an account named "${action.name}"` } }));
       }
@@ -154,8 +161,7 @@ export default function AlfredChat() {
       if (action.color) qs.set("color", String(action.color));
       if (action.q) qs.set("q", String(action.q));
       window.dispatchEvent(new CustomEvent("cave-toast", { detail: { message: "Filtering the overview" } }));
-      setOpen(false);
-      router.push(`/overview?${qs.toString()}`);
+      go(`/overview?${qs.toString()}`);
     }
   }
 

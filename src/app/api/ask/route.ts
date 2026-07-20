@@ -492,12 +492,29 @@ export async function POST(req: Request) {
     }
     // Fallback: if the user gave an explicit open/go-to command and the model
     // forgot to emit the directive, synthesize it from the question so the
-    // navigation still fires (the client resolves the name fuzzily).
+    // navigation still fires.
     if (!action) {
       const nav = q.match(/^\s*(?:open|go ?to|pull up|take me to|show me|navigate to|jump to)\s+(.+?)['".!?]*\s*$/i);
       if (nav && nav[1] && nav[1].length >= 3 && !/\b(accounts?|book|risk|overview|list|all|my)\b/i.test(nav[1])) {
         action = { type: "open", name: nav[1].replace(/^the\s+/i, "").replace(/'s\b.*$/, "").replace(/["']/g, "").trim() };
       }
+    }
+    // Resolve an open action's name → entityId SERVER-SIDE against the full book,
+    // so the client can navigate by id and never depends on its own index being
+    // loaded. Fuzzy: exact → substring → all-tokens.
+    const act = action as { type?: string; name?: string; entityId?: string } | null;
+    if (act && act.type === "open" && act.name && !act.entityId) {
+      const nm = act.name.toLowerCase().trim();
+      const toks = nm.split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+      const L = ctx.list;
+      const hit =
+        L.find((a) => (a.name || "").toLowerCase() === nm) ||
+        L.find((a) => (a.name || "").toLowerCase().includes(nm)) ||
+        L.find((a) => { const an = (a.name || "").toLowerCase(); return an.length > 4 && nm.includes(an); }) ||
+        (toks.length ? L.find((a) => { const an = (a.name || "").toLowerCase(); return toks.every((t) => an.includes(t)); }) : undefined) ||
+        (toks.length >= 2 ? L.find((a) => { const an = (a.name || "").toLowerCase(); return toks.filter((t) => an.includes(t)).length >= Math.ceil(toks.length * 0.6); }) : undefined);
+      if (hit) { act.entityId = hit.entityId; act.name = hit.name; }
+      else action = null; // no match → don't emit a dead action
     }
     const ms = Date.now() - t0;
     logTrace({ status, q: q.slice(0, 120), tools: toolsUsed, iters, ms, tok_in: tokIn, tok_out: tokOut, tok_cache_read: tokCache, model: MODEL, reply_len: reply.length });
