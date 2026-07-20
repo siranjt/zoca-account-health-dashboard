@@ -73,6 +73,15 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [mrrMin, setMrrMin] = useState<string>("");
   const [mrrMax, setMrrMax] = useState<string>("");
+  const [cols, setCols] = useState({ engagement: true, seo: true, timing: true, payments: true });
+  const [colMenu, setColMenu] = useState(false);
+  useEffect(() => {
+    try { const r = localStorage.getItem("zoca-ahd-cols"); if (r) setCols((c) => ({ ...c, ...JSON.parse(r) })); } catch { /* ignore */ }
+  }, []);
+  function toggleColGroup(k: "engagement" | "seo" | "timing" | "payments") {
+    setCols((c) => { const n = { ...c, [k]: !c[k] }; try { localStorage.setItem("zoca-ahd-cols", JSON.stringify(n)); } catch { /* ignore */ } return n; });
+  }
+  const colCount = 3 + (cols.engagement ? 6 : 0) + (cols.seo ? 3 : 0) + (cols.timing ? 3 : 0) + (cols.payments ? 4 : 0);
   const [sort, setSort] = useState<SortState>({ key: "health", dir: "asc" });
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [pop, setPop] = useState<{ x: number; y: number; body: React.ReactNode } | null>(null);
@@ -611,6 +620,22 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
           {savedViews.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
         </select>
         <button onClick={saveView} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-100">＋ Save view</button>
+        <div className="relative inline-block">
+          <button onClick={() => setColMenu((o) => !o)} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-100">⚙ Columns</button>
+          {colMenu && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setColMenu(false)} />
+              <div className="absolute left-0 top-8 z-30 w-44 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
+                {([["engagement", "Engagement"], ["seo", "SEO / rankings"], ["timing", "Response timing"], ["payments", "Payments"]] as const).map(([k, label]) => (
+                  <label key={k} className="flex items-center gap-2 rounded px-1 py-1 text-xs hover:bg-slate-100">
+                    <input type="checkbox" checked={cols[k]} onChange={() => toggleColGroup(k)} />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
         <button onClick={() => setShowLeaders(true)} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-100">🏆 Leaderboards</button>
         {pinned.size >= 2 && (
           <button onClick={() => setShowCompare(true)} className="rounded-md border px-2.5 py-1 font-medium" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-cy)" }}>
@@ -635,6 +660,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               <Th onClick={() => toggleSort("name")} active={sort} k="name" sticky>
                 Business
               </Th>
+              {cols.engagement && (<>
               <Th onClick={() => toggleSort("leadsReceived")} active={sort} k="leadsReceived" num onDistro={(e) => openPop(e, distro("leadsReceived", "Leads"))}>
                 Leads
               </Th>
@@ -653,6 +679,8 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               <Th onClick={() => toggleSort("bookOnlineClicks")} active={sort} k="bookOnlineClicks" num>
                 Book Online
               </Th>
+              </>)}
+              {cols.seo && (<>
               <Th onClick={() => toggleSort("keywordsTop3Pct")} active={sort} k="keywordsTop3Pct" num>
                 KW Top-3 %
               </Th>
@@ -662,6 +690,8 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               <Th onClick={() => toggleSort("keywordImpressions")} active={sort} k="keywordImpressions" num onDistro={(e) => openPop(e, distro("keywordImpressions", "Keyword impressions"))}>
                 KW impr.
               </Th>
+              </>)}
+              {cols.timing && (<>
               <Th onClick={() => toggleSort("avgReceivedToOpenedMs")} active={sort} k="avgReceivedToOpenedMs" num>
                 Recv→Open
               </Th>
@@ -671,6 +701,8 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               <Th onClick={() => toggleSort("avgOpenedToContactedMs")} active={sort} k="avgOpenedToContactedMs" num>
                 Open→Contact
               </Th>
+              </>)}
+              {cols.payments && (<>
               <Th onClick={() => toggleSort("daysToInvoice")} active={sort} k="daysToInvoice" num>
                 Next invoice
               </Th>
@@ -683,6 +715,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               <Th onClick={() => toggleSort("tenureDays")} active={sort} k="tenureDays" num onDistro={(e) => openPop(e, distro("tenureDays", "Tenure (days)"))}>
                 Tenure
               </Th>
+              </>)}
               <Th onClick={() => toggleSort("otherProducts")} active={sort} k="otherProducts">
                 Products
               </Th>
@@ -757,6 +790,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
                         </div>
                       </div>
                     </td>
+                    {cols.engagement && (<>
                     <MetricCell value={a.leadsReceived} delta={a.leadsDelta} spark={a.sparkLeads} color={VIZ.series[0]} onClick={(e) => openPop(e, metricPop(a, "leads"))} />
                     <MetricCell value={a.reviewsReceived} delta={a.reviewsDelta} color={VIZ.series[1]} onClick={(e) => openPop(e, metricPop(a, "reviews"))} />
                     <Num onClick={(e) => openPop(e, metricPop(a, "photos"))}>{formatNumber(a.photosUploaded)}</Num>
@@ -769,12 +803,18 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
                         <span className="text-slate-300" title="Book Online CTA not active on GBP">n/a</span>
                       )}
                     </td>
+                    </>)}
+                    {cols.seo && (<>
                     <Num onClick={(e) => openPop(e, metricPop(a, "rank"))}>{formatPercent(a.keywordsTop3Pct)}</Num>
                     <Num onClick={(e) => openPop(e, metricPop(a, "rank"))}>{formatRank(a.avgCurrentRank)}</Num>
                     <Num onClick={(e) => openPop(e, metricPop(a, "impressions"))}>{formatNumber(a.keywordImpressions)}</Num>
+                    </>)}
+                    {cols.timing && (<>
                     <Num onClick={(e) => openPop(e, metricPop(a, "timing"))}>{formatDuration(a.avgReceivedToOpenedMs)}</Num>
                     <Num onClick={(e) => openPop(e, metricPop(a, "timing"))}>{formatDuration(a.avgReceivedToContactedMs)}</Num>
                     <Num onClick={(e) => openPop(e, metricPop(a, "timing"))}>{formatDuration(a.avgOpenedToContactedMs)}</Num>
+                    </>)}
+                    {cols.payments && (<>
                     <td className="cursor-pointer px-3 py-2 text-right tabular-nums text-slate-700 hover:bg-indigo-50" onClick={(e) => openPop(e, metricPop(a, "payments"))} title="Click for payment detail">
                       {a.daysToInvoice != null ? formatDays(a.daysToInvoice) : "—"}
                     </td>
@@ -795,6 +835,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
                     <td className="cursor-pointer px-3 py-2 text-right tabular-nums text-slate-700 hover:bg-indigo-50" onClick={(e) => openPop(e, metricPop(a, "payments"))}>
                       {formatTenure(a.tenureDays)}
                     </td>
+                    </>)}
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-1">
                         <Chip label="Discovery" tone="neutral" />
@@ -808,7 +849,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={19} className="p-0">
+                      <td colSpan={colCount} className="p-0">
                         <DetailPanel account={a} windowDays={windowDays} />
                       </td>
                     </tr>
@@ -818,7 +859,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={19} className="px-3 py-10 text-center text-slate-400">
+                <td colSpan={colCount} className="px-3 py-10 text-center text-slate-400">
                   No accounts match these filters.
                 </td>
               </tr>
