@@ -79,6 +79,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [groupBy, setGroupBy] = useState<"none" | "am" | "tier" | "state">("none");
   const [viewMode, setViewMode] = useState<"table" | "board">("table");
   const [showCompare, setShowCompare] = useState(false);
+  const [showLeaders, setShowLeaders] = useState(false);
   const [savedViews, setSavedViews] = useState<{ name: string; s: any }[]>([]);
   const searchParams = useSearchParams();
 
@@ -597,6 +598,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
           {savedViews.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
         </select>
         <button onClick={saveView} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-100">＋ Save view</button>
+        <button onClick={() => setShowLeaders(true)} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-100">🏆 Leaderboards</button>
         {pinned.size >= 2 && (
           <button onClick={() => setShowCompare(true)} className="rounded-md border px-2.5 py-1 font-medium" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-cy)" }}>
             ⇄ Compare ({pinned.size})
@@ -839,6 +841,51 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
           </div>
         </div>
       )}
+
+      {showLeaders && (
+        <div className="fixed inset-0 z-[2147483450] flex items-center justify-center p-6" style={{ background: "rgba(2,6,8,.72)" }} onClick={() => setShowLeaders(false)}>
+          <div className="max-h-[85vh] w-full max-w-[980px] overflow-auto rounded-xl border p-4" style={{ borderColor: "var(--cave-line2)", background: "var(--cave-panel)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-semibold" style={{ color: "var(--cave-cy)" }}>🏆 Leaderboards <span className="text-slate-400">· {rows.length} accounts in view</span></div>
+              <button onClick={() => setShowLeaders(false)} className="text-slate-400 hover:text-slate-200">✕</button>
+            </div>
+            <LeaderboardView accounts={rows} onOpen={() => setShowLeaders(false)} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LeaderboardView({ accounts, onOpen }: { accounts: AccountRow[]; onOpen: () => void }) {
+  const boards: { title: string; val: (a: AccountRow) => number; fmt: (a: AccountRow) => string; asc?: boolean }[] = [
+    { title: "Top MRR", val: (a) => a.mrr ?? 0, fmt: (a) => (a.mrr != null ? `$${formatNumber(a.mrr)}` : "—") },
+    { title: "Most leads", val: (a) => a.leadsReceived, fmt: (a) => formatNumber(a.leadsReceived) },
+    { title: "Most reviews", val: (a) => a.reviewsReceived, fmt: (a) => formatNumber(a.reviewsReceived) },
+    { title: "Lowest composite", val: (a) => a.health.composite ?? 999, fmt: (a) => a.health.composite?.toFixed(1) ?? "—", asc: true },
+    { title: "Most open tickets", val: (a) => a.openTickets, fmt: (a) => formatNumber(a.openTickets) },
+    { title: "Most overdue", val: (a) => a.daysOverdue ?? 0, fmt: (a) => (a.daysOverdue && a.daysOverdue > 0 ? `${a.daysOverdue}d` : "—") },
+  ];
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {boards.map((b) => {
+        const top = [...accounts].sort((x, y) => (b.asc ? b.val(x) - b.val(y) : b.val(y) - b.val(x))).slice(0, 8);
+        return (
+          <div key={b.title} className="rounded-lg border border-slate-200 bg-white p-2">
+            <div className="mb-1.5 px-1 text-xs font-semibold text-slate-600">{b.title}</div>
+            <div className="space-y-0.5">
+              {top.map((a, i) => (
+                <Link key={a.entityId} href={`/account/${a.entityId}`} onClick={onOpen} className="flex items-center gap-2 rounded px-1 py-0.5 text-xs no-underline hover:bg-slate-100">
+                  <span className="w-4 text-right tabular-nums text-slate-400">{i + 1}</span>
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: a.health.color === "red" ? "#dc2626" : a.health.color === "yellow" ? "#d97706" : "#16a34a" }} />
+                  <span className="flex-1 truncate text-slate-700">{a.name}</span>
+                  <span className="tabular-nums font-medium text-slate-600">{b.fmt(a)}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

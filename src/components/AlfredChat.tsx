@@ -1,7 +1,40 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Msg = { role: "user" | "alfred"; text: string };
+type Idx = { id: string; name: string };
+
+// linkify account names in Alfred's answers → their detail pages
+function renderAlfred(text: string, index: Idx[]): React.ReactNode {
+  if (!index.length) return text;
+  const lc = text.toLowerCase();
+  const found: { start: number; end: number; id: string }[] = [];
+  for (const a of index) {
+    if (a.name.length < 5) continue;
+    const nlc = a.name.toLowerCase();
+    let pos = lc.indexOf(nlc);
+    while (pos !== -1) {
+      found.push({ start: pos, end: pos + a.name.length, id: a.id });
+      pos = lc.indexOf(nlc, pos + a.name.length);
+      if (found.length > 300) break;
+    }
+    if (found.length > 300) break;
+  }
+  if (!found.length) return text;
+  found.sort((x, y) => x.start - y.start || (y.end - y.start) - (x.end - x.start));
+  const picked: typeof found = [];
+  let lastEnd = -1;
+  for (const f of found) if (f.start >= lastEnd) { picked.push(f); lastEnd = f.end; }
+  const nodes: React.ReactNode[] = [];
+  let cur = 0;
+  picked.forEach((f, i) => {
+    if (f.start > cur) nodes.push(text.slice(cur, f.start));
+    nodes.push(<a key={i} href={`/account/${f.id}`} style={{ color: "#8FF0FF", textDecoration: "underline" }}>{text.slice(f.start, f.end)}</a>);
+    cur = f.end;
+  });
+  if (cur < text.length) nodes.push(text.slice(cur));
+  return nodes;
+}
 
 const CHIPS = [
   "Which 3 accounts need attention most?",
@@ -49,7 +82,17 @@ export default function AlfredChat() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [busy, setBusy] = useState(false);
   const [input, setInput] = useState("");
+  const [index, setIndex] = useState<Idx[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
+
+  // account name index for linkifying Alfred's answers
+  useEffect(() => {
+    fetch("/api/accounts?window=30", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((p) => setIndex((p.accounts ?? []).map((a: any) => ({ id: a.entityId, name: a.name })).filter((a: Idx) => a.name)))
+      .catch(() => {});
+  }, []);
+  const rendered = useMemo(() => msgs.map((m) => (m.role === "alfred" ? renderAlfred(m.text, index) : m.text)), [msgs, index]);
 
   useEffect(() => {
     try { const s = localStorage.getItem("cave_chat"); if (s) setMsgs(JSON.parse(s)); } catch {}
@@ -116,7 +159,7 @@ export default function AlfredChat() {
           )}
           {msgs.map((m, i) => (
             <div key={i} className={"cave-msg " + (m.role === "user" ? "user" : "alf")}>
-              <div className="cave-who">{m.role === "user" ? "You" : "Alfred"}</div>{m.text}
+              <div className="cave-who">{m.role === "user" ? "You" : "Alfred"}</div>{rendered[i] ?? m.text}
             </div>
           ))}
           {busy && (<div className="cave-typing"><i /><i /><i /></div>)}
