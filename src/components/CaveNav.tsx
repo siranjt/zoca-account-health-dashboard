@@ -16,6 +16,7 @@ export default function CaveNav() {
   const links: { href: string; label: string; match: (p: string) => boolean }[] = [
     { href: "/", label: "Home", match: (p) => p === "/" },
     { href: "/overview", label: "Overview", match: (p) => p === "/overview" || p.startsWith("/account") },
+    { href: "/trends", label: "Trends", match: (p) => p === "/trends" },
   ];
 
   return (

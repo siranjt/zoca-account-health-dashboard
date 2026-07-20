@@ -92,6 +92,8 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [viewMode, setViewMode] = useState<"table" | "board">("table");
   const [showCompare, setShowCompare] = useState(false);
   const [showLeaders, setShowLeaders] = useState(false);
+  const [showAlerts, setShowAlerts] = useState(false);
+  const [showActivity, setShowActivity] = useState(false);
   const [savedViews, setSavedViews] = useState<{ name: string; s: any }[]>([]);
   const searchParams = useSearchParams();
 
@@ -655,6 +657,8 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
           )}
         </div>
         <button onClick={() => setShowLeaders(true)} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-100">🏆 Leaderboards</button>
+        <button onClick={() => setShowAlerts(true)} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-100">🔔 Alerts</button>
+        <button onClick={() => setShowActivity(true)} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-100">📋 Activity</button>
         {pinned.size >= 2 && (
           <button onClick={() => setShowCompare(true)} className="rounded-md border px-2.5 py-1 font-medium" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-cy)" }}>
             ⇄ Compare ({pinned.size})
@@ -923,6 +927,103 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
             </div>
             <LeaderboardView accounts={rows} onOpen={() => setShowLeaders(false)} />
           </div>
+        </div>
+      )}
+
+      {showAlerts && (
+        <div className="fixed inset-0 z-[2147483450] flex items-center justify-center p-6" style={{ background: "rgba(2,6,8,.72)" }} onClick={() => setShowAlerts(false)}>
+          <div className="max-h-[85vh] w-full max-w-[720px] overflow-auto rounded-xl border p-4" style={{ borderColor: "var(--cave-line2)", background: "var(--cave-panel)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-semibold" style={{ color: "var(--cave-cy)" }}>🔔 Threshold alerts</div>
+              <button onClick={() => setShowAlerts(false)} className="text-slate-400 hover:text-slate-200">✕</button>
+            </div>
+            <AlertsView accounts={accounts} onOpen={() => setShowAlerts(false)} />
+          </div>
+        </div>
+      )}
+
+      {showActivity && (
+        <div className="fixed inset-0 z-[2147483450] flex items-center justify-center p-6" style={{ background: "rgba(2,6,8,.72)" }} onClick={() => setShowActivity(false)}>
+          <div className="max-h-[85vh] w-full max-w-[720px] overflow-auto rounded-xl border p-4" style={{ borderColor: "var(--cave-line2)", background: "var(--cave-panel)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-semibold" style={{ color: "var(--cave-cy)" }}>📋 Activity feed</div>
+              <button onClick={() => setShowActivity(false)} className="text-slate-400 hover:text-slate-200">✕</button>
+            </div>
+            <ActivityView onOpen={() => setShowActivity(false)} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AlertsView({ accounts, onOpen }: { accounts: AccountRow[]; onOpen: () => void }) {
+  const [compBelow, setCompBelow] = useState(40);
+  const [overdueOver, setOverdueOver] = useState(0);
+  const [ticketsAtLeast, setTicketsAtLeast] = useState(3);
+  const hits = accounts.filter(
+    (a) =>
+      (a.health.composite != null && a.health.composite < compBelow) ||
+      (a.daysOverdue != null && a.daysOverdue > overdueOver) ||
+      a.openTickets >= ticketsAtLeast
+  );
+  const reason = (a: AccountRow) => {
+    const r: string[] = [];
+    if (a.health.composite != null && a.health.composite < compBelow) r.push(`composite ${a.health.composite.toFixed(0)}`);
+    if (a.daysOverdue != null && a.daysOverdue > overdueOver) r.push(`${a.daysOverdue}d overdue`);
+    if (a.openTickets >= ticketsAtLeast) r.push(`${a.openTickets} tickets`);
+    return r.join(" · ");
+  };
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+        <span className="flex items-center gap-1">composite &lt; <input type="number" value={compBelow} onChange={(e) => setCompBelow(Number(e.target.value))} className="w-14 rounded border border-slate-300 bg-white px-1 py-0.5" /></span>
+        <span className="flex items-center gap-1">overdue &gt; <input type="number" value={overdueOver} onChange={(e) => setOverdueOver(Number(e.target.value))} className="w-14 rounded border border-slate-300 bg-white px-1 py-0.5" />d</span>
+        <span className="flex items-center gap-1">tickets ≥ <input type="number" value={ticketsAtLeast} onChange={(e) => setTicketsAtLeast(Number(e.target.value))} className="w-14 rounded border border-slate-300 bg-white px-1 py-0.5" /></span>
+        <span className="ml-auto font-medium text-slate-500">{hits.length} breaching</span>
+      </div>
+      <div className="space-y-1">
+        {hits.length === 0 ? (
+          <div className="py-6 text-center text-sm text-slate-400">No accounts breach these thresholds.</div>
+        ) : (
+          hits.sort((x, y) => (x.health.composite ?? 999) - (y.health.composite ?? 999)).map((a) => (
+            <Link key={a.entityId} href={`/account/${a.entityId}`} onClick={onOpen} className="flex items-center gap-2 rounded px-1.5 py-1 text-xs no-underline hover:bg-slate-100">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: a.health.color === "red" ? "#dc2626" : a.health.color === "yellow" ? "#d97706" : "#16a34a" }} />
+              <span className="flex-1 truncate text-slate-700">{a.name}</span>
+              <span className="text-red-500">{reason(a)}</span>
+            </Link>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ActivityView({ onOpen }: { onOpen: () => void }) {
+  const [data, setData] = useState<{ from: string | null; to: string | null; changes: { entityId: string; name: string; kind: string; detail: string }[] } | null>(null);
+  useEffect(() => {
+    fetch("/api/activity", { cache: "no-store" }).then((r) => r.json()).then(setData).catch(() => setData({ from: null, to: null, changes: [] }));
+  }, []);
+  if (!data) return <div className="py-8 text-center text-sm text-slate-400">Loading…</div>;
+  const color = (k: string) => (k === "risk" ? "#dc2626" : k === "recover" ? "#16a34a" : k === "new" ? "#818cf8" : "#d97706");
+  return (
+    <div>
+      <div className="mb-2 text-xs text-slate-400">
+        {data.changes.length ? `${data.changes.length} changes · ${data.from} → ${data.to}` : "No changes to show yet."}
+      </div>
+      {data.changes.length === 0 ? (
+        <div className="py-6 text-center text-sm text-slate-400">
+          The activity feed compares consecutive daily snapshots. It fills in once at least two days of history exist (a snapshot is taken automatically each day).
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {data.changes.map((c, i) => (
+            <Link key={i} href={`/account/${c.entityId}`} onClick={onOpen} className="flex items-center gap-2 rounded px-1.5 py-1 text-xs no-underline hover:bg-slate-100">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color(c.kind) }} />
+              <span className="flex-1 truncate text-slate-700">{c.name}</span>
+              <span className="text-slate-500">{c.detail}</span>
+            </Link>
+          ))}
         </div>
       )}
     </div>
