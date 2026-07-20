@@ -75,6 +75,11 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [pop, setPop] = useState<{ x: number; y: number; body: React.ReactNode } | null>(null);
   const [pinned, setPinned] = useState<Set<string>>(() => new Set());
+  const [dense, setDense] = useState(false);
+  const [groupBy, setGroupBy] = useState<"none" | "am" | "tier" | "state">("none");
+  const [viewMode, setViewMode] = useState<"table" | "board">("table");
+  const [showCompare, setShowCompare] = useState(false);
+  const [savedViews, setSavedViews] = useState<{ name: string; s: any }[]>([]);
   const searchParams = useSearchParams();
 
   // deep-link filters from the URL (e.g. /overview?am=Sudha&color=red) — takes
@@ -109,6 +114,40 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
       }
       return next;
     });
+  }
+
+  // saved views (filter + sort snapshots)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("zoca-ahd-views");
+      if (raw) setSavedViews(JSON.parse(raw));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  function persistViews(v: { name: string; s: any }[]) {
+    setSavedViews(v);
+    try { localStorage.setItem("zoca-ahd-views", JSON.stringify(v)); } catch { /* ignore */ }
+  }
+  function saveView() {
+    const name = window.prompt("Name this view:");
+    if (!name) return;
+    const s = { query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, overdueOnly, ticketsOnly, pinnedOnly, sort, groupBy };
+    persistViews([...savedViews.filter((x) => x.name !== name), { name, s }]);
+    window.dispatchEvent(new CustomEvent("cave-toast", { detail: { message: `Saved view "${name}"` } }));
+  }
+  function loadView(v: { name: string; s: any }) {
+    const s = v.s;
+    setQuery(s.query || "");
+    setColorFilter(s.colorFilter || "all");
+    setAmFilter(s.amFilter || "all");
+    setOnlyMultiProduct(!!s.onlyMultiProduct);
+    setOnlyDeclining(!!s.onlyDeclining);
+    setOverdueOnly(!!s.overdueOnly);
+    setTicketsOnly(!!s.ticketsOnly);
+    setPinnedOnly(!!s.pinnedOnly);
+    if (s.sort) setSort(s.sort);
+    setGroupBy(s.groupBy || "none");
   }
 
   function openPop(e: React.MouseEvent, body: React.ReactNode) {
@@ -537,10 +576,40 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
         <span className="ml-auto text-sm text-slate-500">{rows.length} shown</span>
       </div>
 
+      {/* view mode + tools */}
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+        <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
+          {(["table", "board"] as const).map((m) => (
+            <button key={m} onClick={() => setViewMode(m)} className={`px-2.5 py-1 font-medium ${viewMode === m ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}>
+              {m === "table" ? "▤ Table" : "▦ Board"}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setDense((d) => !d)} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-100">
+          {dense ? "↕ Comfortable" : "↕ Compact"}
+        </button>
+        <select
+          value=""
+          onChange={(e) => { const v = savedViews.find((x) => x.name === e.target.value); if (v) loadView(v); }}
+          className="rounded-md border border-slate-300 bg-white px-2 py-1"
+        >
+          <option value="">Saved views…</option>
+          {savedViews.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
+        </select>
+        <button onClick={saveView} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-100">＋ Save view</button>
+        {pinned.size >= 2 && (
+          <button onClick={() => setShowCompare(true)} className="rounded-md border px-2.5 py-1 font-medium" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-cy)" }}>
+            ⇄ Compare ({pinned.size})
+          </button>
+        )}
+      </div>
+
+      {viewMode === "board" && <BoardView rows={rows} pinned={pinned} togglePin={togglePin} />}
+
       <div
-        className={`table-scroll rounded-lg border border-slate-200 bg-white shadow-sm transition-opacity ${
+        className={`table-scroll rounded-lg border border-slate-200 bg-white shadow-sm transition-opacity ${dense ? "cave-dense" : ""} ${
           loading ? "pointer-events-none opacity-60" : ""
-        }`}
+        } ${viewMode === "board" ? "hidden" : ""}`}
       >
         <table className="w-full border-collapse text-sm">
           <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
@@ -758,6 +827,18 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
           </div>
         </>
       )}
+
+      {showCompare && (
+        <div className="fixed inset-0 z-[2147483450] flex items-center justify-center p-6" style={{ background: "rgba(2,6,8,.72)" }} onClick={() => setShowCompare(false)}>
+          <div className="max-h-[85vh] w-full max-w-[1000px] overflow-auto rounded-xl border p-4" style={{ borderColor: "var(--cave-line2)", background: "var(--cave-panel)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-semibold" style={{ color: "var(--cave-cy)" }}>⇄ Compare {accounts.filter((a) => pinned.has(a.entityId)).length} pinned accounts</div>
+              <button onClick={() => setShowCompare(false)} className="text-slate-400 hover:text-slate-200">✕</button>
+            </div>
+            <CompareTable accounts={accounts.filter((a) => pinned.has(a.entityId))} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -874,6 +955,92 @@ function MetricCell({
         </div>
       )}
     </td>
+  );
+}
+
+function CompareTable({ accounts }: { accounts: AccountRow[] }) {
+  if (accounts.length < 2) return <div className="text-sm text-slate-400">Pin 2 or more accounts (★) to compare them side by side.</div>;
+  const metrics: { label: string; get: (a: AccountRow) => React.ReactNode }[] = [
+    { label: "Health", get: (a) => a.health.tierLabel || "—" },
+    { label: "Composite", get: (a) => a.health.composite?.toFixed(1) ?? "—" },
+    { label: "MRR", get: (a) => (a.mrr != null ? `$${formatNumber(a.mrr)}` : "—") },
+    { label: "Leads", get: (a) => formatNumber(a.leadsReceived) },
+    { label: "Reviews", get: (a) => formatNumber(a.reviewsReceived) },
+    { label: "Profile clicks", get: (a) => formatNumber(a.profileClicks) },
+    { label: "KW top-3 %", get: (a) => (a.keywordsTop3Pct != null ? `${a.keywordsTop3Pct}%` : "—") },
+    { label: "Avg rank", get: (a) => (a.avgCurrentRank != null ? `#${a.avgCurrentRank}` : "—") },
+    { label: "Impressions", get: (a) => formatNumber(a.keywordImpressions) },
+    { label: "Open tickets", get: (a) => formatNumber(a.openTickets) },
+    { label: "Overdue", get: (a) => (a.daysOverdue && a.daysOverdue > 0 ? `${a.daysOverdue}d` : "—") },
+    { label: "Tenure", get: (a) => formatTenure(a.tenureDays) },
+    { label: "AM", get: (a) => a.accountManager ?? "—" },
+    { label: "Products", get: (a) => a.activeProducts.join(", ") || "—" },
+  ];
+  return (
+    <div className="table-scroll overflow-auto">
+      <table className="w-full border-collapse text-xs">
+        <thead>
+          <tr>
+            <th className="sticky left-0 bg-slate-50 px-2 py-1.5" />
+            {accounts.map((a) => (
+              <th key={a.entityId} className="px-2 py-1.5 text-left">
+                <Link href={`/account/${a.entityId}`} className="font-medium text-slate-900 no-underline hover:text-indigo-600">{a.name}</Link>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {metrics.map((m) => (
+            <tr key={m.label} className="border-t border-slate-100">
+              <td className="sticky left-0 bg-white px-2 py-1.5 font-medium text-slate-500">{m.label}</td>
+              {accounts.map((a) => (
+                <td key={a.entityId} className="px-2 py-1.5 tabular-nums text-slate-700">{m.get(a)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function BoardView({ rows, pinned, togglePin }: { rows: AccountRow[]; pinned: Set<string>; togglePin: (id: string) => void }) {
+  const cols: { key: HealthColor; label: string; hex: string }[] = [
+    { key: "red", label: "At risk", hex: "#dc2626" },
+    { key: "yellow", label: "Monitor", hex: "#d97706" },
+    { key: "green", label: "Healthy", hex: "#16a34a" },
+  ];
+  return (
+    <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+      {cols.map((c) => {
+        const items = rows.filter((a) => a.health.color === c.key);
+        return (
+          <div key={c.key} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+            <div className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold" style={{ color: c.hex }}>
+              <span className="h-2 w-2 rounded-full" style={{ background: c.hex }} />
+              {c.label} <span className="text-slate-400">({items.length})</span>
+            </div>
+            <div className="table-scroll max-h-[70vh] space-y-1.5 overflow-auto pr-1">
+              {items.map((a) => (
+                <div key={a.entityId} className="rounded-md border border-slate-200 bg-white p-2">
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => togglePin(a.entityId)} style={{ color: pinned.has(a.entityId) ? "#f5b301" : "#3a565d" }}>{pinned.has(a.entityId) ? "★" : "☆"}</button>
+                    <Link href={`/account/${a.entityId}`} className="flex-1 truncate text-xs font-medium text-slate-900 no-underline hover:text-indigo-600">{a.name}</Link>
+                    <span className="text-[10px] tabular-nums text-slate-400">{a.mrr != null ? `$${formatNumber(a.mrr)}` : ""}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-400">
+                    <span className="truncate">{a.accountManager ?? "—"}</span>
+                    <span className="ml-auto">L{formatNumber(a.leadsReceived)}</span>
+                    {a.openTickets > 0 && <span className="text-red-500">🎫{a.openTickets}</span>}
+                  </div>
+                </div>
+              ))}
+              {!items.length && <div className="px-1 py-2 text-center text-[11px] text-slate-400">none</div>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

@@ -63,6 +63,9 @@ body {
   to { opacity: 1; transform: none; }
 }
 .cave-toast-in { animation: cave-toast-in 0.18s ease-out; }
+
+/* compact/dense table rows */
+.cave-dense td, .cave-dense th { padding-top: 3px !important; padding-bottom: 3px !important; }
 @media (prefers-reduced-motion: reduce) {
   .cave-loadbar > i { animation: none; left: 0; width: 100%; opacity: 0.4; }
 }
