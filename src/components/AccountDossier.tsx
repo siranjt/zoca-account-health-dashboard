@@ -20,11 +20,13 @@ import {
   LeadForecastChart,
 } from "./Charts";
 import { formatNumber, formatDuration, formatTenure } from "@/lib/format";
+import RetoolAllData from "./RetoolAllData";
 
 const WINDOWS = [7, 30, 90, 180];
 
 // Sections mirror the real Retool "Customer Dashboard" export order/vocabulary:
 // Profile & GBP → Reviews → Funnel & Leads → Rankings → Payments → Scheduling & App.
+// "All Data" runs every one of the 76 Retool queries live, with viewable SQL.
 const TABS = [
   "Profile & GBP",
   "Reviews",
@@ -32,6 +34,7 @@ const TABS = [
   "Rankings",
   "Payments",
   "Scheduling & App",
+  "All Data (76)",
 ] as const;
 type Tab = (typeof TABS)[number];
 
@@ -387,6 +390,12 @@ export default function AccountDossier({
               ) : <NoData />) : skel}
             </ChartCard>
           </>
+        )}
+
+        {tab === "All Data (76)" && (
+          <div className="md:col-span-2 xl:col-span-3">
+            <RetoolAllData entityId={account.entityId} />
+          </div>
         )}
       </div>
     </main>
