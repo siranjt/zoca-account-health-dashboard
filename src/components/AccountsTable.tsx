@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { AccountRow, AccountsPayload, Delta, HealthColor } from "@/lib/types";
 import { otherProducts } from "@/lib/types";
@@ -67,9 +68,48 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [amFilter, setAmFilter] = useState<string>("all");
   const [onlyMultiProduct, setOnlyMultiProduct] = useState(false);
   const [onlyDeclining, setOnlyDeclining] = useState(false);
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [ticketsOnly, setTicketsOnly] = useState(false);
+  const [pinnedOnly, setPinnedOnly] = useState(false);
   const [sort, setSort] = useState<SortState>({ key: "health", dir: "asc" });
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [pop, setPop] = useState<{ x: number; y: number; body: React.ReactNode } | null>(null);
+  const [pinned, setPinned] = useState<Set<string>>(() => new Set());
+  const searchParams = useSearchParams();
+
+  // deep-link filters from the URL (e.g. /overview?am=Sudha&color=red) — takes
+  // precedence over the persisted view, so breadcrumb/Alfred links land filtered.
+  useEffect(() => {
+    const am = searchParams.get("am");
+    const color = searchParams.get("color");
+    const q = searchParams.get("q");
+    if (am) setAmFilter(am);
+    if (color === "green" || color === "yellow" || color === "red") setColorFilter(color);
+    if (q) setQuery(q);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // pinned accounts (persisted) — float to the top
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("zoca-ahd-pins");
+      if (raw) setPinned(new Set(JSON.parse(raw)));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  function togglePin(id: string) {
+    setPinned((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      try {
+        localStorage.setItem("zoca-ahd-pins", JSON.stringify(Array.from(next)));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
 
   function openPop(e: React.MouseEvent, body: React.ReactNode) {
     e.stopPropagation();
@@ -180,11 +220,19 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     if (amFilter !== "all") out = out.filter((a) => a.accountManager === amFilter);
     if (onlyMultiProduct) out = out.filter((a) => otherProducts(a).length > 0);
     if (onlyDeclining) out = out.filter((a) => a.leadsDelta != null && a.leadsDelta.cur < a.leadsDelta.prev);
+    if (overdueOnly) out = out.filter((a) => a.daysOverdue != null && a.daysOverdue > 0);
+    if (ticketsOnly) out = out.filter((a) => a.openTickets > 0);
+    if (pinnedOnly) out = out.filter((a) => pinned.has(a.entityId));
 
     const dir = sort.dir === "asc" ? 1 : -1;
-    out.sort((a, b) => dir * cmp(a, b, sort.key));
+    out.sort((a, b) => {
+      const pa = pinned.has(a.entityId) ? 0 : 1;
+      const pb = pinned.has(b.entityId) ? 0 : 1;
+      if (pa !== pb) return pa - pb; // pinned float to top
+      return dir * cmp(a, b, sort.key);
+    });
     return out;
-  }, [accounts, query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, sort]);
+  }, [accounts, query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, overdueOnly, ticketsOnly, pinnedOnly, sort, pinned]);
 
   const kpi = useMemo(() => {
     const leads = rows.reduce((s, a) => s + a.leadsReceived, 0);
@@ -246,16 +294,16 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
       </div>
     );
     switch (key) {
-      case "leads": return <div className="w-60">{H(`Leads · ${a.name}`)}<Big v={formatNumber(a.leadsReceived)} d={a.leadsDelta} s={a.sparkLeads} />{a.leadsDelta && <div className="mt-1"><R l="Previous period" v={a.leadsDelta.prev} /></div>}</div>;
-      case "reviews": return <div className="w-56">{H("Reviews received")}<Big v={formatNumber(a.reviewsReceived)} d={a.reviewsDelta} />{a.reviewsDelta && <R l="Previous period" v={a.reviewsDelta.prev} />}</div>;
+      case "leads": return <div className="w-60">{H(`Leads · ${a.name}`)}<Big v={formatNumber(a.leadsReceived)} d={a.leadsDelta} s={a.sparkLeads} />{a.leadsDelta && <div className="mt-1"><R l="Previous period" v={a.leadsDelta.prev} /></div>}<PopLink id={a.entityId} tab="Funnel & Leads" /></div>;
+      case "reviews": return <div className="w-56">{H("Reviews received")}<Big v={formatNumber(a.reviewsReceived)} d={a.reviewsDelta} />{a.reviewsDelta && <R l="Previous period" v={a.reviewsDelta.prev} />}<PopLink id={a.entityId} tab="Reviews" /></div>;
       case "photos": return <div className="w-56">{H("Photos uploaded")}<Big v={formatNumber(a.photosUploaded)} /><div className="mt-1 text-xs text-slate-400">Uploaded within the selected window.</div></div>;
       case "profileClicks": return <div className="w-60">{H("Profile clicks")}<Big v={formatNumber(a.profileClicks)} d={a.clicksDelta} s={a.sparkClicks} /></div>;
       case "websiteClicks": return <div className="w-52">{H("Website clicks")}<Big v={formatNumber(a.websiteClicks)} /></div>;
       case "bookOnline": return <div className="w-52">{H("Book Online clicks")}<Big v={a.bookOnlineActive ? formatNumber(a.bookOnlineClicks) : "n/a"} />{!a.bookOnlineActive && <div className="mt-1 text-xs text-slate-400">Book-Online CTA not active on GBP.</div>}</div>;
-      case "rank": return <div className="w-56">{H("Keyword rankings")}<R l="Keywords tracked" v={a.keywordsTracked ?? "—"} /><R l="% in top 3" v={a.keywordsTop3Pct != null ? `${a.keywordsTop3Pct}%` : "—"} /><R l="Avg current rank" v={a.avgCurrentRank != null ? `#${a.avgCurrentRank}` : "—"} /><R l="Impressions (mo)" v={formatNumber(a.keywordImpressions)} /></div>;
+      case "rank": return <div className="w-56">{H("Keyword rankings")}<R l="Keywords tracked" v={a.keywordsTracked ?? "—"} /><R l="% in top 3" v={a.keywordsTop3Pct != null ? `${a.keywordsTop3Pct}%` : "—"} /><R l="Avg current rank" v={a.avgCurrentRank != null ? `#${a.avgCurrentRank}` : "—"} /><R l="Impressions (mo)" v={formatNumber(a.keywordImpressions)} /><PopLink id={a.entityId} tab="Rankings" /></div>;
       case "impressions": return <div className="w-52">{H("Keyword impressions")}<Big v={formatNumber(a.keywordImpressions)} /><div className="mt-1 text-xs text-slate-400">Latest complete month.</div></div>;
       case "timing": return <div className="w-56">{H("Lead response time")}<R l="Received → Opened" v={formatDuration(a.avgReceivedToOpenedMs)} /><R l="Received → Contacted" v={formatDuration(a.avgReceivedToContactedMs)} /><R l="Opened → Contacted" v={formatDuration(a.avgOpenedToContactedMs)} /></div>;
-      case "payments": return <div className="w-60">{H(`Payments · ${a.name}`)}<R l="MRR" v={a.mrr != null ? `$${a.mrr}` : "—"} /><R l="Next invoice in" v={a.daysToInvoice != null ? `${a.daysToInvoice}d` : "—"} /><R l="Overdue" v={a.daysOverdue && a.daysOverdue > 0 ? `${a.daysOverdue}d` : "—"} red={!!(a.daysOverdue && a.daysOverdue > 0)} /><R l="Missed payments" v={a.failedPayments} red={a.failedPayments > 0} /><R l="Tenure" v={formatTenure(a.tenureDays)} /></div>;
+      case "payments": return <div className="w-60">{H(`Payments · ${a.name}`)}<R l="MRR" v={a.mrr != null ? `$${a.mrr}` : "—"} /><R l="Next invoice in" v={a.daysToInvoice != null ? `${a.daysToInvoice}d` : "—"} /><R l="Overdue" v={a.daysOverdue && a.daysOverdue > 0 ? `${a.daysOverdue}d` : "—"} red={!!(a.daysOverdue && a.daysOverdue > 0)} /><R l="Missed payments" v={a.failedPayments} red={a.failedPayments > 0} /><R l="Tenure" v={formatTenure(a.tenureDays)} /><PopLink id={a.entityId} tab="Payments" /></div>;
       case "health": return (
         <div className="w-60">
           {H(`Health · ${a.health.tierLabel}`)}
@@ -377,6 +425,52 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
         />
         <Kpi label="Leads declining" value={formatNumber(kpi.declining)} alert={kpi.declining > 0} onClick={() => setOnlyDeclining((v) => !v)} active={onlyDeclining} />
       </div>
+
+      {/* quick-filter presets */}
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-slate-400">Quick filters:</span>
+        <Preset label="🔴 At-risk" active={colorFilter === "red"} onClick={() => setColorFilter((c) => (c === "red" ? "all" : "red"))} />
+        <Preset label="📉 Declining" active={onlyDeclining} onClick={() => setOnlyDeclining((v) => !v)} />
+        <Preset label="⏰ Overdue" active={overdueOnly} onClick={() => setOverdueOnly((v) => !v)} />
+        <Preset label="🎫 Has tickets" active={ticketsOnly} onClick={() => setTicketsOnly((v) => !v)} />
+        <Preset label="➕ Multi-product" active={onlyMultiProduct} onClick={() => setOnlyMultiProduct((v) => !v)} />
+        <Preset label={`★ Pinned${pinned.size ? ` (${pinned.size})` : ""}`} active={pinnedOnly} onClick={() => setPinnedOnly((v) => !v)} />
+      </div>
+
+      {/* active-filter chips (dismissible) */}
+      {(() => {
+        const chips: { label: string; clear: () => void }[] = [];
+        if (query) chips.push({ label: `search: "${query}"`, clear: () => setQuery("") });
+        if (colorFilter !== "all") chips.push({ label: `health: ${colorFilter}`, clear: () => setColorFilter("all") });
+        if (amFilter !== "all") chips.push({ label: `AM: ${amFilter}`, clear: () => setAmFilter("all") });
+        if (onlyMultiProduct) chips.push({ label: "multi-product", clear: () => setOnlyMultiProduct(false) });
+        if (onlyDeclining) chips.push({ label: "declining", clear: () => setOnlyDeclining(false) });
+        if (overdueOnly) chips.push({ label: "overdue", clear: () => setOverdueOnly(false) });
+        if (ticketsOnly) chips.push({ label: "has tickets", clear: () => setTicketsOnly(false) });
+        if (pinnedOnly) chips.push({ label: "pinned only", clear: () => setPinnedOnly(false) });
+        if (!chips.length) return null;
+        return (
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            {chips.map((c, i) => (
+              <button
+                key={i}
+                onClick={c.clear}
+                className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium hover:bg-slate-100"
+                style={{ borderColor: "var(--cave-line2)", color: "var(--cave-cy)" }}
+                title="Remove filter"
+              >
+                {c.label} <span className="text-slate-400">✕</span>
+              </button>
+            ))}
+            <button
+              onClick={() => { setQuery(""); setColorFilter("all"); setAmFilter("all"); setOnlyMultiProduct(false); setOnlyDeclining(false); setOverdueOnly(false); setTicketsOnly(false); setPinnedOnly(false); }}
+              className="text-[11px] text-slate-400 hover:text-slate-200"
+            >
+              clear all
+            </button>
+          </div>
+        );
+      })()}
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <input
@@ -525,9 +619,34 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
                       <div className="flex items-start gap-1.5">
                         <span className="mt-0.5 select-none text-slate-400">{isOpen ? "▾" : "▸"}</span>
                         <div>
-                          <div className="font-medium text-slate-900">{a.name}</div>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); togglePin(a.entityId); }}
+                              title={pinned.has(a.entityId) ? "Unpin" : "Pin to top"}
+                              className="text-sm leading-none"
+                              style={{ color: pinned.has(a.entityId) ? "#f5b301" : "#3a565d" }}
+                            >
+                              {pinned.has(a.entityId) ? "★" : "☆"}
+                            </button>
+                            <Link
+                              href={`/account/${a.entityId}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="font-medium text-slate-900 no-underline hover:text-indigo-600"
+                              title="Open account dossier"
+                            >
+                              {a.name}
+                            </Link>
+                          </div>
                           <div className="text-xs text-slate-400">
-                            {[a.city, a.state].filter(Boolean).join(", ")}
+                            {a.city ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setQuery(a.city!); }}
+                                className="hover:text-indigo-600"
+                                title={`Filter to ${a.city}`}
+                              >
+                                {[a.city, a.state].filter(Boolean).join(", ")}
+                              </button>
+                            ) : [a.city, a.state].filter(Boolean).join(", ")}
                             {a.accountManager ? (
                               <>
                                 {" · AM "}
@@ -753,6 +872,34 @@ function MetricCell({
         </div>
       )}
     </td>
+  );
+}
+
+function Preset({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors"
+      style={
+        active
+          ? { borderColor: "var(--cave-cy)", color: "var(--cave-cy)", background: "rgba(53,224,255,.1)" }
+          : { borderColor: "var(--cave-line)", color: "#a7c3c8" }
+      }
+    >
+      {label}
+    </button>
+  );
+}
+
+function PopLink({ id, tab }: { id: string; tab: string }) {
+  return (
+    <Link
+      href={`/account/${id}?tab=${encodeURIComponent(tab)}`}
+      onClick={(e) => e.stopPropagation()}
+      className="mt-2 block w-full rounded bg-slate-800 px-2 py-1 text-center text-xs font-medium text-white no-underline hover:bg-slate-700"
+    >
+      Open {tab} →
+    </Link>
   );
 }
 

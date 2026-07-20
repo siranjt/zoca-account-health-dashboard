@@ -35,7 +35,18 @@ export default function CaveNav() {
         </span>
       </Link>
 
-      <div className="ml-auto flex items-center gap-1 text-sm">
+      <button
+        onClick={() => window.dispatchEvent(new CustomEvent("cave-open-palette"))}
+        className="ml-auto flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs"
+        style={{ borderColor: "var(--cave-line)", color: "var(--cave-dim)" }}
+        title="Search accounts & actions (⌘K)"
+      >
+        <span>🔍</span>
+        <span className="hidden sm:inline">Search…</span>
+        <kbd className="rounded px-1 text-[10px]" style={{ background: "var(--cave-line)", color: "#a7c3c8" }}>⌘K</kbd>
+      </button>
+
+      <div className="flex items-center gap-1 text-sm">
         {links.map((l, i) => {
           const active = l.match(path);
           return (

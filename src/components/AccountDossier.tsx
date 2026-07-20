@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import type { AccountDetail, AccountRow, PaymentInvoice } from "@/lib/types";
 import type { PickerItem } from "@/app/account/[id]/page";
 import { VIZ } from "@/lib/theme";
@@ -52,10 +53,45 @@ export default function AccountDossier({
   initialWindow: number;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const paramTab = searchParams.get("tab");
   const [windowDays, setWindowDays] = useState<number>(WINDOWS.includes(initialWindow) ? initialWindow : 30);
-  const [tab, setTab] = useState<Tab>("Profile & GBP");
+  const [tab, setTab] = useState<Tab>((TABS as readonly string[]).includes(paramTab ?? "") ? (paramTab as Tab) : "Profile & GBP");
   const [detail, setDetail] = useState<AccountDetail | null>(null);
   const [error, setError] = useState(false);
+
+  // keep the active tab in the URL (deep-linkable, shareable, back-button-safe)
+  function selectTab(t: Tab) {
+    setTab(t);
+    const qs = new URLSearchParams(Array.from(searchParams.entries()));
+    qs.set("tab", t);
+    router.replace(`/account/${account.entityId}?${qs.toString()}`, { scroll: false });
+  }
+
+  // prev / next through the (alphabetical) account list
+  const idx = picker.findIndex((p) => p.entityId === account.entityId);
+  const prev = idx > 0 ? picker[idx - 1] : null;
+  const next = idx >= 0 && idx < picker.length - 1 ? picker[idx + 1] : null;
+
+  // keyboard: [ ] cycle tabs, ← → cycle accounts
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const el = e.target as HTMLElement;
+      if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      if (e.key === "[" || e.key === "]") {
+        const ti = TABS.indexOf(tab);
+        const nt = e.key === "]" ? TABS[(ti + 1) % TABS.length] : TABS[(ti - 1 + TABS.length) % TABS.length];
+        selectTab(nt);
+      } else if (e.key === "ArrowLeft" && prev) {
+        router.push(`/account/${prev.entityId}?tab=${encodeURIComponent(tab)}`);
+      } else if (e.key === "ArrowRight" && next) {
+        router.push(`/account/${next.entityId}?tab=${encodeURIComponent(tab)}`);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, prev, next, account.entityId]);
 
   useEffect(() => {
     let alive = true;
@@ -70,28 +106,60 @@ export default function AccountDossier({
     };
   }, [account.entityId, windowDays]);
 
+  // record recently-viewed for the command palette
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("zoca-recent");
+      const list: { id: string; name: string }[] = raw ? JSON.parse(raw) : [];
+      const next = [{ id: account.entityId, name: account.name }, ...list.filter((r) => r.id !== account.entityId)].slice(0, 8);
+      localStorage.setItem("zoca-recent", JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  }, [account.entityId, account.name]);
+
   const h = account.health;
   const skel = <Skeleton error={error} />;
   const pay = detail?.payments;
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 py-5">
+      {/* breadcrumb */}
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] text-slate-400">
+        <Link href="/overview" className="no-underline hover:text-cyan-400" style={{ color: "var(--cave-dim)" }}>Overview</Link>
+        {account.accountManager && (
+          <>
+            <span>›</span>
+            <Link href={`/overview?am=${encodeURIComponent(account.accountManager)}`} className="no-underline hover:text-cyan-400" style={{ color: "var(--cave-dim)" }}>
+              {account.accountManager}
+            </Link>
+          </>
+        )}
+        <span>›</span>
+        <span className="text-slate-300">{account.name}</span>
+        <span className="ml-2 tabular-nums text-slate-500">({idx + 1} of {picker.length})</span>
+      </div>
+
       {/* ── Customer Dashboard header (Retool: "#### Customer Dashboard" + Location Name) ── */}
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <span className="text-[11px] uppercase tracking-[0.22em] text-cyan-400/70">Customer Dashboard</span>
-        <select
-          value={account.entityId}
-          onChange={(e) => router.push(`/account/${e.target.value}`)}
-          className="min-w-[280px] max-w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm"
-        >
-          {picker.map((p) => (
-            <option key={p.entityId} value={p.entityId}>
-              {p.color === "red" ? "🔴 " : p.color === "yellow" ? "🟡 " : "🟢 "}
-              {p.name}
-              {p.am ? ` — ${p.am}` : ""}
-            </option>
-          ))}
-        </select>
+        <div className="inline-flex items-center gap-1">
+          <NavArrow dir="prev" to={prev ? `/account/${prev.entityId}?tab=${encodeURIComponent(tab)}` : null} title={prev ? `← ${prev.name}` : "First account"} />
+          <select
+            value={account.entityId}
+            onChange={(e) => router.push(`/account/${e.target.value}?tab=${encodeURIComponent(tab)}`)}
+            className="min-w-[260px] max-w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm"
+          >
+            {picker.map((p) => (
+              <option key={p.entityId} value={p.entityId}>
+                {p.color === "red" ? "🔴 " : p.color === "yellow" ? "🟡 " : "🟢 "}
+                {p.name}
+                {p.am ? ` — ${p.am}` : ""}
+              </option>
+            ))}
+          </select>
+          <NavArrow dir="next" to={next ? `/account/${next.entityId}?tab=${encodeURIComponent(tab)}` : null} title={next ? `${next.name} →` : "Last account"} />
+        </div>
 
         <div className="ml-auto inline-flex overflow-hidden rounded-md border border-slate-300" title="Window applies to leads, reviews, clicks and time-series. Rankings, payments and health reflect current state.">
           {WINDOWS.map((d) => (
@@ -168,20 +236,31 @@ export default function AccountDossier({
 
       {/* ── section tabs ─────────────────────────────────────────────────── */}
       <div className="mb-4 flex flex-wrap gap-1 border-b" style={{ borderColor: "var(--cave-line)" }}>
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className="relative px-3.5 py-2 text-sm font-medium"
-            style={
-              tab === t
-                ? { color: "var(--cave-cy)", borderBottom: "2px solid var(--cave-cy)" }
-                : { color: "#a7c3c8", borderBottom: "2px solid transparent" }
-            }
-          >
-            {t}
-          </button>
-        ))}
+        {TABS.map((t) => {
+          const badge = tabBadge(t, account, detail);
+          return (
+            <button
+              key={t}
+              onClick={() => selectTab(t)}
+              className="relative flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium"
+              style={
+                tab === t
+                  ? { color: "var(--cave-cy)", borderBottom: "2px solid var(--cave-cy)" }
+                  : { color: "#a7c3c8", borderBottom: "2px solid transparent" }
+              }
+            >
+              {t}
+              {badge != null && (
+                <span
+                  className="rounded-full px-1.5 text-[10px] font-semibold tabular-nums"
+                  style={{ background: tab === t ? "rgba(53,224,255,.16)" : "var(--cave-line)", color: tab === t ? "var(--cave-cy)" : "#7a97a0" }}
+                >
+                  {badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* loading / error status line */}
@@ -818,6 +897,38 @@ function Row({ l, v }: { l: string; v: React.ReactNode }) {
 
 function yesNo(v: boolean | null): string {
   return v == null ? "—" : v ? "Yes" : "No";
+}
+
+function NavArrow({ dir, to, title }: { dir: "prev" | "next"; to: string | null; title: string }) {
+  const cls = "flex h-[34px] w-8 items-center justify-center rounded-md border text-sm";
+  if (!to) return <span className={`${cls} opacity-30`} style={{ borderColor: "var(--cave-line)", color: "var(--cave-dim)" }}>{dir === "prev" ? "‹" : "›"}</span>;
+  return (
+    <Link href={to} title={title} className={`${cls} no-underline hover:border-cyan-400`} style={{ borderColor: "var(--cave-line)", color: "#a7c3c8" }}>
+      {dir === "prev" ? "‹" : "›"}
+    </Link>
+  );
+}
+
+// small count next to a tab so you see what's populated before clicking
+function tabBadge(t: string, account: AccountRow, detail: AccountDetail | null): number | null {
+  switch (t) {
+    case "Communication":
+      return account.openTickets > 0 ? account.openTickets : null;
+    case "Reviews":
+      return detail?.reviewsList?.length || null;
+    case "Funnel & Leads":
+      return detail?.leadsList?.length || null;
+    case "Rankings":
+      return detail?.keywordRankings?.length || null;
+    case "Payments":
+      return detail?.payments?.invoices?.length || null;
+    case "Scheduling & Support":
+      return (detail?.services?.length ?? 0) + (detail?.requests?.length ?? 0) || null;
+    case "All Data (76)":
+      return 76;
+    default:
+      return null;
+  }
 }
 
 function LinkRow({ label, href }: { label: string; href: string | null }) {

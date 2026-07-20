@@ -54,6 +54,17 @@ export default function AlfredChat() {
   useEffect(() => {
     try { const s = localStorage.getItem("cave_chat"); if (s) setMsgs(JSON.parse(s)); } catch {}
   }, []);
+  // open programmatically (command palette, "Ask Alfred about this" buttons),
+  // optionally prefilling the input with a contextual question
+  useEffect(() => {
+    function onOpen(e: Event) {
+      setOpen(true);
+      const prefill = (e as CustomEvent)?.detail?.prefill;
+      if (typeof prefill === "string" && prefill) setInput(prefill);
+    }
+    window.addEventListener("cave-open-alfred", onOpen as EventListener);
+    return () => window.removeEventListener("cave-open-alfred", onOpen as EventListener);
+  }, []);
   useEffect(() => {
     try { localStorage.setItem("cave_chat", JSON.stringify(msgs.slice(-40))); } catch {}
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
