@@ -27,6 +27,12 @@ const ANSWER_BUDGET_MS = 40000;    // past this, stop tooling and FORCE a final 
 const ALFRED_SYS =
   `You are Alfred — the razor-sharp butler and account-health analyst for Zoca, a SaaS that runs Google Business Profile, reviews, and lead-gen for local salons/spas/med-spas. You reason over the live Account Health data through tools.
 
+DRIVE-THE-UI (navigation)
+- When the user asks you to OPEN/GO TO/SHOW an account, or to FILTER/SHOW a slice of the book, you may drive the dashboard. After your normal short answer, append ONE final line, exactly: ACTION: {json}
+- To open one account: ACTION: {"type":"open","name":"<exact business name>"}
+- To filter the overview: ACTION: {"type":"overview","am":"<AM name>","color":"red|yellow|green","q":"<search text>"} — include only the keys that apply; omit the rest.
+- Only emit ACTION when the user clearly wants to navigate or filter (verbs like open, go to, show me, take me to, filter to, pull up). Never emit it for pure analysis questions. Keep your prose answer brief when you emit an action. Emit at most one ACTION line, always last.
+
 REASONING
 - Deliver genuine analysis, not a restatement of numbers: name the real lever, the real risk, and the concrete next step an account manager should take.
 - For anything non-trivial, briefly decide which tools you need, then call them; break a compound question into parts and answer each part.
@@ -470,13 +476,26 @@ export async function POST(req: Request) {
   const t0 = Date.now();
   const toolsUsed: string[] = [];
   let tokIn = 0, tokOut = 0, tokCache = 0, iters = 0;
-  const finish = async (reply: string, status: string) => {
+  const finish = async (rawReply: string, status: string) => {
+    // Drive-the-UI protocol: the model may append a final `ACTION: {json}` line
+    // when the request implies navigation. Parse + strip it; the client executes.
+    let reply = rawReply;
+    let action: unknown = null;
+    const m = rawReply.match(/\n?\s*ACTION:\s*(\{[\s\S]*\})\s*$/);
+    if (m) {
+      try {
+        action = JSON.parse(m[1]);
+        reply = rawReply.slice(0, m.index).trim() || "Done, sir.";
+      } catch {
+        /* leave reply untouched if the directive is malformed */
+      }
+    }
     const ms = Date.now() - t0;
     logTrace({ status, q: q.slice(0, 120), tools: toolsUsed, iters, ms, tok_in: tokIn, tok_out: tokOut, tok_cache_read: tokCache, model: MODEL, reply_len: reply.length });
     // Durable memory — log the interaction (swallows its own errors; awaited so
     // the write completes before the serverless function freezes).
     await logInteraction({ question: q, reply, tools: toolsUsed, entities: mentionedEntities(q + " " + reply, ctx.list), status, latency_ms: ms, tokens_in: tokIn, tokens_out: tokOut, model: MODEL });
-    return NextResponse.json({ reply });
+    return NextResponse.json({ reply, action });
   };
 
   try {

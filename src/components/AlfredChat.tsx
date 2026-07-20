@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Msg = { role: "user" | "alfred"; text: string };
 type Idx = { id: string; name: string };
@@ -84,6 +85,7 @@ export default function AlfredChat() {
   const [input, setInput] = useState("");
   const [index, setIndex] = useState<Idx[]>([]);
   const logRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   // account name index for linkifying Alfred's answers
   useEffect(() => {
@@ -122,6 +124,27 @@ export default function AlfredChat() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  function runAction(action: any) {
+    if (!action || typeof action !== "object") return;
+    if (action.type === "open" && action.name) {
+      const nlc = String(action.name).toLowerCase();
+      const hit = index.find((a) => a.name.toLowerCase() === nlc) || index.find((a) => a.name.toLowerCase().includes(nlc));
+      if (hit) {
+        window.dispatchEvent(new CustomEvent("cave-toast", { detail: { message: `Opening ${hit.name}` } }));
+        setOpen(false);
+        router.push(`/account/${hit.id}`);
+      }
+    } else if (action.type === "overview") {
+      const qs = new URLSearchParams();
+      if (action.am) qs.set("am", String(action.am));
+      if (action.color) qs.set("color", String(action.color));
+      if (action.q) qs.set("q", String(action.q));
+      window.dispatchEvent(new CustomEvent("cave-toast", { detail: { message: "Filtering the overview" } }));
+      setOpen(false);
+      router.push(`/overview?${qs.toString()}`);
+    }
+  }
+
   async function send(text: string) {
     const q = text.trim();
     if (!q || busy) return;
@@ -133,6 +156,7 @@ export default function AlfredChat() {
       const r = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ q, history }) });
       const d = await r.json();
       setMsgs((m) => [...m, { role: "alfred", text: clean(d.reply || "(no answer, sir)") }]);
+      if (d.action) runAction(d.action);
     } catch {
       setMsgs((m) => [...m, { role: "alfred", text: "Comms failed, sir — please try again." }]);
     } finally {
