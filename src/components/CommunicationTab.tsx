@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { CommsPayload } from "@/lib/comms";
+import AiAssist from "./AiAssist";
 
 const TYPE_STYLE: Record<string, { bg: string; fg: string; icon: string }> = {
   "App Chat": { bg: "rgba(53,224,255,.14)", fg: "#35e0ff", icon: "💬" },
@@ -49,19 +50,19 @@ export default function CommunicationTab({ entityId, windowDays }: { entityId: s
     [data, filter]
   );
 
-  if (error) return <div className="py-10 text-center text-sm text-red-500">Couldn&apos;t load communication: {error}</div>;
-  if (!data)
-    return (
-      <div className="flex flex-col items-center justify-center gap-2 py-16 text-sm text-slate-400">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-cyan-400" />
-        Gathering messages across chat, calls, SMS, email & meetings…
-      </div>
-    );
-
-  const types = Object.keys(data.byType);
-
   return (
     <div className="space-y-4">
+      <AiAssist entityId={entityId} windowDays={windowDays} />
+
+      {error ? (
+        <div className="py-8 text-center text-sm text-red-500">Couldn&apos;t load communication: {error}</div>
+      ) : !data ? (
+        <div className="flex flex-col items-center justify-center gap-2 py-16 text-sm text-slate-400">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-cyan-400" />
+          Gathering messages across chat, calls, SMS, email &amp; meetings…
+        </div>
+      ) : (
+        <>
       {/* ── Message History ─────────────────────────────────────────────── */}
       <div className="rounded-xl border p-3" style={{ borderColor: "var(--cave-line)", background: "var(--cave-panel)" }}>
         <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -75,7 +76,7 @@ export default function CommunicationTab({ entityId, windowDays }: { entityId: s
           <>
             <div className="mb-3 flex flex-wrap gap-1.5">
               <Chip label={`All ${data.total}`} active={filter === "all"} onClick={() => setFilter("all")} />
-              {types.map((t) => {
+              {Object.keys(data.byType).map((t) => {
                 const s = styleFor(t);
                 return (
                   <Chip
@@ -180,6 +181,8 @@ export default function CommunicationTab({ entityId, windowDays }: { entityId: s
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }
