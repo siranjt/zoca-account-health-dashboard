@@ -17,15 +17,24 @@ function niceMax(v: number): number {
   return step * mag;
 }
 
-function Legend({ items }: { items: { name: string; color: string }[] }) {
+function Legend({ items, hidden, onToggle }: { items: { name: string; color: string }[]; hidden?: Set<string>; onToggle?: (name: string) => void }) {
   return (
     <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
-      {items.map((it) => (
-        <span key={it.name} className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-sm" style={{ background: it.color }} />
-          {it.name}
-        </span>
-      ))}
+      {items.map((it) => {
+        const off = hidden?.has(it.name);
+        return (
+          <button
+            key={it.name}
+            onClick={() => onToggle?.(it.name)}
+            className="inline-flex items-center gap-1"
+            style={{ opacity: off ? 0.4 : 1, cursor: onToggle ? "pointer" : "default" }}
+            title={onToggle ? (off ? "Show series" : "Hide series") : undefined}
+          >
+            <span className="inline-block h-2 w-2 rounded-sm" style={{ background: it.color }} />
+            <span style={{ textDecoration: off ? "line-through" : "none" }}>{it.name}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -93,14 +102,22 @@ function useIndexHover(n: number, W: number, PL: number, PR: number) {
 export function MultiLineChart({ xLabels, series }: { xLabels: string[]; series: { name: string; color: string; values: number[] }[] }) {
   const W = 520, H = 170, PL = 34, PR = 8, PT = 8, PB = 20;
   const n = xLabels.length;
-  const max = niceMax(Math.max(1, ...series.flatMap((s) => s.values)));
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const vis = series.filter((s) => !hidden.has(s.name));
+  const max = niceMax(Math.max(1, ...vis.flatMap((s) => s.values)));
   const x = (i: number) => PL + (i / Math.max(1, n - 1)) * (W - PL - PR);
   const y = (v: number) => PT + (1 - v / max) * (H - PT - PB);
   const ticks = [0, max / 2, max];
   const hv = useIndexHover(n, W, PL, PR);
+  const toggle = (name: string) =>
+    setHidden((prev) => {
+      const nx = new Set(prev);
+      nx.has(name) ? nx.delete(name) : nx.add(name);
+      return nx;
+    });
   return (
     <div className="relative">
-      <Legend items={series.map((s) => ({ name: s.name, color: s.color }))} />
+      <Legend items={series.map((s) => ({ name: s.name, color: s.color }))} hidden={series.length > 1 ? hidden : undefined} onToggle={series.length > 1 ? toggle : undefined} />
       <svg ref={hv.ref} viewBox={`0 0 ${W} ${H}`} className="w-full cursor-pointer" style={{ maxHeight: 200 }} role="img" onMouseMove={hv.onMove} onMouseLeave={hv.onLeave} onClick={hv.onClick}>
         {ticks.map((t, i) => (
           <g key={i}>
@@ -108,7 +125,7 @@ export function MultiLineChart({ xLabels, series }: { xLabels: string[]; series:
             <text x={PL - 4} y={y(t) + 3} textAnchor="end" fontSize={9} fill={VIZ.muted}>{formatNumber(Math.round(t))}</text>
           </g>
         ))}
-        {series.map((s) => (
+        {vis.map((s) => (
           <polyline key={s.name} points={s.values.map((v, i) => `${x(i)},${y(v)}`).join(" ")} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
         ))}
         {[0, Math.floor(n / 2), n - 1].map((i) => (
@@ -117,12 +134,12 @@ export function MultiLineChart({ xLabels, series }: { xLabels: string[]; series:
         {hv.active != null && (
           <g>
             <line x1={x(hv.active)} x2={x(hv.active)} y1={PT} y2={H - PB} stroke={VIZ.baseline} strokeWidth={1} strokeDasharray="3 3" />
-            {series.map((s) => <circle key={s.name} cx={x(hv.active!)} cy={y(s.values[hv.active!])} r={3} fill={s.color} stroke="#fff" strokeWidth={1} />)}
+            {vis.map((s) => <circle key={s.name} cx={x(hv.active!)} cy={y(s.values[hv.active!])} r={3} fill={s.color} stroke="#fff" strokeWidth={1} />)}
           </g>
         )}
       </svg>
       {hv.active != null && (
-        <Tooltip leftPct={(x(hv.active) / W) * 100} title={xLabels[hv.active]} rows={series.map((s) => ({ name: s.name, color: s.color, value: formatNumber(s.values[hv.active!]) }))} pinned={hv.pinned != null} onClose={hv.clear} />
+        <Tooltip leftPct={(x(hv.active) / W) * 100} title={xLabels[hv.active]} rows={vis.map((s) => ({ name: s.name, color: s.color, value: formatNumber(s.values[hv.active!]) }))} pinned={hv.pinned != null} onClose={hv.clear} />
       )}
     </div>
   );

@@ -372,6 +372,7 @@ export default function AccountDossier({
                       { key: "state", label: "State" },
                     ]}
                     rows={detail.posts ?? []}
+                    name="gbp-posts"
                   />
                 ) : skel}
               </ChartCard>
@@ -407,6 +408,7 @@ export default function AccountDossier({
                       { key: "answer", label: "Answer", wide: true },
                     ]}
                     rows={detail.csat ?? []}
+                    name="csat"
                   />
                 ) : skel}
               </ChartCard>
@@ -624,6 +626,7 @@ export default function AccountDossier({
                       { key: "price", label: "Price", money: true },
                     ]}
                     rows={detail.services ?? []}
+                    name="services"
                   />
                 ) : skel}
               </ChartCard>
@@ -641,6 +644,7 @@ export default function AccountDossier({
                       { key: "details", label: "Details", wide: true },
                     ]}
                     rows={detail.requests ?? []}
+                    name="support-requests"
                   />
                 ) : skel}
               </ChartCard>
@@ -842,8 +846,25 @@ function KeywordTable({ rows }: { rows: NonNullable<AccountDetail["keywordRankin
 
 type Col = { key: string; label: string; num?: boolean; money?: boolean; date?: boolean; wide?: boolean };
 
-function DataTable({ cols, rows }: { cols: Col[]; rows: Record<string, unknown>[] }) {
-  if (!rows.length) return <NoData />;
+function csvEsc(v: unknown): string {
+  const s = v == null ? "" : String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function downloadCsv(name: string, rows: string[][]) {
+  const csv = rows.map((r) => r.map(csvEsc).join(",")).join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function DataTable({ cols, rows, name = "data" }: { cols: Col[]; rows: Record<string, unknown>[]; name?: string }) {
+  const [q, setQ] = useState("");
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [dir, setDir] = useState<1 | -1>(1);
+
   const fmt = (v: unknown, c: Col): string => {
     if (v == null || v === "") return "—";
     if (c.date) return ddmmyy(String(v));
@@ -852,32 +873,78 @@ function DataTable({ cols, rows }: { cols: Col[]; rows: Record<string, unknown>[
     const s = String(v);
     return s.length > 300 ? s.slice(0, 300) + "…" : s;
   };
+
+  const view = useMemo(() => {
+    let out = rows;
+    const term = q.trim().toLowerCase();
+    if (term) out = out.filter((r) => cols.some((c) => String(r[c.key] ?? "").toLowerCase().includes(term)));
+    if (sortKey) {
+      const c = cols.find((x) => x.key === sortKey);
+      out = [...out].sort((a, b) => {
+        const av = a[sortKey], bv = b[sortKey];
+        if (c?.num || c?.money) return dir * ((Number(av) || 0) - (Number(bv) || 0));
+        return dir * String(av ?? "").localeCompare(String(bv ?? ""));
+      });
+    }
+    return out;
+  }, [rows, cols, q, sortKey, dir]);
+
+  if (!rows.length) return <NoData />;
+
+  function toggleSort(k: string) {
+    if (sortKey === k) setDir((d) => (d === 1 ? -1 : 1));
+    else { setSortKey(k); setDir(1); }
+  }
+
   return (
-    <div className="table-scroll -mx-1 max-h-[440px] overflow-auto">
-      <div className="px-1 pb-1 text-xs text-slate-400">{rows.length} row{rows.length === 1 ? "" : "s"}</div>
-      <table className="w-full border-collapse text-xs">
-        <thead className="sticky top-0 bg-slate-50 text-left uppercase tracking-wide text-slate-400">
-          <tr>
-            {cols.map((c) => (
-              <th key={c.key} className={`whitespace-nowrap px-2 py-1.5 font-semibold ${c.num || c.money ? "text-right" : ""}`}>{c.label}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className="border-t border-slate-100 align-top">
+    <div>
+      <div className="mb-1.5 flex items-center gap-2">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Filter…"
+          className="w-40 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] outline-none focus:border-slate-400"
+        />
+        <span className="text-[11px] text-slate-400">{view.length} of {rows.length}</span>
+        <button
+          onClick={() => downloadCsv(`${name}.csv`, [cols.map((c) => c.label), ...view.map((r) => cols.map((c) => (r[c.key] == null ? "" : String(r[c.key]))))])}
+          className="ml-auto rounded border border-slate-300 px-2 py-1 text-[11px] font-medium text-slate-500 hover:bg-slate-100"
+        >
+          ⭳ CSV
+        </button>
+      </div>
+      <div className="table-scroll -mx-1 max-h-[440px] overflow-auto">
+        <table className="w-full border-collapse text-xs">
+          <thead className="sticky top-0 bg-slate-50 text-left uppercase tracking-wide text-slate-400">
+            <tr>
               {cols.map((c) => (
-                <td
+                <th
                   key={c.key}
-                  className={`px-2 py-1.5 ${c.num || c.money ? "text-right tabular-nums text-slate-700" : "text-slate-600"} ${c.wide ? "max-w-[360px]" : "max-w-[200px]"}`}
+                  onClick={() => toggleSort(c.key)}
+                  className={`cursor-pointer select-none whitespace-nowrap px-2 py-1.5 font-semibold hover:text-slate-600 ${c.num || c.money ? "text-right" : ""}`}
+                  title="Sort"
                 >
-                  {fmt(r[c.key], c)}
-                </td>
+                  {c.label}{sortKey === c.key ? (dir === 1 ? " ▲" : " ▼") : ""}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {view.map((r, i) => (
+              <tr key={i} className="border-t border-slate-100 align-top">
+                {cols.map((c) => (
+                  <td
+                    key={c.key}
+                    className={`px-2 py-1.5 ${c.num || c.money ? "text-right tabular-nums text-slate-700" : "text-slate-600"} ${c.wide ? "max-w-[360px]" : "max-w-[200px]"}`}
+                  >
+                    {fmt(r[c.key], c)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
