@@ -21,6 +21,14 @@ function mkSpark(base: number, seed: string): number[] {
 const HOUR = 3_600_000;
 const MIN = 60_000;
 
+// approx [lat, lng] for the mock cities so the local map view has points
+const MOCK_COORDS: Record<string, [number, number]> = {
+  Bronx: [40.85, -73.87], Austin: [30.27, -97.74], Denver: [39.74, -104.99], Chicago: [41.88, -87.63],
+  Miami: [25.76, -80.19], Seattle: [47.61, -122.33], Phoenix: [33.45, -112.07], Portland: [45.52, -122.68],
+  "San Diego": [32.72, -117.16], Boston: [42.36, -71.06], Charleston: [32.78, -79.93], Dallas: [32.78, -96.8],
+  Nashville: [36.16, -86.78],
+};
+
 interface Seed {
   entityId: string; name: string; city: string; state: string; am: string;
   eng: number | null; val: number | null; prod: number | null;
@@ -89,7 +97,9 @@ const SEEDS: Seed[] = [
 
 function toRow(s: Seed): AccountRow {
   return {
-    entityId: s.entityId, name: s.name, city: s.city, state: s.state, accountManager: s.am,
+    entityId: s.entityId, name: s.name, city: s.city, state: s.state,
+    lat: MOCK_COORDS[s.city]?.[0] ?? null, lng: MOCK_COORDS[s.city]?.[1] ?? null,
+    accountManager: s.am,
     health: buildHealth(s.eng, s.val, s.prod), mrr: s.mrr,
     leadsReceived: s.leads, reviewsReceived: s.reviews, photosUploaded: s.photos,
     profileClicks: s.profileClicks, websiteClicks: s.websiteClicks,

@@ -5,8 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import type { AccountRow, AccountsPayload, Delta, HealthColor } from "@/lib/types";
 import { otherProducts } from "@/lib/types";
+import dynamic from "next/dynamic";
 import HealthDot from "./HealthDot";
 import DetailPanel from "./DetailPanel";
+
+const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="py-16 text-center text-sm text-slate-400">Loading map…</div> });
 import { Sparkline, DeltaBadge } from "./Sparkline";
 import { VIZ } from "@/lib/theme";
 import {
@@ -89,7 +92,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [pinned, setPinned] = useState<Set<string>>(() => new Set());
   const [dense, setDense] = useState(false);
   const [groupBy, setGroupBy] = useState<"none" | "am" | "tier" | "state">("none");
-  const [viewMode, setViewMode] = useState<"table" | "board">("table");
+  const [viewMode, setViewMode] = useState<"table" | "board" | "map">("table");
   const [showCompare, setShowCompare] = useState(false);
   const [showLeaders, setShowLeaders] = useState(false);
   const [showAlerts, setShowAlerts] = useState(false);
@@ -622,9 +625,9 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
       {/* view mode + tools */}
       <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
         <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
-          {(["table", "board"] as const).map((m) => (
+          {(["table", "board", "map"] as const).map((m) => (
             <button key={m} onClick={() => setViewMode(m)} className={`px-2.5 py-1 font-medium ${viewMode === m ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}>
-              {m === "table" ? "▤ Table" : "▦ Board"}
+              {m === "table" ? "▤ Table" : m === "board" ? "▦ Board" : "🗺 Map"}
             </button>
           ))}
         </div>
@@ -667,11 +670,12 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
       </div>
 
       {viewMode === "board" && <BoardView rows={rows} pinned={pinned} togglePin={togglePin} />}
+      {viewMode === "map" && <MapView rows={rows} />}
 
       <div
         className={`table-scroll rounded-lg border border-slate-200 bg-white shadow-sm transition-opacity ${dense ? "cave-dense" : ""} ${
           loading ? "pointer-events-none opacity-60" : ""
-        } ${viewMode === "board" ? "hidden" : ""}`}
+        } ${viewMode !== "table" ? "hidden" : ""}`}
       >
         <table className="w-full border-collapse text-sm">
           <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">

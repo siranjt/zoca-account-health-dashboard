@@ -43,6 +43,8 @@ export interface AccountRow {
   name: string;
   city: string | null;
   state: string | null;
+  lat?: number | null;
+  lng?: number | null;
   accountManager: string | null;
 
   health: HealthScore;

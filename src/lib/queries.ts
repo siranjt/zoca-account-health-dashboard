@@ -24,6 +24,7 @@ WITH hs AS (
   FROM cx.health_score
 ),
 loc AS (SELECT entity_id, storefront_address->>'locality' AS city, storefront_address->>'administrativeArea' AS state FROM gbp.locations),
+geo AS (SELECT entity_id, latitude::float AS lat, longitude::float AS lng FROM entities.locations WHERE latitude IS NOT NULL AND longitude IS NOT NULL),
 leads AS (SELECT entity_id, COUNT(*) AS leads FROM website.booking_enquiries WHERE source='WEBSITE' AND is_test_lead=false AND ${range("created_at", from, to)} GROUP BY 1),
 rev AS (SELECT entity_id, COUNT(*) AS reviews FROM reviews.reviews WHERE is_deleted=false AND ${range("review_time", from, to)} GROUP BY 1),
 -- photos = actually uploaded in the window (media.media_entities has a real created_at)
@@ -47,7 +48,7 @@ ec AS (SELECT DISTINCT (custom_fields::jsonb->>'cf_entity_id')::uuid AS entity_i
 nb AS (SELECT ec.entity_id, MIN(cs.next_billing_at) AS nbill FROM chargebee.subscriptions cs JOIN ec ON ec.customer_id=cs.customer_id WHERE cs.status IN ('active','non_renewing','future') AND cs.next_billing_at IS NOT NULL GROUP BY 1),
 od AS (SELECT ec.entity_id, MIN(i.due_date) AS oldest_due FROM chargebee.invoices i JOIN ec ON ec.customer_id=i.customer_id WHERE i.deleted=false AND i.status='payment_due' AND i.amount_due>0 GROUP BY 1),
 ms AS (SELECT ec.entity_id, COUNT(*) AS c FROM chargebee.transactions t JOIN ec ON ec.customer_id=t.customer_id WHERE t.status='failure' GROUP BY 1)
-SELECT hs.entity_id, hs.gbp_title, loc.city, loc.state, hs.am_name,
+SELECT hs.entity_id, hs.gbp_title, loc.city, loc.state, geo.lat, geo.lng, hs.am_name,
        hs.health_tier, hs.composite_health_score, hs.score_engagement, hs.score_value_realization, hs.score_product_stability,
        hs.health_tier_reason_names, hs.recommended_action, hs.agents_paid_for, hs.total_mrr, hs.active_subs,
        COALESCE(leads.leads,0) AS leads_received,
@@ -64,7 +65,7 @@ SELECT hs.entity_id, hs.gbp_title, loc.city, loc.state, hs.am_name,
        COALESCE(ms.c,0) AS failed_payments,
        (CURRENT_DATE - hs.onboarding_date::date) AS tenure_days
 FROM hs
-LEFT JOIN loc USING(entity_id) LEFT JOIN leads USING(entity_id) LEFT JOIN rev USING(entity_id)
+LEFT JOIN loc USING(entity_id) LEFT JOIN geo USING(entity_id) LEFT JOIN leads USING(entity_id) LEFT JOIN rev USING(entity_id)
 LEFT JOIN pho USING(entity_id) LEFT JOIN met USING(entity_id) LEFT JOIN web USING(entity_id)
 LEFT JOIN rnk USING(entity_id) LEFT JOIN imp USING(entity_id)
 LEFT JOIN nb USING(entity_id) LEFT JOIN od USING(entity_id) LEFT JOIN ms USING(entity_id)

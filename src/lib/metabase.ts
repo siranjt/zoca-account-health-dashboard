@@ -176,6 +176,8 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
       name: (r.gbp_title as string) || "(unnamed)",
       city: (r.city as string) || null,
       state: (r.state as string) || null,
+      lat: num(r.lat),
+      lng: num(r.lng),
       accountManager: (r.am_name as string) || null,
       health: toHealth(r),
       mrr: num(r.total_mrr),
