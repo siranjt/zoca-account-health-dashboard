@@ -28,14 +28,21 @@ export default function CaveNav() {
         backdropFilter: "blur(6px)",
       }}
     >
-      <Link href="/" className="flex items-baseline gap-2 no-underline">
+      <Link href="/" className="flex items-center gap-2.5 no-underline">
+        <svg viewBox="0 0 100 44" width="34" height="15" aria-hidden="true" style={{ filter: "drop-shadow(0 0 10px rgba(53,224,255,.45))" }}>
+          <path fill="var(--cave-cy)" d="M50 3 C48 11 45 14 41 12 C43 16 42 19 39 20 C33 15 25 16 20 23 C26 21 30 23 31 27 C25 28 20 32 18 39 C24 34 33 33 37 37 C40 30 45 28 50 33 C55 28 60 30 63 37 C67 33 76 34 82 39 C80 32 75 28 69 27 C70 23 74 21 80 23 C75 16 67 15 61 20 C58 19 57 16 59 12 C55 14 52 11 50 3 Z" />
+        </svg>
         <span className="cave-brand text-sm font-bold tracking-[0.3em]" style={{ color: "var(--cave-cy)" }}>
-          ◤◢ CAVE//OS
+          CAVE//OS
         </span>
         <span className="hidden text-[10px] uppercase tracking-[0.18em] sm:inline" style={{ color: "var(--cave-dim)" }}>
-          Account Health Command Deck
+          Bat-Computer · Account Health Grid
         </span>
       </Link>
+
+      <span className="cave-live ml-3 hidden text-[9px] uppercase tracking-[0.2em] md:inline-flex" title="Live Metabase feed">
+        <b className="cave-pulse" style={{ display: "inline-block" }}></b> Live feed
+      </span>
 
       <button
         onClick={() => window.dispatchEvent(new CustomEvent("cave-open-palette"))}

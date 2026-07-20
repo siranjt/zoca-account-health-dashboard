@@ -672,11 +672,13 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
       {viewMode === "board" && <BoardView rows={rows} pinned={pinned} togglePin={togglePin} />}
       {viewMode === "map" && <MapView rows={rows} />}
 
-      <div
-        className={`table-scroll rounded-lg border border-slate-200 bg-white shadow-sm transition-opacity ${dense ? "cave-dense" : ""} ${
-          loading ? "pointer-events-none opacity-60" : ""
-        } ${viewMode !== "table" ? "hidden" : ""}`}
-      >
+      <div className={`relative cave-brk ${viewMode !== "table" ? "hidden" : ""}`}>
+        <div className="cave-radar"><b></b><i></i></div>
+        <div
+          className={`table-scroll rounded-lg border border-slate-200 bg-white shadow-sm transition-opacity ${dense ? "cave-dense" : ""} ${
+            loading ? "pointer-events-none opacity-60" : ""
+          }`}
+        >
         <table className="w-full border-collapse text-sm">
           <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
@@ -754,7 +756,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               return (
                 <Fragment key={a.entityId}>
                   <tr
-                    className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${isOpen ? "bg-slate-50" : ""}`}
+                    className={`cave-row cave-row-${a.health.color} cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${isOpen ? "bg-slate-50" : ""}`}
                     onClick={() => toggleExpand(a.entityId)}
                   >
                     <td className="cursor-pointer px-3 py-2 text-center hover:bg-indigo-50" onClick={(e) => openPop(e, metricPop(a, "health"))} title="Click for health breakdown">
@@ -892,6 +894,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {pop && (
@@ -1138,7 +1141,7 @@ function Kpi({ label, value, custom, alert, onClick, active }: { label: string; 
   return (
     <div
       onClick={onClick}
-      className={`rounded-lg border bg-white px-3 py-2 ${onClick ? "cursor-pointer hover:border-indigo-300" : ""} ${active ? "ring-2 ring-indigo-300" : ""} ${alert ? "border-red-200" : "border-slate-200"}`}
+      className={`cave-brk rounded-lg border bg-white px-3 py-2 ${onClick ? "cursor-pointer hover:border-indigo-300" : ""} ${active ? "ring-2 ring-indigo-300" : ""} ${alert ? "border-red-200" : "border-slate-200"}`}
     >
       <div className="text-[11px] uppercase tracking-wide text-slate-400">{label}</div>
       {custom ?? <div className={`text-lg font-semibold tabular-nums ${alert ? "text-red-600" : "text-slate-800"}`}>{value}</div>}

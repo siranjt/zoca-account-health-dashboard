@@ -24,13 +24,18 @@ html,
 body {
   padding: 0;
   margin: 0;
+  /* Bat-computer ground: radial cyan wash + faint tactical grid */
   background:
-    radial-gradient(1200px 600px at 80% -10%, rgba(53, 224, 255, 0.06), transparent),
+    radial-gradient(1200px 620px at 84% -12%, rgba(53, 224, 255, 0.08), transparent 60%),
+    radial-gradient(900px 500px at -6% 108%, rgba(53, 224, 255, 0.045), transparent 60%),
+    linear-gradient(transparent 95%, rgba(53, 224, 255, 0.03) 95%),
+    linear-gradient(90deg, transparent 95%, rgba(53, 224, 255, 0.03) 95%),
     var(--cave-bg);
+  background-size: auto, auto, 26px 26px, 26px 26px, auto;
   color: var(--cave-txt);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    Helvetica, Arial, sans-serif;
+  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 }
+html.light body { background-size: auto, auto, 26px 26px, 26px 26px, auto; }
 
 * {
   box-sizing: border-box;
@@ -40,6 +45,50 @@ body {
   font-family: "IBM Plex Mono", ui-monospace, monospace;
   text-shadow: 0 0 14px rgba(53, 224, 255, 0.4);
 }
+
+/* ── Bat-computer battech layer ─────────────────────────────────────────── */
+/* global scanline sweep */
+body::after{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:30;
+  height:170px; opacity:.5;
+  background:linear-gradient(rgba(53,224,255,0), rgba(53,224,255,.05) 50%, rgba(53,224,255,0));
+  animation:cave-scan 8s linear infinite;
+}
+@keyframes cave-scan{0%{transform:translateY(-200px)}100%{transform:translateY(105vh)}}
+html.light body::after{opacity:.25}
+@media (prefers-reduced-motion:reduce){ body::after{display:none} .cave-pulse,.cave-radar i{animation:none!important} }
+
+/* corner-bracket frame (2 diagonal corners) — add class to any panel */
+.cave-brk{position:relative}
+.cave-brk::before,.cave-brk::after{content:"";position:absolute;width:10px;height:10px;border:1px solid var(--cave-cy);opacity:.7;pointer-events:none;z-index:2}
+.cave-brk::before{top:-1px;left:-1px;border-right:0;border-bottom:0}
+.cave-brk::after{bottom:-1px;right:-1px;border-left:0;border-top:0}
+
+/* pulsing live indicator */
+.cave-live{display:inline-flex;align-items:center;gap:6px;color:var(--green,#25e39a)}
+.cave-live b{width:7px;height:7px;border-radius:50%;background:#25e39a;box-shadow:0 0 10px #25e39a}
+.cave-pulse{animation:cave-pulse 1.6s ease-in-out infinite}
+@keyframes cave-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+
+/* radar sweep (corner ornament) */
+.cave-radar{position:absolute;right:-1px;bottom:-1px;width:118px;height:118px;overflow:hidden;pointer-events:none;opacity:.4;z-index:1}
+.cave-radar b{position:absolute;inset:12px;border:1px solid var(--cave-line2);border-radius:50%}
+.cave-radar b::after{content:"";position:absolute;inset:22px;border:1px solid var(--cave-line);border-radius:50%}
+.cave-radar i{position:absolute;left:50%;top:50%;width:46px;height:1px;background:linear-gradient(90deg,var(--cave-cy),transparent);transform-origin:0 0;animation:cave-spin 4s linear infinite}
+@keyframes cave-spin{to{transform:rotate(360deg)}}
+
+/* glow on the health traffic-lights (bat-computer threat status) */
+[aria-label="At risk"],[aria-label="Critical"]{box-shadow:0 0 9px #dc2626,0 0 2px #dc2626 !important}
+[aria-label="Monitor"]{box-shadow:0 0 9px #d97706,0 0 2px #d97706 !important}
+[aria-label="Healthy"]{box-shadow:0 0 9px #16a34a,0 0 2px #16a34a !important}
+
+/* target-list row treatment: health-colored accent bar + hover scan */
+.cave-row > td:first-child{position:relative}
+.cave-row > td:first-child::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;opacity:.9}
+.cave-row-red > td:first-child::before{background:#dc2626;box-shadow:0 0 8px #dc2626}
+.cave-row-yellow > td:first-child::before{background:#d97706;box-shadow:0 0 8px #d97706}
+.cave-row-green > td:first-child::before{background:#16a34a;box-shadow:0 0 8px #16a34a}
+.cave-row:hover{background:linear-gradient(90deg, rgba(53,224,255,.09), rgba(53,224,255,.015)) !important}
 
 /* indeterminate loading bar (per-account detail fetch) */
 .cave-loadbar {
