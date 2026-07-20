@@ -120,6 +120,12 @@ export interface AccountDetail {
   // Row-level records (Retool "Reviews List" / "Lead Table")
   reviewsList?: { reviewer: string | null; rating: number | null; platform: string | null; text: string | null; date: string | null }[];
   leadsList?: { date: string | null; source: string | null; service: string | null; status: string | null; price: number | null; currency: string | null; utm: string | null }[];
+  // Native-tab widgets promoted from the Retool export
+  posts?: { date: string | null; summary: string | null; event: string | null; offer: string | null; cta: string | null; topic: string | null; state: string | null }[];
+  postsWeekly?: { wk: string; posts: number; cumsum: number }[];
+  services?: { name: string | null; description: string | null; duration: number | null; price: number | null; category: string | null }[];
+  requests?: { date: string | null; status: string | null; priority: string | null; requestType: string | null; details: string | null }[];
+  csat?: { date: string | null; platform: string | null; formType: string | null; question: string | null; answer: string | null }[];
 }
 
 export interface PaymentInvoice {

@@ -26,6 +26,11 @@ import {
   detailForecastSql,
   detailReviewsListSql,
   detailLeadsListSql,
+  detailPostsSql,
+  detailPostsWeeklySql,
+  detailServicesSql,
+  detailRequestsSql,
+  detailCsatSql,
 } from "./queries";
 import { labelAgent } from "./types";
 import { mapTier } from "./health";
@@ -218,7 +223,7 @@ export async function getAccountDetailFromMetabase(
   const cfg = readMetabaseConfig();
   if (!cfg) throw new Error("Metabase not configured");
   const safe = (sql: string) => runDataset(cfg, sql).catch(() => [] as Row[]);
-  const [pw, lr, rt, fn, au, bk, kr, im, rd, cm, md, fc, rl, ll] = await Promise.all([
+  const [pw, lr, rt, fn, au, bk, kr, im, rd, cm, md, fc, rl, ll, ps, pw2, sv, rq, cs] = await Promise.all([
     runDataset(cfg, detailProfileWeeklySql(id)),
     runDataset(cfg, detailLeadsReviewsMonthlySql(id)),
     runDataset(cfg, detailRankTrendSql(id)),
@@ -233,6 +238,11 @@ export async function getAccountDetailFromMetabase(
     safe(detailForecastSql(id)),
     safe(detailReviewsListSql(id)),
     safe(detailLeadsListSql(id, Math.max(windowDays, 90))),
+    safe(detailPostsSql(id)),
+    safe(detailPostsWeeklySql(id)),
+    safe(detailServicesSql(id)),
+    safe(detailRequestsSql(id)),
+    safe(detailCsatSql(id)),
   ]);
   const f = fn[0] ?? {};
   const RATING = { FIVE: 5, FOUR: 4, THREE: 3, TWO: 2, ONE: 1, ZERO: 0 } as Record<string, number>;
@@ -293,6 +303,37 @@ export async function getAccountDetailFromMetabase(
       price: num(r.price),
       currency: (r.currency as string) || null,
       utm: (r.utm_source as string) || null,
+    })),
+    posts: ps.map((r) => ({
+      date: (r.d as string) || null,
+      summary: (r.summary as string) || null,
+      event: (r.event as string) || null,
+      offer: (r.offer as string) || null,
+      cta: (r.cta as string) || null,
+      topic: (r.topic_type as string) || null,
+      state: (r.state as string) || null,
+    })),
+    postsWeekly: pw2.map((r) => ({ wk: String(r.wk), posts: int0(r.posts), cumsum: int0(r.cumsum) })),
+    services: sv.map((r) => ({
+      name: (r.name as string) || null,
+      description: (r.description as string) || null,
+      duration: num(r.duration),
+      price: num(r.price),
+      category: (r.category as string) || null,
+    })),
+    requests: rq.map((r) => ({
+      date: (r.d as string) || null,
+      status: (r.status as string) || null,
+      priority: (r.priority as string) || null,
+      requestType: (r.request_type as string) || null,
+      details: (r.details as string) || null,
+    })),
+    csat: cs.map((r) => ({
+      date: (r.d as string) || null,
+      platform: (r.platform as string) || null,
+      formType: (r.form_type as string) || null,
+      question: (r.question as string) || null,
+      answer: (r.answer as string) || null,
     })),
   };
 }

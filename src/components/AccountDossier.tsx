@@ -33,7 +33,7 @@ const TABS = [
   "Funnel & Leads",
   "Rankings",
   "Payments",
-  "Scheduling & App",
+  "Scheduling & Support",
   "All Data (76)",
 ] as const;
 type Tab = (typeof TABS)[number];
@@ -245,6 +245,32 @@ export default function AccountDossier({
                 <Stat label="Book-online" value={account.bookOnlineActive ? formatNumber(account.bookOnlineClicks) : "n/a"} />
               </div>
             </ChartCard>
+
+            <ChartCard title="GBP Posts (cumulative)" subtitle="live posts published to the profile over time">
+              {detail ? (detail.postsWeekly?.length ? (
+                <MultiLineChart xLabels={detail.postsWeekly.map((p) => p.wk)} series={[
+                  { name: "Cumulative posts", color: VIZ.series[2], values: detail.postsWeekly.map((p) => p.cumsum) },
+                ]} />
+              ) : <NoData />) : skel}
+            </ChartCard>
+
+            <div className="md:col-span-2 xl:col-span-3">
+              <ChartCard title="GBP Posts" subtitle="recent posts published to the Google profile (gbp.posts)">
+                {detail ? (
+                  <DataTable
+                    cols={[
+                      { key: "date", label: "Date", date: true },
+                      { key: "topic", label: "Type" },
+                      { key: "summary", label: "Summary", wide: true },
+                      { key: "offer", label: "Offer" },
+                      { key: "cta", label: "CTA" },
+                      { key: "state", label: "State" },
+                    ]}
+                    rows={detail.posts ?? []}
+                  />
+                ) : skel}
+              </ChartCard>
+            </div>
           </>
         )}
 
@@ -261,6 +287,23 @@ export default function AccountDossier({
             <div className="md:col-span-2 xl:col-span-3">
               <ChartCard title="Reviews List" subtitle="every review · what customers actually said (reviews.reviews)">
                 {detail ? <ReviewsList reviews={detail.reviewsList ?? []} /> : skel}
+              </ChartCard>
+            </div>
+
+            <div className="md:col-span-2 xl:col-span-3">
+              <ChartCard title="CSAT Submissions" subtitle="customer satisfaction survey responses (csat_typeform)">
+                {detail ? (
+                  <DataTable
+                    cols={[
+                      { key: "date", label: "Date", date: true },
+                      { key: "platform", label: "Platform" },
+                      { key: "formType", label: "Form" },
+                      { key: "question", label: "Question", wide: true },
+                      { key: "answer", label: "Answer", wide: true },
+                    ]}
+                    rows={detail.csat ?? []}
+                  />
+                ) : skel}
               </ChartCard>
             </div>
           </>
@@ -359,7 +402,7 @@ export default function AccountDossier({
           </>
         )}
 
-        {tab === "Scheduling & App" && (
+        {tab === "Scheduling & Support" && (
           <>
             <ChartCard title="Scheduling & Calls" subtitle="scheduling active · call CTA">
               <div className="grid grid-cols-2 gap-2 text-xs">
@@ -389,6 +432,40 @@ export default function AccountDossier({
                 ]} />
               ) : <NoData />) : skel}
             </ChartCard>
+
+            <div className="md:col-span-2 xl:col-span-3">
+              <ChartCard title="Services Offered" subtitle="active services on the account (services.services)">
+                {detail ? (
+                  <DataTable
+                    cols={[
+                      { key: "category", label: "Category" },
+                      { key: "name", label: "Service" },
+                      { key: "description", label: "Description", wide: true },
+                      { key: "duration", label: "Min", num: true },
+                      { key: "price", label: "Price", money: true },
+                    ]}
+                    rows={detail.services ?? []}
+                  />
+                ) : skel}
+              </ChartCard>
+            </div>
+
+            <div className="md:col-span-2 xl:col-span-3">
+              <ChartCard title="Support Requests" subtitle="active ops / support requests (requests.requests)">
+                {detail ? (
+                  <DataTable
+                    cols={[
+                      { key: "date", label: "Date", date: true },
+                      { key: "requestType", label: "Type" },
+                      { key: "priority", label: "Priority" },
+                      { key: "status", label: "Status" },
+                      { key: "details", label: "Details", wide: true },
+                    ]}
+                    rows={detail.requests ?? []}
+                  />
+                ) : skel}
+              </ChartCard>
+            </div>
           </>
         )}
 
@@ -566,6 +643,48 @@ function KeywordTable({ rows }: { rows: NonNullable<AccountDetail["keywordRankin
               <td className={`px-2 py-1.5 text-right tabular-nums ${k.avgRank <= 3 ? "font-semibold text-emerald-600" : "text-slate-700"}`}>#{k.avgRank}</td>
               <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">#{k.minRank}</td>
               <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{k.searchVolume != null ? formatNumber(k.searchVolume) : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+type Col = { key: string; label: string; num?: boolean; money?: boolean; date?: boolean; wide?: boolean };
+
+function DataTable({ cols, rows }: { cols: Col[]; rows: Record<string, unknown>[] }) {
+  if (!rows.length) return <NoData />;
+  const fmt = (v: unknown, c: Col): string => {
+    if (v == null || v === "") return "—";
+    if (c.date) return ddmmyy(String(v));
+    if (c.money) return `$${formatNumber(Number(v))}`;
+    if (c.num) return formatNumber(Number(v));
+    const s = String(v);
+    return s.length > 300 ? s.slice(0, 300) + "…" : s;
+  };
+  return (
+    <div className="table-scroll -mx-1 max-h-[440px] overflow-auto">
+      <div className="px-1 pb-1 text-xs text-slate-400">{rows.length} row{rows.length === 1 ? "" : "s"}</div>
+      <table className="w-full border-collapse text-xs">
+        <thead className="sticky top-0 bg-slate-50 text-left uppercase tracking-wide text-slate-400">
+          <tr>
+            {cols.map((c) => (
+              <th key={c.key} className={`whitespace-nowrap px-2 py-1.5 font-semibold ${c.num || c.money ? "text-right" : ""}`}>{c.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} className="border-t border-slate-100 align-top">
+              {cols.map((c) => (
+                <td
+                  key={c.key}
+                  className={`px-2 py-1.5 ${c.num || c.money ? "text-right tabular-nums text-slate-700" : "text-slate-600"} ${c.wide ? "max-w-[360px]" : "max-w-[200px]"}`}
+                >
+                  {fmt(r[c.key], c)}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>

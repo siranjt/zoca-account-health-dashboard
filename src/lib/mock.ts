@@ -240,5 +240,49 @@ export function getMockAccountDetail(id: string): AccountDetail {
         utm: i % 4 === 0 ? "instagram" : null,
       }));
     })(),
+    posts: (() => {
+      const summaries = ["Book your summer glow-up now! ✨", "New lash styles just dropped", "20% off first visit this week", "Meet our newest stylist", "Holiday hours update"];
+      const topics = ["STANDARD", "OFFER", "EVENT", "STANDARD", "STANDARD"];
+      const n = Math.min(5, Math.max(2, Math.round((s.leads || 2) / 6)));
+      return Array.from({ length: n }, (_, i) => ({
+        date: new Date(2026, 6, 14 - i * 6).toISOString().slice(0, 10),
+        summary: summaries[i % summaries.length],
+        event: null,
+        offer: i % 3 === 0 ? "20% off" : null,
+        cta: i % 2 === 0 ? "BOOK" : "LEARN_MORE",
+        topic: topics[i % topics.length],
+        state: "LIVE",
+      }));
+    })(),
+    postsWeekly: (() => { let c = 0; return mkSpark(1, id + "pw").map((v, i) => { c += v; return { wk: new Date(2026, 4, 1 + i * 7).toISOString().slice(0, 10), posts: v, cumsum: c }; }); })(),
+    services: [
+      { name: "Full Set Lashes", description: "Classic full-set lash extensions", duration: 120, price: 150, category: "Lashes" },
+      { name: "Lash Fill", description: "2-3 week refill", duration: 60, price: 75, category: "Lashes" },
+      { name: "Brow Lamination", description: "Brow shaping + lamination", duration: 45, price: 65, category: "Brows" },
+      { name: "Full Body Massage", description: "60-min relaxation massage", duration: 60, price: 90, category: "Massage" },
+    ].slice(0, Math.max(2, (s.leads % 4) + 1)),
+    requests: (() => {
+      const types = ["WEBSITE_EDIT", "GBP_SUPPORT", "SUBSCRIPTION_SUPPORT", "REVIEWS_SUPPORT"];
+      const stats = ["OPEN", "IN_PROGRESS", "RESOLVED"];
+      const pris = ["HIGH", "MEDIUM", "LOW"];
+      const n = s.leads % 4;
+      return Array.from({ length: n }, (_, i) => ({
+        date: new Date(2026, 6, 16 - i * 2).toISOString().slice(0, 10),
+        status: stats[i % stats.length],
+        priority: pris[i % pris.length],
+        requestType: types[i % types.length],
+        details: "Customer requested an update to their profile / listing.",
+      }));
+    })(),
+    csat: (() => {
+      const n = s.reviews % 3;
+      return Array.from({ length: n }, (_, i) => ({
+        date: new Date(2026, 6, 12 - i * 5).toISOString().slice(0, 10),
+        platform: "app",
+        formType: "Post-onboarding CSAT",
+        question: "How satisfied are you with Zoca so far?",
+        answer: i % 2 === 0 ? "Very satisfied" : "Satisfied",
+      }));
+    })(),
   };
 }

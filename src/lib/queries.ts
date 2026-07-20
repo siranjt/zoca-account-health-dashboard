@@ -240,3 +240,53 @@ export function detailLeadsListSql(id: string, windowDays: number): string {
     ORDER BY created_at DESC
     LIMIT 500`;
 }
+
+/** GBP posts — recent posts on the profile (Retool "posts_raw"). */
+export function detailPostsSql(id: string): string {
+  return `SELECT to_char(gp.create_time::date,'YYYY-MM-DD') d, gp.summary, gp.event, gp.offer,
+      gp.call_to_action cta, gp.topic_type, gp.state
+    FROM gbp.posts gp JOIN gbp.locations gl ON gl.name = gp.location_name
+    WHERE gl.entity_id='${id}'::uuid AND gp.is_deleted=false
+    ORDER BY gp.create_time::date DESC LIMIT 100`;
+}
+
+/** GBP posts cadence — weekly live posts + cumulative (Retool "posts_count"). */
+export function detailPostsWeeklySql(id: string): string {
+  return `WITH p AS (SELECT date_trunc('week', gp.create_time::date) wk, count(*) posts
+      FROM gbp.posts gp JOIN gbp.locations gl ON gl.name = gp.location_name
+      WHERE gl.entity_id='${id}'::uuid AND gp.is_deleted=false AND gp.state='LIVE' GROUP BY 1)
+    SELECT to_char(wk,'YYYY-MM-DD') wk, posts, sum(posts) OVER (ORDER BY wk) cumsum FROM p ORDER BY wk`;
+}
+
+/** Services offered by the account (Retool "query19"). Entity-first CTE +
+ *  native-uuid joins — the Retool ::text joins full-scan and time out. */
+export function detailServicesSql(id: string): string {
+  return `WITH sse AS (
+      SELECT service_id FROM services.services_entities
+      WHERE entity_id='${id}'::uuid AND is_deleted=false)
+    SELECT ss.name, ss.description, ss.duration, ss.price, sc.name category
+    FROM sse
+    JOIN services.services ss ON ss.id=sse.service_id::uuid AND ss.is_active AND ss.is_deleted=false
+    JOIN services.services_categories ssc ON ssc.service_id=ss.id AND ssc.is_deleted=false
+    JOIN services.categories sc ON sc.id=ssc.category_id AND sc.is_active AND sc.is_deleted=false
+    ORDER BY sc.name, ss.name LIMIT 300`;
+}
+
+/** Support/ops requests raised for the account (Retool "requests"). */
+export function detailRequestsSql(id: string): string {
+  return `SELECT to_char(created_at::date,'YYYY-MM-DD') d, status, priority, request_type, details
+    FROM requests.requests WHERE entity_id='${id}'::uuid AND is_active=true
+    ORDER BY created_at DESC LIMIT 100`;
+}
+
+/** CSAT survey submissions (Retool "csat_submitted"). */
+export function detailCsatSql(id: string): string {
+  return `WITH base_sub AS (SELECT landing_id, platform, _sdc_form_id form_id, landed_at
+      FROM csat_typeform_stitch.submitted_landings WHERE hidden::json->>'entity_id'='${id}'),
+    forms AS (SELECT id, title, type FROM csat_typeform_stitch.forms),
+    questions AS (SELECT question_id, form_id, type, title FROM csat_typeform_stitch.questions)
+    SELECT to_char(bs.landed_at,'YYYY-MM-DD') d, bs.platform, f.title form_type, q.title question, a.answer
+    FROM base_sub bs JOIN forms f ON bs.form_id=f.id JOIN questions q ON q.form_id=f.id
+    LEFT JOIN csat_typeform_stitch.answers a ON a.question_id=q.question_id AND a.landing_id=bs.landing_id
+    ORDER BY bs.landed_at DESC LIMIT 200`;
+}
