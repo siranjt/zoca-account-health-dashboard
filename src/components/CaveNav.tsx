@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import ThemeToggle from "./ThemeToggle";
 
 /**
  * CAVE//OS top navigation bar — shared across Landing, Overview and Detail.
@@ -45,6 +46,8 @@ export default function CaveNav() {
         <span className="hidden sm:inline">Search…</span>
         <kbd className="rounded px-1 text-[10px]" style={{ background: "var(--cave-line)", color: "#a7c3c8" }}>⌘K</kbd>
       </button>
+
+      <ThemeToggle />
 
       <div className="flex items-center gap-1 text-sm">
         {links.map((l, i) => {
