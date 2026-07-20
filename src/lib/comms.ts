@@ -23,6 +23,7 @@ export interface CommsTicket {
   title: string | null;
   description: string | null;
   state: string | null;
+  url: string | null;
 }
 export interface CommsPayload {
   windowDays: number;
@@ -99,7 +100,7 @@ function channelSqls(id: string, days: number): string[] {
 
 // Linear tickets for the account (Retool "query7").
 function ticketsSql(id: string): string {
-  return `SELECT cn.linear_created_at::text linear_created_at, i.assignee_name, i.title, i.description, i.state_name
+  return `SELECT cn.linear_created_at::text linear_created_at, i.assignee_name, i.title, i.description, i.state_name, i.url
     FROM linear.customer_needs cn
     JOIN linear.issues i ON cn.issue_id = i.id
     WHERE cn.customer_external_id = '${id}'
@@ -136,6 +137,7 @@ export async function getComms(entityId: string, windowDays: number): Promise<Co
     title: str(r.title),
     description: str(r.description),
     state: str(r.state_name),
+    url: str(r.url),
   }));
 
   return { windowDays: w, messages: merged, tickets, byType, total, capped };

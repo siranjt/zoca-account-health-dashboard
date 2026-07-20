@@ -210,12 +210,22 @@ export default function AccountDossier({
             </div>
           </div>
 
-          <div
-            className="rounded-lg px-3 py-1.5 text-sm font-semibold"
-            style={{ color: HEALTH_HEX[h.color], background: `${HEALTH_HEX[h.color]}1a`, border: `1px solid ${HEALTH_HEX[h.color]}55` }}
-            title={h.reason ? `Watch: ${h.reason}` : undefined}
-          >
-            {h.tierLabel || "—"}
+          <div className="flex flex-col items-end gap-2">
+            <div
+              className="rounded-lg px-3 py-1.5 text-sm font-semibold"
+              style={{ color: HEALTH_HEX[h.color], background: `${HEALTH_HEX[h.color]}1a`, border: `1px solid ${HEALTH_HEX[h.color]}55` }}
+              title={h.reason ? `Watch: ${h.reason}` : undefined}
+            >
+              {h.tierLabel || "—"}
+            </div>
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent("cave-open-alfred", { detail: { prefill: `Give me a full briefing on ${account.name} — health, billing, tickets, and what needs attention.` } }))}
+              className="rounded-md px-2.5 py-1 text-xs font-medium no-underline"
+              style={{ color: "var(--cave-cy)", border: "1px solid var(--cave-line2)", background: "rgba(53,224,255,.06)" }}
+              title="Ask Alfred about this account"
+            >
+              ✨ Ask Alfred
+            </button>
           </div>
         </div>
 
@@ -814,7 +824,11 @@ function KeywordTable({ rows }: { rows: NonNullable<AccountDetail["keywordRankin
         <tbody>
           {rows.map((k, i) => (
             <tr key={i} className="border-t border-slate-100">
-              <td className="px-2 py-1.5 text-slate-700">{k.keyword}</td>
+              <td className="px-2 py-1.5 text-slate-700">
+                <a href={`https://www.google.com/search?q=${encodeURIComponent(k.keyword)}`} target="_blank" rel="noopener noreferrer" className="text-slate-700 no-underline hover:text-indigo-600" title="See this keyword's SERP">
+                  {k.keyword} ↗
+                </a>
+              </td>
               <td className={`px-2 py-1.5 text-right tabular-nums ${k.avgRank <= 3 ? "font-semibold text-emerald-600" : "text-slate-700"}`}>#{k.avgRank}</td>
               <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">#{k.minRank}</td>
               <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{k.searchVolume != null ? formatNumber(k.searchVolume) : "—"}</td>

@@ -29,6 +29,7 @@ export default function CommunicationTab({ entityId, windowDays }: { entityId: s
   const [filter, setFilter] = useState<string>("all");
   const [open, setOpen] = useState<Set<number>>(new Set());
   const [openTix, setOpenTix] = useState<Set<number>>(new Set());
+  const [focusBody, setFocusBody] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -52,7 +53,9 @@ export default function CommunicationTab({ entityId, windowDays }: { entityId: s
 
   return (
     <div className="space-y-4">
-      <AiAssist entityId={entityId} windowDays={windowDays} />
+      <div id="cave-ai-assist">
+        <AiAssist entityId={entityId} windowDays={windowDays} focusBody={focusBody} onClearFocus={() => setFocusBody(null)} />
+      </div>
 
       {error ? (
         <div className="py-8 text-center text-sm text-red-500">Couldn&apos;t load communication: {error}</div>
@@ -104,6 +107,15 @@ export default function CommunicationTab({ entityId, windowDays }: { entityId: s
                       </span>
                       {m.sender && <span className="text-slate-500">{m.sender}</span>}
                       <span className="ml-auto tabular-nums text-slate-400">{ddmmyyhm(m.at)}</span>
+                      {m.body && (
+                        <button
+                          onClick={() => { setFocusBody(m.body || ""); document.getElementById("cave-ai-assist")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                          title="Focus AI Assist on this message"
+                          className="text-[11px] text-slate-400 hover:text-cyan-400"
+                        >
+                          🎯
+                        </button>
+                      )}
                     </div>
                     {body ? (
                       <div className="whitespace-pre-wrap break-words text-xs leading-relaxed text-slate-600">
@@ -152,7 +164,13 @@ export default function CommunicationTab({ entityId, windowDays }: { entityId: s
                 <div key={i} className="rounded-lg border border-slate-100 bg-white p-2.5">
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <StateBadge state={t.state} />
-                    <span className="font-medium text-slate-700">{t.title ?? "—"}</span>
+                    {t.url ? (
+                      <a href={t.url} target="_blank" rel="noopener noreferrer" className="font-medium text-indigo-600 no-underline hover:underline" title="Open in Linear">
+                        {t.title ?? "—"} ↗
+                      </a>
+                    ) : (
+                      <span className="font-medium text-slate-700">{t.title ?? "—"}</span>
+                    )}
                     {t.assignee && <span className="text-slate-400">· {t.assignee}</span>}
                     <span className="ml-auto tabular-nums text-slate-400">{t.createdAt ? ddmmyyhm(t.createdAt) : "—"}</span>
                   </div>

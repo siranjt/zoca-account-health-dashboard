@@ -4,7 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 
 interface PromptMeta { function: string; type: string; useCase: string; }
 
-export default function AiAssist({ entityId, windowDays }: { entityId: string; windowDays: number }) {
+export default function AiAssist({
+  entityId,
+  windowDays,
+  focusBody,
+  onClearFocus,
+}: {
+  entityId: string;
+  windowDays: number;
+  focusBody?: string | null;
+  onClearFocus?: () => void;
+}) {
   const [catalog, setCatalog] = useState<PromptMeta[] | null>(null);
   const [fn, setFn] = useState("");
   const [type, setType] = useState("");
@@ -56,7 +66,7 @@ export default function AiAssist({ entityId, windowDays }: { entityId: string; w
       const r = await fetch(`/api/account/${entityId}/assist`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ instruction, window: windowDays }),
+        body: JSON.stringify({ instruction, window: windowDays, selectedBody: focusBody ?? null }),
       });
       const j = await r.json();
       if (j.error) setError(j.error);
@@ -76,6 +86,14 @@ export default function AiAssist({ entityId, windowDays }: { entityId: string; w
         <span className="text-sm font-semibold" style={{ color: "var(--cave-cy)" }}>✨ AI Assist</span>
         <span className="text-xs text-slate-400">· pick a prompt or write your own · runs over the last {windowDays}d of communication</span>
       </div>
+
+      {focusBody && (
+        <div className="mb-2 flex items-center gap-2 rounded-md border px-2 py-1 text-[11px]" style={{ borderColor: "var(--cave-line2)", color: "#a7c3c8" }}>
+          <span style={{ color: "var(--cave-cy)" }}>🎯 Focused on selected message:</span>
+          <span className="flex-1 truncate text-slate-400">{focusBody.slice(0, 90)}</span>
+          <button onClick={onClearFocus} className="text-slate-400 hover:text-slate-200">✕</button>
+        </div>
+      )}
 
       {/* prompt picker */}
       <div className="mb-2 flex flex-wrap gap-2">

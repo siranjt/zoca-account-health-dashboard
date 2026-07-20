@@ -312,6 +312,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
           {a.health.reason && <div className="mt-1 text-xs text-slate-500">Watch: {a.health.reason}</div>}
           {a.health.recommendedAction && <div className="mt-1 text-xs text-slate-500">Action: {a.health.recommendedAction}</div>}
           <Link href={`/account/${a.entityId}`} onClick={(e) => { e.stopPropagation(); setPop(null); }} className="mt-2 block w-full rounded bg-slate-800 px-2 py-1 text-center text-xs font-medium text-white no-underline hover:bg-slate-700">Open detailed page →</Link>
+          <button onClick={(e) => { e.stopPropagation(); setPop(null); window.dispatchEvent(new CustomEvent("cave-open-alfred", { detail: { prefill: `Give me a briefing on ${a.name}.` } })); }} className="mt-1 block w-full rounded border px-2 py-1 text-center text-xs font-medium" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-cy)" }}>✨ Ask Alfred</button>
         </div>
       );
       default: return null;
