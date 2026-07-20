@@ -31,6 +31,15 @@ import {
   detailServicesSql,
   detailRequestsSql,
   detailCsatSql,
+  detailOnboardingSql,
+  detailWinOnboardedSql,
+  detailSchedulingStatusSql,
+  detailTotalBookingsSql,
+  detailBookingsByStatusSql,
+  detailBookingsByCreatorSql,
+  detailWowTasksSql,
+  detailCallbackActionsSql,
+  detailPaymentLinksSql,
 } from "./queries";
 import { labelAgent } from "./types";
 import { mapTier } from "./health";
@@ -223,7 +232,7 @@ export async function getAccountDetailFromMetabase(
   const cfg = readMetabaseConfig();
   if (!cfg) throw new Error("Metabase not configured");
   const safe = (sql: string) => runDataset(cfg, sql).catch(() => [] as Row[]);
-  const [pw, lr, rt, fn, au, bk, kr, im, rd, cm, md, fc, rl, ll, ps, pw2, sv, rq, cs] = await Promise.all([
+  const [pw, lr, rt, fn, au, bk, kr, im, rd, cm, md, fc, rl, ll, ps, pw2, sv, rq, cs, ob, wo, sst, tb, bs, bc, wt, ca, pl] = await Promise.all([
     runDataset(cfg, detailProfileWeeklySql(id)),
     runDataset(cfg, detailLeadsReviewsMonthlySql(id)),
     runDataset(cfg, detailRankTrendSql(id)),
@@ -243,6 +252,15 @@ export async function getAccountDetailFromMetabase(
     safe(detailServicesSql(id)),
     safe(detailRequestsSql(id)),
     safe(detailCsatSql(id)),
+    safe(detailOnboardingSql(id)),
+    safe(detailWinOnboardedSql(id)),
+    safe(detailSchedulingStatusSql(id)),
+    safe(detailTotalBookingsSql(id)),
+    safe(detailBookingsByStatusSql(id)),
+    safe(detailBookingsByCreatorSql(id)),
+    safe(detailWowTasksSql(id)),
+    safe(detailCallbackActionsSql(id)),
+    safe(detailPaymentLinksSql(id)),
   ]);
   const f = fn[0] ?? {};
   const RATING = { FIVE: 5, FOUR: 4, THREE: 3, TWO: 2, ONE: 1, ZERO: 0 } as Record<string, number>;
@@ -335,5 +353,39 @@ export async function getAccountDetailFromMetabase(
       question: (r.question as string) || null,
       answer: (r.answer as string) || null,
     })),
+    onboarding: ob[0] || wo[0]
+      ? {
+          state: (ob[0]?.onboarding_state as string) || null,
+          createdAt: (ob[0]?.d as string) || null,
+          bookingLinkAdded: ob[0]?.is_booking_link_added == null ? null : Boolean(ob[0].is_booking_link_added),
+          leadPredictionViewed: ob[0]?.is_lead_prediction_viewed == null ? null : Boolean(ob[0].is_lead_prediction_viewed),
+          winOnboardedDate: (wo[0]?.onboarded_date as string) || null,
+        }
+      : null,
+    schedulingStatus: sst[0]
+      ? {
+          schedulingProduct: (sst[0].scheduling_product as string) || null,
+          websiteFlipped: (sst[0].website_flipped as string) || null,
+          callCtaEnabled: (sst[0].call_cta as string) || null,
+        }
+      : null,
+    totalBookings: tb[0] ? int0(tb[0].total_bookings) : null,
+    bookingsByStatus: bs.map((r) => ({ status: (r.status as string) || null, count: int0(r.booking_count) })),
+    bookingsByCreator: bc.map((r) => ({ creatorType: (r.created_by_type as string) || null, count: int0(r.booking_count) })),
+    wowTasks: wt.map((r) => ({
+      wk: String(r.wk),
+      total: int0(r.total_tasks),
+      completed: int0(r.completed),
+      cancelled: int0(r.cancelled),
+      pending: int0(r.pending),
+      resolutionPct: num(r.resolution_rate_pct),
+    })),
+    callbackActions: ca.map((r) => ({ action: (r.action as string) || null, count: int0(r.count) })),
+    paymentLinks: pl[0]
+      ? {
+          missedPayment: (pl[0].missed_payment as string) || null,
+          paymentMethodUpdate: (pl[0].payment_method_update as string) || null,
+        }
+      : null,
   };
 }

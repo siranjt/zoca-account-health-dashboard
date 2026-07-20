@@ -284,5 +284,51 @@ export function getMockAccountDetail(id: string): AccountDetail {
         answer: i % 2 === 0 ? "Very satisfied" : "Satisfied",
       }));
     })(),
+    onboarding: {
+      state: "COMPLETED",
+      createdAt: "2026-01-15",
+      bookingLinkAdded: true,
+      leadPredictionViewed: s.leads % 2 === 0,
+      winOnboardedDate: "2026-01-22",
+    },
+    schedulingStatus: {
+      schedulingProduct: s.leads % 3 === 0 ? "Active" : "Not Active",
+      websiteFlipped: s.leads % 2 === 0 ? "Yes" : "No",
+      callCtaEnabled: "Yes",
+    },
+    totalBookings: s.leads * 2,
+    bookingsByStatus: [
+      { status: "COMPLETED", count: s.leads },
+      { status: "CANCELLED", count: Math.round(s.leads / 4) },
+      { status: "NO_SHOW", count: Math.round(s.leads / 8) },
+    ].filter((b) => b.count > 0),
+    bookingsByCreator: [
+      { creatorType: "CUSTOMER", count: Math.round(s.leads * 1.2) },
+      { creatorType: "STAFF", count: Math.round(s.leads * 0.6) },
+      { creatorType: "AI_AGENT", count: Math.round(s.leads * 0.2) },
+    ].filter((b) => b.count > 0),
+    wowTasks: mkSpark(Math.max(2, Math.round(s.leads / 5)), id + "wow").map((v, i) => {
+      const total = v + 1;
+      const completed = Math.round(total * 0.7);
+      const cancelled = Math.round(total * 0.1);
+      const pending = total - completed - cancelled;
+      return {
+        wk: new Date(2026, 4, 1 + i * 7).toISOString().slice(0, 10),
+        total,
+        completed,
+        cancelled,
+        pending,
+        resolutionPct: Math.round(((total - pending) / total) * 1000) / 10,
+      };
+    }),
+    callbackActions: [
+      { action: "RESCHEDULE", count: Math.max(1, s.leads % 5) },
+      { action: "CONFIRM", count: Math.max(1, s.leads % 4) },
+      { action: "CANCEL", count: Math.max(1, s.leads % 3) },
+    ],
+    paymentLinks: {
+      missedPayment: `https://public.zoca.com/chargebee/missed/payment/${id}`,
+      paymentMethodUpdate: `https://public.zoca.com/chargebee/update/payment/method/${id}`,
+    },
   };
 }

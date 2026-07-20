@@ -279,6 +279,79 @@ export function detailRequestsSql(id: string): string {
     ORDER BY created_at DESC LIMIT 100`;
 }
 
+/** Onboarding state (Retool "query26") — app.onboarding. */
+export function detailOnboardingSql(id: string): string {
+  return `SELECT onboarding_state, created_at::date d, is_booking_link_added, is_lead_prediction_viewed
+    FROM app.onboarding WHERE entity_id='${id}'::uuid LIMIT 1`;
+}
+
+/** WIN onboarding completion date (Retool "query34"). */
+export function detailWinOnboardedSql(id: string): string {
+  return `SELECT completed_at::date onboarded_date FROM l2b.win_onboarding_status
+    WHERE entity_id='${id}'::uuid AND status='completed' ORDER BY completed_at DESC LIMIT 1`;
+}
+
+/** Scheduling status flags (Retool "scheduling_status" + "query37") in one row. */
+export function detailSchedulingStatusSql(id: string): string {
+  return `SELECT
+    (CASE WHEN EXISTS(SELECT 1 FROM entities.product_entities WHERE entity_id='${id}' AND product_id=10 AND is_active=true) THEN 'Active' ELSE 'Not Active' END) scheduling_product,
+    (CASE WHEN EXISTS(SELECT 1 FROM scheduling.onboarding so WHERE so.location_entity_id='${id}' AND so.is_website_flipped=true) THEN 'Yes' ELSE 'No' END) website_flipped,
+    (CASE WHEN EXISTS(SELECT 1 FROM entities.preferences ep WHERE ep.entity_id='${id}' AND ep.attribute='website.callNow.buttonText' AND ep.value='Call Us (24x7)') THEN 'Yes' ELSE 'No' END) call_cta`;
+}
+
+/** Total bookings (Retool "total_booking_count", migration-source excluded). */
+export function detailTotalBookingsSql(id: string): string {
+  return `SELECT COUNT(DISTINCT b.id) total_bookings FROM scheduling.bookings b
+    WHERE b.entity_id='${id}'::uuid
+      AND ((b.attributes #>> array['migration_source']::text[])::text IS NULL OR (b.attributes #>> array['migration_source']::text[])::text='')`;
+}
+
+/** Bookings grouped by status (Retool "bookings_by_status"). */
+export function detailBookingsByStatusSql(id: string): string {
+  return `SELECT b.status, COUNT(DISTINCT b.id) booking_count FROM scheduling.bookings b
+    WHERE b.entity_id='${id}'::uuid
+      AND ((b.attributes #>> array['migration_source']::text[])::text IS NULL OR (b.attributes #>> array['migration_source']::text[])::text='')
+    GROUP BY b.status ORDER BY b.status`;
+}
+
+/** Bookings grouped by who created them (Retool "bookings_by_creator_type"). */
+export function detailBookingsByCreatorSql(id: string): string {
+  return `SELECT bi.created_by_type, COUNT(DISTINCT b.id) booking_count
+    FROM scheduling.bookings b LEFT JOIN scheduling.booking_items bi ON b.id=bi.booking_id
+    WHERE b.entity_id='${id}'::uuid
+      AND ((b.attributes #>> array['migration_source']::text[])::text IS NULL OR (b.attributes #>> array['migration_source']::text[])::text='')
+    GROUP BY bi.created_by_type ORDER BY bi.created_by_type`;
+}
+
+/** Weekly WoW task completion (Retool "query39") — l2b.call_callbacks. */
+export function detailWowTasksSql(id: string): string {
+  return `SELECT to_char(date_trunc('week', cc.created_at)::date,'YYYY-MM-DD') wk,
+      COUNT(*) total_tasks,
+      COUNT(*) FILTER (WHERE cc.status='completed') completed,
+      COUNT(*) FILTER (WHERE cc.status='cancelled') cancelled,
+      COUNT(*) FILTER (WHERE cc.status='pending') pending,
+      ROUND(100.0*COUNT(*) FILTER (WHERE cc.status!='pending')/NULLIF(COUNT(*),0),1) resolution_rate_pct
+    FROM l2b.call_callbacks cc LEFT JOIN chatbot.transcript_mapping ctm ON cc.call_id=ctm.call_id
+    WHERE cc.entity_id='${id}'::uuid AND ctm.is_test=false
+    GROUP BY 1 ORDER BY 1`;
+}
+
+/** Callback actions taken (Retool "query38"). */
+export function detailCallbackActionsSql(id: string): string {
+  return `SELECT l2bcc.action, COUNT(*) count
+    FROM l2b.call_callbacks l2bcc LEFT JOIN chatbot.transcript_mapping ctm ON l2bcc.call_id=ctm.call_id
+    WHERE l2bcc.entity_id='${id}'::uuid AND ctm.is_test=false
+    GROUP BY l2bcc.action ORDER BY count DESC`;
+}
+
+/** Public payment action links (Retool "paymentRelatedLinks"). */
+export function detailPaymentLinksSql(id: string): string {
+  return `SELECT
+      'https://public.zoca.com/chargebee/missed/payment/'||entity_id missed_payment,
+      'https://public.zoca.com/chargebee/update/payment/method/'||entity_id payment_method_update
+    FROM entities.entities WHERE entity_id='${id}'::uuid`;
+}
+
 /** CSAT survey submissions (Retool "csat_submitted"). */
 export function detailCsatSql(id: string): string {
   return `WITH base_sub AS (SELECT landing_id, platform, _sdc_form_id form_id, landed_at

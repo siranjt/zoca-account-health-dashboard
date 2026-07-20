@@ -126,6 +126,14 @@ export interface AccountDetail {
   services?: { name: string | null; description: string | null; duration: number | null; price: number | null; category: string | null }[];
   requests?: { date: string | null; status: string | null; priority: string | null; requestType: string | null; details: string | null }[];
   csat?: { date: string | null; platform: string | null; formType: string | null; question: string | null; answer: string | null }[];
+  onboarding?: { state: string | null; createdAt: string | null; bookingLinkAdded: boolean | null; leadPredictionViewed: boolean | null; winOnboardedDate: string | null } | null;
+  schedulingStatus?: { schedulingProduct: string | null; websiteFlipped: string | null; callCtaEnabled: string | null } | null;
+  totalBookings?: number | null;
+  bookingsByStatus?: { status: string | null; count: number }[];
+  bookingsByCreator?: { creatorType: string | null; count: number }[];
+  wowTasks?: { wk: string; total: number; completed: number; cancelled: number; pending: number; resolutionPct: number | null }[];
+  callbackActions?: { action: string | null; count: number }[];
+  paymentLinks?: { missedPayment: string | null; paymentMethodUpdate: string | null } | null;
 }
 
 export interface PaymentInvoice {

@@ -394,6 +394,17 @@ export default function AccountDossier({
               ) : skel}
             </ChartCard>
 
+            <ChartCard title="Payment Related Links" subtitle="public self-serve links (click to copy/share)">
+              {detail ? (
+                detail.paymentLinks ? (
+                  <div className="space-y-2 py-1">
+                    <LinkRow label="Missed payment" href={detail.paymentLinks.missedPayment} />
+                    <LinkRow label="Update payment method" href={detail.paymentLinks.paymentMethodUpdate} />
+                  </div>
+                ) : <NoData />
+              ) : skel}
+            </ChartCard>
+
             <div className="md:col-span-2 xl:col-span-3">
               <ChartCard title="One Time Invoices" subtitle="newest first · Chargebee">
                 {detail ? <InvoiceTable invoices={detail.payments?.invoices ?? []} /> : skel}
@@ -404,13 +415,46 @@ export default function AccountDossier({
 
         {tab === "Scheduling & Support" && (
           <>
-            <ChartCard title="Scheduling & Calls" subtitle="scheduling active · call CTA">
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <Stat label="Book-online active" value={account.bookOnlineActive ? "Yes" : "No"} />
-                <Stat label="Book-online clicks" value={account.bookOnlineActive ? formatNumber(account.bookOnlineClicks) : "n/a"} />
-                <Stat label="Recv → Contacted" value={formatDuration(account.avgReceivedToContactedMs)} />
-                <Stat label="Open tickets" value={formatNumber(account.openTickets)} />
-              </div>
+            <ChartCard title="Scheduling Status" subtitle="entities.product_entities · scheduling.onboarding">
+              {detail ? (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <Stat label="Scheduling product" value={detail.schedulingStatus?.schedulingProduct ?? "—"} />
+                  <Stat label="Website flipped" value={detail.schedulingStatus?.websiteFlipped ?? "—"} />
+                  <Stat label="Call CTA enabled" value={detail.schedulingStatus?.callCtaEnabled ?? "—"} />
+                  <Stat label="Book-online" value={account.bookOnlineActive ? "Active" : "Off"} />
+                </div>
+              ) : skel}
+            </ChartCard>
+
+            <ChartCard title="Onboarding Status" subtitle="app.onboarding · l2b.win_onboarding_status">
+              {detail ? (
+                detail.onboarding ? (
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <Stat label="State" value={detail.onboarding.state ?? "—"} />
+                    <Stat label="WIN onboarded" value={detail.onboarding.winOnboardedDate ? ddmmyy(detail.onboarding.winOnboardedDate) : "—"} />
+                    <Stat label="Booking link added" value={yesNo(detail.onboarding.bookingLinkAdded)} />
+                    <Stat label="Lead prediction seen" value={yesNo(detail.onboarding.leadPredictionViewed)} />
+                  </div>
+                ) : <NoData />
+              ) : skel}
+            </ChartCard>
+
+            <ChartCard title="Bookings" subtitle="scheduling.bookings (migration excluded)">
+              {detail ? (
+                <>
+                  <div className="mb-2 flex items-baseline gap-2">
+                    <span className="text-2xl font-semibold tabular-nums text-slate-800">{formatNumber(detail.totalBookings ?? 0)}</span>
+                    <span className="text-xs text-slate-400">total bookings</span>
+                  </div>
+                  {detail.bookingsByStatus?.length ? (
+                    <div className="space-y-1 text-xs">
+                      {detail.bookingsByStatus.map((b) => (
+                        <Row key={b.status ?? "—"} l={b.status ?? "—"} v={formatNumber(b.count)} />
+                      ))}
+                    </div>
+                  ) : <div className="text-xs text-slate-400">No bookings.</div>}
+                </>
+              ) : skel}
             </ChartCard>
 
             <ChartCard title="Total Calls / Comms" subtitle="weekly SMS · calls, last 3 months">
@@ -430,6 +474,36 @@ export default function AccountDossier({
                   { name: "Reviews", color: VIZ.series[2], values: detail.appUsage.map((w) => w.reviews) },
                   { name: "Photos", color: VIZ.series[3], values: detail.appUsage.map((w) => w.photos) },
                 ]} />
+              ) : <NoData />) : skel}
+            </ChartCard>
+
+            <ChartCard title="WoW Tasks (weekly)" subtitle="follow-up task volume & completion (l2b.call_callbacks)">
+              {detail ? (detail.wowTasks?.length ? (
+                <MultiLineChart xLabels={detail.wowTasks.map((t) => t.wk)} series={[
+                  { name: "Total", color: VIZ.series[0], values: detail.wowTasks.map((t) => t.total) },
+                  { name: "Completed", color: VIZ.series[3], values: detail.wowTasks.map((t) => t.completed) },
+                  { name: "Pending", color: VIZ.series[1], values: detail.wowTasks.map((t) => t.pending) },
+                ]} />
+              ) : <NoData />) : skel}
+            </ChartCard>
+
+            <ChartCard title="Bookings by creator" subtitle="who created the booking (scheduling.booking_items)">
+              {detail ? (detail.bookingsByCreator?.length ? (
+                <div className="space-y-1 py-1 text-xs">
+                  {detail.bookingsByCreator.map((b) => (
+                    <Row key={b.creatorType ?? "—"} l={b.creatorType ?? "—"} v={formatNumber(b.count)} />
+                  ))}
+                </div>
+              ) : <NoData />) : skel}
+            </ChartCard>
+
+            <ChartCard title="Callback Actions" subtitle="actions taken on AI callbacks (l2b.call_callbacks)">
+              {detail ? (detail.callbackActions?.length ? (
+                <div className="space-y-1 py-1 text-xs">
+                  {detail.callbackActions.map((c) => (
+                    <Row key={c.action ?? "—"} l={c.action ?? "—"} v={formatNumber(c.count)} />
+                  ))}
+                </div>
               ) : <NoData />) : skel}
             </ChartCard>
 
@@ -716,6 +790,28 @@ function Row({ l, v }: { l: string; v: React.ReactNode }) {
     <div className="flex justify-between">
       <span className="text-slate-500">{l}</span>
       <span className="font-medium tabular-nums text-slate-700">{v}</span>
+    </div>
+  );
+}
+
+function yesNo(v: boolean | null): string {
+  return v == null ? "—" : v ? "Yes" : "No";
+}
+
+function LinkRow({ label, href }: { label: string; href: string | null }) {
+  if (!href) return <Row l={label} v="—" />;
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-xs text-slate-500">{label}</span>
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="max-w-[62%] truncate text-xs font-medium text-indigo-600 no-underline hover:underline"
+        title={href}
+      >
+        {href.replace(/^https?:\/\//, "")}
+      </a>
     </div>
   );
 }
