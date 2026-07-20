@@ -71,6 +71,8 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [ticketsOnly, setTicketsOnly] = useState(false);
   const [pinnedOnly, setPinnedOnly] = useState(false);
+  const [mrrMin, setMrrMin] = useState<string>("");
+  const [mrrMax, setMrrMax] = useState<string>("");
   const [sort, setSort] = useState<SortState>({ key: "health", dir: "asc" });
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [pop, setPop] = useState<{ x: number; y: number; body: React.ReactNode } | null>(null);
@@ -263,6 +265,10 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     if (overdueOnly) out = out.filter((a) => a.daysOverdue != null && a.daysOverdue > 0);
     if (ticketsOnly) out = out.filter((a) => a.openTickets > 0);
     if (pinnedOnly) out = out.filter((a) => pinned.has(a.entityId));
+    const lo = mrrMin === "" ? null : Number(mrrMin);
+    const hi = mrrMax === "" ? null : Number(mrrMax);
+    if (lo != null && Number.isFinite(lo)) out = out.filter((a) => (a.mrr ?? 0) >= lo);
+    if (hi != null && Number.isFinite(hi)) out = out.filter((a) => (a.mrr ?? 0) <= hi);
 
     const dir = sort.dir === "asc" ? 1 : -1;
     out.sort((a, b) => {
@@ -272,7 +278,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
       return dir * cmp(a, b, sort.key);
     });
     return out;
-  }, [accounts, query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, overdueOnly, ticketsOnly, pinnedOnly, sort, pinned]);
+  }, [accounts, query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, overdueOnly, ticketsOnly, pinnedOnly, mrrMin, mrrMax, sort, pinned]);
 
   const kpi = useMemo(() => {
     const leads = rows.reduce((s, a) => s + a.leadsReceived, 0);
@@ -490,6 +496,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
         if (overdueOnly) chips.push({ label: "overdue", clear: () => setOverdueOnly(false) });
         if (ticketsOnly) chips.push({ label: "has tickets", clear: () => setTicketsOnly(false) });
         if (pinnedOnly) chips.push({ label: "pinned only", clear: () => setPinnedOnly(false) });
+        if (mrrMin || mrrMax) chips.push({ label: `MRR ${mrrMin || "0"}–${mrrMax || "∞"}`, clear: () => { setMrrMin(""); setMrrMax(""); } });
         if (!chips.length) return null;
         return (
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
@@ -543,6 +550,12 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
             </option>
           ))}
         </select>
+        <span className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-500" title="Filter by MRR range">
+          MRR
+          <input type="number" value={mrrMin} onChange={(e) => setMrrMin(e.target.value)} placeholder="min" className="w-14 rounded border border-slate-300 bg-white px-1 py-0.5 text-xs outline-none" />
+          –
+          <input type="number" value={mrrMax} onChange={(e) => setMrrMax(e.target.value)} placeholder="max" className="w-14 rounded border border-slate-300 bg-white px-1 py-0.5 text-xs outline-none" />
+        </span>
         <label className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm">
           <input
             type="checkbox"
