@@ -74,6 +74,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [mrrMin, setMrrMin] = useState<string>("");
   const [mrrMax, setMrrMax] = useState<string>("");
   const [cols, setCols] = useState({ engagement: true, seo: true, timing: true, payments: true });
+  const [metricRange, setMetricRange] = useState<{ key: keyof AccountRow; label: string; min: number; max: number } | null>(null);
   const [colMenu, setColMenu] = useState(false);
   useEffect(() => {
     try { const r = localStorage.getItem("zoca-ahd-cols"); if (r) setCols((c) => ({ ...c, ...JSON.parse(r) })); } catch { /* ignore */ }
@@ -278,6 +279,10 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     const hi = mrrMax === "" ? null : Number(mrrMax);
     if (lo != null && Number.isFinite(lo)) out = out.filter((a) => (a.mrr ?? 0) >= lo);
     if (hi != null && Number.isFinite(hi)) out = out.filter((a) => (a.mrr ?? 0) <= hi);
+    if (metricRange) {
+      const { key, min, max } = metricRange;
+      out = out.filter((a) => { const v = a[key]; return typeof v === "number" && v >= min && v <= max; });
+    }
 
     const dir = sort.dir === "asc" ? 1 : -1;
     out.sort((a, b) => {
@@ -287,7 +292,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
       return dir * cmp(a, b, sort.key);
     });
     return out;
-  }, [accounts, query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, overdueOnly, ticketsOnly, pinnedOnly, mrrMin, mrrMax, sort, pinned]);
+  }, [accounts, query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, overdueOnly, ticketsOnly, pinnedOnly, mrrMin, mrrMax, metricRange, sort, pinned]);
 
   const kpi = useMemo(() => {
     const leads = rows.reduce((s, a) => s + a.leadsReceived, 0);
@@ -386,9 +391,21 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     const median = sorted[Math.floor(sorted.length / 2)];
     return (
       <div className="w-64">
-        <div className="mb-1 text-xs font-medium text-slate-500">{label} · {rows.length} accounts</div>
+        <div className="mb-1 text-xs font-medium text-slate-500">{label} · {rows.length} accounts <span className="text-slate-400">· click a bar to filter</span></div>
         <div className="flex h-16 items-end gap-0.5">
-          {counts.map((c, i) => <div key={i} className="flex-1 rounded-t" style={{ height: `${cmax ? (c / cmax) * 100 : 0}%`, background: "#86b6ef" }} title={`${c} accounts`} />)}
+          {counts.map((c, i) => {
+            const bMin = min + (i / bins) * span;
+            const bMax = i === bins - 1 ? max : min + ((i + 1) / bins) * span;
+            return (
+              <button
+                key={i}
+                onClick={(e) => { e.stopPropagation(); setPop(null); setMetricRange({ key, label: `${label} ${formatNumber(Math.round(bMin))}–${formatNumber(Math.round(bMax))}`, min: bMin, max: bMax }); }}
+                className="flex-1 rounded-t hover:opacity-80"
+                style={{ height: `${cmax ? (c / cmax) * 100 : 0}%`, background: "#86b6ef" }}
+                title={`${c} accounts · ${formatNumber(Math.round(bMin))}–${formatNumber(Math.round(bMax))} — click to filter`}
+              />
+            );
+          })}
         </div>
         <div className="mt-1 flex justify-between text-[10px] text-slate-400"><span>{formatNumber(Math.round(min))}</span><span>{formatNumber(Math.round(max))}</span></div>
         <div className="mt-1 flex justify-between text-xs"><span className="text-slate-500">Median</span><span className="font-medium tabular-nums">{formatNumber(Math.round(median))}</span></div>
@@ -506,6 +523,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
         if (ticketsOnly) chips.push({ label: "has tickets", clear: () => setTicketsOnly(false) });
         if (pinnedOnly) chips.push({ label: "pinned only", clear: () => setPinnedOnly(false) });
         if (mrrMin || mrrMax) chips.push({ label: `MRR ${mrrMin || "0"}–${mrrMax || "∞"}`, clear: () => { setMrrMin(""); setMrrMax(""); } });
+        if (metricRange) chips.push({ label: metricRange.label, clear: () => setMetricRange(null) });
         if (!chips.length) return null;
         return (
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
