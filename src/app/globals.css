@@ -58,6 +58,11 @@ body {
   0% { left: -40%; }
   100% { left: 100%; }
 }
+@keyframes cave-toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.cave-toast-in { animation: cave-toast-in 0.18s ease-out; }
 @media (prefers-reduced-motion: reduce) {
   .cave-loadbar > i { animation: none; left: 0; width: 100%; opacity: 0.4; }
 }

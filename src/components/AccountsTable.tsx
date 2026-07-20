@@ -274,6 +274,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     link.download = `account-health-${windowDays}d.csv`;
     link.click();
     URL.revokeObjectURL(url);
+    window.dispatchEvent(new CustomEvent("cave-toast", { detail: { message: `Exported ${rows.length} accounts` } }));
   }
 
   function metricPop(a: AccountRow, key: string): React.ReactNode {

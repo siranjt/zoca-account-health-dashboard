@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import AlfredChat from "@/components/AlfredChat";
 import CommandPalette from "@/components/CommandPalette";
+import Toaster from "@/components/Toaster";
+import ShortcutsHelp from "@/components/ShortcutsHelp";
 
 export const metadata: Metadata = {
   title: "CAVE//OS — Account Health Command Deck",
@@ -27,6 +29,8 @@ export default function RootLayout({
       <body>
         {children}
         <CommandPalette />
+        <ShortcutsHelp />
+        <Toaster />
         <AlfredChat />
       </body>
     </html>

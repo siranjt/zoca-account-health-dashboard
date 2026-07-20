@@ -62,14 +62,69 @@ function Tooltip({ leftPct, title, rows, pinned, onClose }: { leftPct: number; t
 }
 
 export function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <div className="mb-1.5">
+  const [expanded, setExpanded] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  function downloadPng() {
+    const svg = ref.current?.querySelector("svg");
+    if (!svg) return;
+    const vb = (svg as SVGSVGElement).viewBox?.baseVal;
+    const w = (vb?.width || 520) * 2, h = (vb?.height || 200) * 2;
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute("width", String(w));
+    clone.setAttribute("height", String(h));
+    const xml = new XMLSerializer().serializeToString(clone);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.fillStyle = "#0a1216";
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob((b) => {
+        if (!b) return;
+        const url = URL.createObjectURL(b);
+        const a = document.createElement("a");
+        a.href = url; a.download = `${title.replace(/\W+/g, "_")}.png`; a.click();
+        URL.revokeObjectURL(url);
+      });
+    };
+    img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(xml)));
+  }
+
+  const header = (
+    <div className="mb-1.5 flex items-start justify-between gap-2">
+      <div>
         <div className="text-sm font-semibold text-slate-800">{title}</div>
         {subtitle && <div className="text-xs text-slate-400">{subtitle}</div>}
       </div>
-      {children}
+      <div className="flex shrink-0 gap-1.5 text-slate-400">
+        <button onClick={downloadPng} title="Download PNG" className="hover:text-cyan-400">⭳</button>
+        <button onClick={() => setExpanded(true)} title="Expand" className="hover:text-cyan-400">⤢</button>
+      </div>
     </div>
+  );
+
+  return (
+    <>
+      <div ref={ref} className="rounded-lg border border-slate-200 bg-white p-3">
+        {header}
+        {children}
+      </div>
+      {expanded && (
+        <div className="fixed inset-0 z-[2147483500] flex items-center justify-center p-6" style={{ background: "rgba(2,6,8,.72)" }} onClick={() => setExpanded(false)}>
+          <div className="w-full max-w-[1100px] rounded-xl border p-5" style={{ borderColor: "var(--cave-line2)", background: "var(--cave-panel)" }} onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-base font-semibold text-slate-800">{title}</div>
+              <button onClick={() => setExpanded(false)} className="text-slate-400 hover:text-slate-200">✕</button>
+            </div>
+            {children}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

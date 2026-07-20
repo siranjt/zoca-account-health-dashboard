@@ -683,57 +683,25 @@ function InvoiceTable({ invoices }: { invoices: PaymentInvoice[] }) {
       [...invoices].sort((a, b) => {
         const da = a.date ? new Date(a.date).getTime() : 0;
         const db = b.date ? new Date(b.date).getTime() : 0;
-        return db - da; // newest first
+        return db - da; // newest first (default order)
       }),
     [invoices]
   );
-  if (!rows.length) return <NoData />;
   return (
-    <div className="table-scroll -mx-1 max-h-[420px] overflow-auto">
-      <table className="w-full border-collapse text-xs">
-        <thead className="sticky top-0 bg-slate-50 text-left uppercase tracking-wide text-slate-400">
-          <tr>
-            <th className="px-2 py-1.5 font-semibold">Date</th>
-            <th className="px-2 py-1.5 font-semibold">Due</th>
-            <th className="px-2 py-1.5 font-semibold">Paid on</th>
-            <th className="px-2 py-1.5 text-right font-semibold">Total</th>
-            <th className="px-2 py-1.5 text-right font-semibold">Paid</th>
-            <th className="px-2 py-1.5 text-right font-semibold">Due amt</th>
-            <th className="px-2 py-1.5 text-right font-semibold">Late</th>
-            <th className="px-2 py-1.5 font-semibold">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((inv, i) => {
-            const late = inv.days_late != null && inv.days_late > 0;
-            return (
-              <tr key={i} className="border-t border-slate-100">
-                <td className="px-2 py-1.5 tabular-nums text-slate-700">{ddmmyy(inv.date)}</td>
-                <td className="px-2 py-1.5 tabular-nums text-slate-500">{ddmmyy(inv.due_date)}</td>
-                <td className="px-2 py-1.5 tabular-nums text-slate-500">{ddmmyy(inv.paid_at)}</td>
-                <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">${formatNumber(Math.round(inv.total_usd))}</td>
-                <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">${formatNumber(Math.round(inv.amount_paid_usd))}</td>
-                <td className={`px-2 py-1.5 text-right tabular-nums ${inv.amount_due_usd > 0 ? "font-semibold text-red-600" : "text-slate-400"}`}>
-                  {inv.amount_due_usd > 0 ? `$${formatNumber(Math.round(inv.amount_due_usd))}` : "—"}
-                </td>
-                <td className={`px-2 py-1.5 text-right tabular-nums ${late ? "font-semibold text-amber-600" : "text-slate-400"}`}>
-                  {late ? `${inv.days_late}d` : inv.paid ? "on time" : "—"}
-                </td>
-                <td className="px-2 py-1.5">
-                  <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                      inv.paid ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                    }`}
-                  >
-                    {inv.status || (inv.paid ? "paid" : "unpaid")}
-                  </span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      name="invoices"
+      rows={rows as unknown as Record<string, unknown>[]}
+      cols={[
+        { key: "date", label: "Date", date: true },
+        { key: "due_date", label: "Due", date: true },
+        { key: "paid_at", label: "Paid on", date: true },
+        { key: "total_usd", label: "Total", money: true, render: (v) => `$${formatNumber(Math.round(Number(v)))}` },
+        { key: "amount_paid_usd", label: "Paid", money: true, render: (v) => `$${formatNumber(Math.round(Number(v)))}` },
+        { key: "amount_due_usd", label: "Due amt", num: true, render: (v) => (Number(v) > 0 ? <span className="font-semibold text-red-600">${formatNumber(Math.round(Number(v)))}</span> : "—") },
+        { key: "days_late", label: "Late", num: true, render: (v, row) => (v != null && Number(v) > 0 ? <span className="font-semibold text-amber-600">{Number(v)}d</span> : row.paid ? "on time" : "—") },
+        { key: "status", label: "Status", render: (v, row) => <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${row.paid ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>{v ? String(v) : row.paid ? "paid" : "unpaid"}</span> },
+      ]}
+    />
   );
 }
 
@@ -752,7 +720,15 @@ function ReviewsList({ reviews }: { reviews: NonNullable<AccountDetail["reviewsL
   if (!reviews.length) return <NoData />;
   return (
     <div className="table-scroll max-h-[540px] space-y-2 overflow-auto pr-1">
-      <div className="pb-1 text-xs text-slate-400">{reviews.length} review{reviews.length === 1 ? "" : "s"}</div>
+      <div className="flex items-center justify-between pb-1 text-xs text-slate-400">
+        <span>{reviews.length} review{reviews.length === 1 ? "" : "s"}</span>
+        <button
+          onClick={() => downloadCsv("reviews.csv", [["date", "reviewer", "rating", "platform", "text"], ...reviews.map((r) => [r.date ?? "", r.reviewer ?? "", String(r.rating ?? ""), r.platform ?? "", r.text ?? ""])])}
+          className="rounded border border-slate-300 px-2 py-0.5 text-[11px] font-medium hover:bg-slate-100"
+        >
+          ⭳ CSV
+        </button>
+      </div>
       {reviews.map((r, i) => (
         <div key={i} className="rounded-lg border border-slate-100 bg-white p-3">
           <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -775,76 +751,38 @@ function ReviewsList({ reviews }: { reviews: NonNullable<AccountDetail["reviewsL
 }
 
 function LeadsTable({ leads }: { leads: NonNullable<AccountDetail["leadsList"]> }) {
-  if (!leads.length) return <NoData />;
   return (
-    <div className="table-scroll -mx-1 max-h-[540px] overflow-auto">
-      <div className="px-1 pb-1 text-xs text-slate-400">{leads.length} lead{leads.length === 1 ? "" : "s"}</div>
-      <table className="w-full border-collapse text-xs">
-        <thead className="sticky top-0 bg-slate-50 text-left uppercase tracking-wide text-slate-400">
-          <tr>
-            <th className="px-2 py-1.5 font-semibold">Date</th>
-            <th className="px-2 py-1.5 font-semibold">Source</th>
-            <th className="px-2 py-1.5 font-semibold">Service</th>
-            <th className="px-2 py-1.5 font-semibold">Status</th>
-            <th className="px-2 py-1.5 text-right font-semibold">Price</th>
-            <th className="px-2 py-1.5 font-semibold">UTM</th>
-          </tr>
-        </thead>
-        <tbody>
-          {leads.map((l, i) => (
-            <tr key={i} className="border-t border-slate-100">
-              <td className="px-2 py-1.5 tabular-nums text-slate-700">{ddmmyy(l.date)}</td>
-              <td className="px-2 py-1.5 text-slate-600">{l.source || "—"}</td>
-              <td className="px-2 py-1.5 text-slate-600">{l.service || "—"}</td>
-              <td className="px-2 py-1.5">
-                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{l.status || "—"}</span>
-              </td>
-              <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">
-                {l.price != null ? `${!l.currency || l.currency === "USD" ? "$" : ""}${formatNumber(l.price)}` : "—"}
-              </td>
-              <td className="px-2 py-1.5 text-slate-500">{l.utm || "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      name="leads"
+      rows={leads as unknown as Record<string, unknown>[]}
+      cols={[
+        { key: "date", label: "Date", date: true },
+        { key: "source", label: "Source" },
+        { key: "service", label: "Service", wide: true },
+        { key: "status", label: "Status", render: (v) => <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{v ? String(v) : "—"}</span> },
+        { key: "price", label: "Price", num: true, render: (v, row) => (v != null ? `${!row.currency || row.currency === "USD" ? "$" : ""}${formatNumber(Number(v))}` : "—") },
+        { key: "utm", label: "UTM" },
+      ]}
+    />
   );
 }
 
 function KeywordTable({ rows }: { rows: NonNullable<AccountDetail["keywordRankings"]> }) {
-  if (!rows.length) return <NoData />;
   return (
-    <div className="table-scroll -mx-1 max-h-[540px] overflow-auto">
-      <div className="px-1 pb-1 text-xs text-slate-400">{rows.length} keyword{rows.length === 1 ? "" : "s"}</div>
-      <table className="w-full border-collapse text-xs">
-        <thead className="sticky top-0 bg-slate-50 text-left uppercase tracking-wide text-slate-400">
-          <tr>
-            <th className="px-2 py-1.5 font-semibold">Keyword</th>
-            <th className="px-2 py-1.5 text-right font-semibold">Avg rank</th>
-            <th className="px-2 py-1.5 text-right font-semibold">Best rank</th>
-            <th className="px-2 py-1.5 text-right font-semibold">Search vol</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((k, i) => (
-            <tr key={i} className="border-t border-slate-100">
-              <td className="px-2 py-1.5 text-slate-700">
-                <a href={`https://www.google.com/search?q=${encodeURIComponent(k.keyword)}`} target="_blank" rel="noopener noreferrer" className="text-slate-700 no-underline hover:text-indigo-600" title="See this keyword's SERP">
-                  {k.keyword} ↗
-                </a>
-              </td>
-              <td className={`px-2 py-1.5 text-right tabular-nums ${k.avgRank <= 3 ? "font-semibold text-emerald-600" : "text-slate-700"}`}>#{k.avgRank}</td>
-              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">#{k.minRank}</td>
-              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{k.searchVolume != null ? formatNumber(k.searchVolume) : "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      name="keywords"
+      rows={rows as unknown as Record<string, unknown>[]}
+      cols={[
+        { key: "keyword", label: "Keyword", wide: true, render: (v) => <a href={`https://www.google.com/search?q=${encodeURIComponent(String(v))}`} target="_blank" rel="noopener noreferrer" className="text-slate-700 no-underline hover:text-indigo-600" title="See this keyword's SERP">{String(v)} ↗</a> },
+        { key: "avgRank", label: "Avg rank", num: true, render: (v) => <span className={Number(v) <= 3 ? "font-semibold text-emerald-600" : ""}>#{formatNumber(Number(v))}</span> },
+        { key: "minRank", label: "Best rank", num: true, render: (v) => `#${formatNumber(Number(v))}` },
+        { key: "searchVolume", label: "Search vol", num: true },
+      ]}
+    />
   );
 }
 
-type Col = { key: string; label: string; num?: boolean; money?: boolean; date?: boolean; wide?: boolean };
+type Col = { key: string; label: string; num?: boolean; money?: boolean; date?: boolean; wide?: boolean; render?: (v: unknown, row: Record<string, unknown>) => React.ReactNode };
 
 function csvEsc(v: unknown): string {
   const s = v == null ? "" : String(v);
@@ -858,6 +796,7 @@ function downloadCsv(name: string, rows: string[][]) {
   a.download = name;
   a.click();
   URL.revokeObjectURL(url);
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("cave-toast", { detail: { message: `Exported ${name}` } }));
 }
 
 function DataTable({ cols, rows, name = "data" }: { cols: Col[]; rows: Record<string, unknown>[]; name?: string }) {
@@ -937,7 +876,7 @@ function DataTable({ cols, rows, name = "data" }: { cols: Col[]; rows: Record<st
                     key={c.key}
                     className={`px-2 py-1.5 ${c.num || c.money ? "text-right tabular-nums text-slate-700" : "text-slate-600"} ${c.wide ? "max-w-[360px]" : "max-w-[200px]"}`}
                   >
-                    {fmt(r[c.key], c)}
+                    {c.render ? c.render(r[c.key], r) : fmt(r[c.key], c)}
                   </td>
                 ))}
               </tr>
