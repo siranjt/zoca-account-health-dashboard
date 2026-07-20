@@ -29,9 +29,9 @@ const WINDOWS = [7, 30, 90, 180];
 // "All Data" runs every one of the 76 Retool queries live, with viewable SQL.
 const TABS = [
   "Profile & GBP",
-  "Reviews",
   "Funnel & Leads",
   "Rankings",
+  "Reviews",
   "Payments",
   "Scheduling & Support",
   "All Data (76)",
@@ -181,6 +181,20 @@ export default function AccountDossier({
           </button>
         ))}
       </div>
+
+      {/* loading / error status line */}
+      {!detail && !error ? (
+        <div className="mb-3 flex items-center gap-2">
+          <div className="cave-loadbar h-[3px] flex-1 rounded-full" style={{ background: "var(--cave-line)" }}>
+            <i style={{ background: "linear-gradient(90deg, transparent, var(--cave-cy), transparent)" }} />
+          </div>
+          <span className="text-[11px] tabular-nums" style={{ color: "var(--cave-dim)" }}>loading account data…</span>
+        </div>
+      ) : error ? (
+        <div className="mb-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs text-red-400">
+          Couldn&apos;t load this account&apos;s data. Try another window or reload.
+        </div>
+      ) : null}
 
       {/* ── section content ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -346,14 +360,6 @@ export default function AccountDossier({
 
         {tab === "Rankings" && (
           <>
-            <ChartCard title="Keyword Rankings" subtitle="best-ranking keywords (local SEO)">
-              {detail ? <KeywordRankingsChart data={detail.keywordRankings?.slice(0, 12)} /> : skel}
-            </ChartCard>
-
-            <ChartCard title="Rank Trend" subtitle="avg current rank per extraction">
-              {detail ? <RankTrendChart data={detail.rankTrend} /> : skel}
-            </ChartCard>
-
             <ChartCard title="Metric Ratios" subtitle="keyword coverage & ranking mix">
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <Stat label="Total Keywords" value={account.keywordsTracked ?? "—"} />
@@ -361,6 +367,14 @@ export default function AccountDossier({
                 <Stat label="Avg. Rank" value={account.avgCurrentRank != null ? `#${account.avgCurrentRank}` : "—"} />
                 <Stat label="KW Impressions" value={formatNumber(account.keywordImpressions)} />
               </div>
+            </ChartCard>
+
+            <ChartCard title="Keyword Rankings" subtitle="best-ranking keywords (local SEO)">
+              {detail ? <KeywordRankingsChart data={detail.keywordRankings?.slice(0, 12)} /> : skel}
+            </ChartCard>
+
+            <ChartCard title="Rank Trend" subtitle="avg current rank per extraction">
+              {detail ? <RankTrendChart data={detail.rankTrend} /> : skel}
             </ChartCard>
 
             <div className="md:col-span-2 xl:col-span-3">
@@ -457,6 +471,36 @@ export default function AccountDossier({
               ) : skel}
             </ChartCard>
 
+            <ChartCard title="Bookings by creator" subtitle="who created the booking (scheduling.booking_items)">
+              {detail ? (detail.bookingsByCreator?.length ? (
+                <div className="space-y-1 py-1 text-xs">
+                  {detail.bookingsByCreator.map((b) => (
+                    <Row key={b.creatorType ?? "—"} l={b.creatorType ?? "—"} v={formatNumber(b.count)} />
+                  ))}
+                </div>
+              ) : <NoData />) : skel}
+            </ChartCard>
+
+            <ChartCard title="WoW Tasks (weekly)" subtitle="follow-up task volume & completion (l2b.call_callbacks)">
+              {detail ? (detail.wowTasks?.length ? (
+                <MultiLineChart xLabels={detail.wowTasks.map((t) => t.wk)} series={[
+                  { name: "Total", color: VIZ.series[0], values: detail.wowTasks.map((t) => t.total) },
+                  { name: "Completed", color: VIZ.series[3], values: detail.wowTasks.map((t) => t.completed) },
+                  { name: "Pending", color: VIZ.series[1], values: detail.wowTasks.map((t) => t.pending) },
+                ]} />
+              ) : <NoData />) : skel}
+            </ChartCard>
+
+            <ChartCard title="Callback Actions" subtitle="actions taken on AI callbacks (l2b.call_callbacks)">
+              {detail ? (detail.callbackActions?.length ? (
+                <div className="space-y-1 py-1 text-xs">
+                  {detail.callbackActions.map((c) => (
+                    <Row key={c.action ?? "—"} l={c.action ?? "—"} v={formatNumber(c.count)} />
+                  ))}
+                </div>
+              ) : <NoData />) : skel}
+            </ChartCard>
+
             <ChartCard title="Total Calls / Comms" subtitle="weekly SMS · calls, last 3 months">
               {detail ? (detail.comms?.length ? (
                 <MultiLineChart xLabels={detail.comms.map((c) => c.wk)} series={[
@@ -474,36 +518,6 @@ export default function AccountDossier({
                   { name: "Reviews", color: VIZ.series[2], values: detail.appUsage.map((w) => w.reviews) },
                   { name: "Photos", color: VIZ.series[3], values: detail.appUsage.map((w) => w.photos) },
                 ]} />
-              ) : <NoData />) : skel}
-            </ChartCard>
-
-            <ChartCard title="WoW Tasks (weekly)" subtitle="follow-up task volume & completion (l2b.call_callbacks)">
-              {detail ? (detail.wowTasks?.length ? (
-                <MultiLineChart xLabels={detail.wowTasks.map((t) => t.wk)} series={[
-                  { name: "Total", color: VIZ.series[0], values: detail.wowTasks.map((t) => t.total) },
-                  { name: "Completed", color: VIZ.series[3], values: detail.wowTasks.map((t) => t.completed) },
-                  { name: "Pending", color: VIZ.series[1], values: detail.wowTasks.map((t) => t.pending) },
-                ]} />
-              ) : <NoData />) : skel}
-            </ChartCard>
-
-            <ChartCard title="Bookings by creator" subtitle="who created the booking (scheduling.booking_items)">
-              {detail ? (detail.bookingsByCreator?.length ? (
-                <div className="space-y-1 py-1 text-xs">
-                  {detail.bookingsByCreator.map((b) => (
-                    <Row key={b.creatorType ?? "—"} l={b.creatorType ?? "—"} v={formatNumber(b.count)} />
-                  ))}
-                </div>
-              ) : <NoData />) : skel}
-            </ChartCard>
-
-            <ChartCard title="Callback Actions" subtitle="actions taken on AI callbacks (l2b.call_callbacks)">
-              {detail ? (detail.callbackActions?.length ? (
-                <div className="space-y-1 py-1 text-xs">
-                  {detail.callbackActions.map((c) => (
-                    <Row key={c.action ?? "—"} l={c.action ?? "—"} v={formatNumber(c.count)} />
-                  ))}
-                </div>
               ) : <NoData />) : skel}
             </ChartCard>
 
@@ -816,10 +830,20 @@ function LinkRow({ label, href }: { label: string; href: string | null }) {
   );
 }
 
+const SKEL_BARS = [46, 72, 54, 83, 61, 90, 49, 76, 66, 88, 58];
+
 function Skeleton({ error }: { error: boolean }) {
+  if (error) {
+    return <div className="flex h-[150px] items-center justify-center text-sm text-slate-400">Couldn&apos;t load.</div>;
+  }
   return (
-    <div className="flex h-[150px] items-center justify-center text-sm text-slate-400">
-      {error ? "Couldn't load charts." : "Loading charts…"}
+    <div className="h-[150px] animate-pulse py-2" aria-hidden>
+      <div className="mb-3 h-2.5 w-1/3 rounded" style={{ background: "var(--cave-line2)" }} />
+      <div className="flex h-[104px] items-end gap-1.5">
+        {SKEL_BARS.map((b, i) => (
+          <div key={i} className="flex-1 rounded-t" style={{ height: `${b}%`, background: "var(--cave-line)" }} />
+        ))}
+      </div>
     </div>
   );
 }

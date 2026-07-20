@@ -41,6 +41,27 @@ body {
   text-shadow: 0 0 14px rgba(53, 224, 255, 0.4);
 }
 
+/* indeterminate loading bar (per-account detail fetch) */
+.cave-loadbar {
+  position: relative;
+  overflow: hidden;
+}
+.cave-loadbar > i {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 38%;
+  border-radius: inherit;
+  animation: cave-indeterminate 1.15s ease-in-out infinite;
+}
+@keyframes cave-indeterminate {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cave-loadbar > i { animation: none; left: 0; width: 100%; opacity: 0.4; }
+}
+
 /* keep sticky table header crisp over scrolling rows */
 .table-scroll {
   overflow: auto;
