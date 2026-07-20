@@ -490,6 +490,15 @@ export async function POST(req: Request) {
         /* leave reply untouched if the directive is malformed */
       }
     }
+    // Fallback: if the user gave an explicit open/go-to command and the model
+    // forgot to emit the directive, synthesize it from the question so the
+    // navigation still fires (the client resolves the name fuzzily).
+    if (!action) {
+      const nav = q.match(/^\s*(?:open|go ?to|pull up|take me to|show me|navigate to|jump to)\s+(.+?)['".!?]*\s*$/i);
+      if (nav && nav[1] && nav[1].length >= 3 && !/\b(accounts?|book|risk|overview|list|all|my)\b/i.test(nav[1])) {
+        action = { type: "open", name: nav[1].replace(/^the\s+/i, "").replace(/'s\b.*$/, "").replace(/["']/g, "").trim() };
+      }
+    }
     const ms = Date.now() - t0;
     logTrace({ status, q: q.slice(0, 120), tools: toolsUsed, iters, ms, tok_in: tokIn, tok_out: tokOut, tok_cache_read: tokCache, model: MODEL, reply_len: reply.length });
     // Durable memory — log the interaction (swallows its own errors; awaited so

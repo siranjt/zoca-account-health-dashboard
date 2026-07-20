@@ -124,15 +124,29 @@ export default function AlfredChat() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  function resolveAccount(name: string): Idx | undefined {
+    const nlc = name.toLowerCase().trim();
+    if (!nlc) return undefined;
+    const toks = nlc.split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+    return (
+      index.find((a) => a.name.toLowerCase() === nlc) ||
+      index.find((a) => a.name.toLowerCase().includes(nlc)) ||
+      index.find((a) => nlc.includes(a.name.toLowerCase())) ||
+      (toks.length ? index.find((a) => { const an = a.name.toLowerCase(); return toks.every((t) => an.includes(t)); }) : undefined) ||
+      (toks.length >= 2 ? index.find((a) => { const an = a.name.toLowerCase(); return toks.filter((t) => an.includes(t)).length >= Math.ceil(toks.length * 0.6); }) : undefined)
+    );
+  }
+
   function runAction(action: any) {
     if (!action || typeof action !== "object") return;
     if (action.type === "open" && action.name) {
-      const nlc = String(action.name).toLowerCase();
-      const hit = index.find((a) => a.name.toLowerCase() === nlc) || index.find((a) => a.name.toLowerCase().includes(nlc));
+      const hit = resolveAccount(String(action.name));
       if (hit) {
         window.dispatchEvent(new CustomEvent("cave-toast", { detail: { message: `Opening ${hit.name}` } }));
         setOpen(false);
         router.push(`/account/${hit.id}`);
+      } else {
+        window.dispatchEvent(new CustomEvent("cave-toast", { detail: { message: `Couldn't find an account named "${action.name}"` } }));
       }
     } else if (action.type === "overview") {
       const qs = new URLSearchParams();
