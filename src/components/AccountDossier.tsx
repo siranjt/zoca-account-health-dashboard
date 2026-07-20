@@ -21,6 +21,7 @@ import {
 } from "./Charts";
 import { formatNumber, formatDuration, formatTenure } from "@/lib/format";
 import RetoolAllData from "./RetoolAllData";
+import CommunicationTab from "./CommunicationTab";
 
 const WINDOWS = [7, 30, 90, 180];
 
@@ -30,6 +31,7 @@ const WINDOWS = [7, 30, 90, 180];
 const TABS = [
   "Profile & GBP",
   "Funnel & Leads",
+  "Communication",
   "Rankings",
   "Reviews",
   "Payments",
@@ -555,6 +557,12 @@ export default function AccountDossier({
               </ChartCard>
             </div>
           </>
+        )}
+
+        {tab === "Communication" && (
+          <div className="md:col-span-2 xl:col-span-3">
+            <CommunicationTab entityId={account.entityId} windowDays={windowDays} />
+          </div>
         )}
 
         {tab === "All Data (76)" && (
