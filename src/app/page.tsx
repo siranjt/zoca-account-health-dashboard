@@ -1,23 +1,64 @@
-import Link from "next/link";
 import { getAccountsPayload } from "@/lib/data";
 import CaveNav from "@/components/CaveNav";
+import LandingDeck from "@/components/LandingDeck";
 
-// Landing / home. Placeholder for now — to be designed later. Shows a live
-// teaser from the book and routes into the Overview deck.
+// Landing / home — the cover screen the team passes through daily. A cinematic
+// hero (dual-persona, Batman ⇄ Bruce Wayne) over a live launchpad: book
+// snapshot, quick-launch tiles, an at-risk board, and an Ask-Alfred prompt with
+// data-aware suggestions. All figures are computed live from the book here and
+// handed to the client deck as plain props.
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+export type LandingStats = { total: number; greens: number; yellows: number; reds: number; avg: number; mrr: number };
+export type RiskItem = { id: string; name: string; city: string | null; state: string | null; am: string | null; score: number | null; reason: string | null };
+
 export default async function Landing() {
-  let total = 0;
-  let greens = 0;
-  let reds = 0;
+  let stats: LandingStats = { total: 0, greens: 0, yellows: 0, reds: 0, avg: 0, mrr: 0 };
+  let atRisk: RiskItem[] = [];
+  let suggestions: string[] = [];
   let source: "mock" | "metabase" = "mock";
+
   try {
     const p = await getAccountsPayload();
-    total = p.accounts.length;
-    greens = p.accounts.filter((a) => a.health.color === "green").length;
-    reds = p.accounts.filter((a) => a.health.color === "red").length;
+    const A = p.accounts;
     source = p.source;
+    const reds = A.filter((a) => a.health.color === "red");
+    const comps = A.map((a) => a.health.composite ?? 0).filter((n) => n > 0);
+    const avg = comps.length ? comps.reduce((s, n) => s + n, 0) / comps.length : 0;
+    const mrr = A.reduce((s, a) => s + (a.mrr ?? 0), 0);
+    stats = {
+      total: A.length,
+      greens: A.filter((a) => a.health.color === "green").length,
+      yellows: A.filter((a) => a.health.color === "yellow").length,
+      reds: reds.length,
+      avg: Math.round(avg * 10) / 10,
+      mrr: Math.round(mrr),
+    };
+    atRisk = [...reds]
+      .sort((a, b) => (a.health.composite ?? 999) - (b.health.composite ?? 999))
+      .slice(0, 6)
+      .map((a) => ({
+        id: a.entityId,
+        name: a.name,
+        city: a.city,
+        state: a.state,
+        am: a.accountManager,
+        score: a.health.composite,
+        reason: a.health.reason,
+      }));
+
+    // AM carrying the most at-risk accounts → a data-aware Alfred suggestion
+    const amCount: Record<string, number> = {};
+    reds.forEach((a) => { if (a.accountManager) amCount[a.accountManager] = (amCount[a.accountManager] ?? 0) + 1; });
+    const topAM = Object.entries(amCount).sort((x, y) => y[1] - x[1])[0]?.[0];
+    const worst = atRisk[0];
+    suggestions = [
+      worst ? `Why is ${worst.name} at risk?` : `Which 3 accounts need attention most?`,
+      `Give me a health summary of the book`,
+      `Which accounts declined the most this month?`,
+      topAM ? `How is ${topAM}'s book doing?` : `Compare the two worst accounts`,
+    ];
   } catch {
     /* keep zeros if the book can't load */
   }
@@ -25,73 +66,7 @@ export default async function Landing() {
   return (
     <>
       <CaveNav />
-      <main className="relative mx-auto flex min-h-[calc(100vh-49px)] max-w-[1100px] flex-col items-center justify-center px-6 py-16 text-center">
-        <div className="cave-brand mb-4 text-xs tracking-[0.4em]" style={{ color: "var(--cave-cy)" }}>
-          ◤◢ CAVE//OS
-        </div>
-        <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl" style={{ color: "var(--cave-txt)" }}>
-          Account Health Command Deck
-        </h1>
-        <p className="mt-4 max-w-xl text-balance text-sm leading-relaxed" style={{ color: "#a7c3c8" }}>
-          One place to read the health of the book — leads, reviews, rankings, GBP metrics,
-          payments and support — with <span style={{ color: "var(--cave-cy)" }}>Alfred</span> on
-          hand to reason across every Zoca database.
-        </p>
-
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <Link
-            href="/overview"
-            className="rounded-lg px-5 py-2.5 text-sm font-semibold no-underline"
-            style={{
-              color: "#03181e",
-              background: "linear-gradient(180deg, var(--cave-cy), #1899b4)",
-              boxShadow: "0 8px 26px rgba(0,0,0,.4), 0 0 18px rgba(53,224,255,.28)",
-            }}
-          >
-            Enter the Overview →
-          </Link>
-          <span className="text-xs" style={{ color: "var(--cave-dim)" }}>
-            Ask Alfred anytime — launcher, bottom-left ↙
-          </span>
-        </div>
-
-        {total > 0 && (
-          <div className="mt-14 flex flex-wrap items-center justify-center gap-3">
-            <Teaser label="Accounts in book" value={total} />
-            <Teaser label="Healthy" value={greens} tone="#16a34a" />
-            <Teaser label="At risk" value={reds} tone="#dc2626" />
-            <span
-              className="rounded-md px-2 py-1 text-[11px] font-medium"
-              style={{
-                color: source === "metabase" ? "#5eead4" : "#fbbf24",
-                background: source === "metabase" ? "rgba(16,185,129,.12)" : "rgba(217,119,6,.14)",
-              }}
-            >
-              {source === "metabase" ? "live · Metabase" : "sample data"}
-            </span>
-          </div>
-        )}
-
-        <div className="mt-16 text-[10px] uppercase tracking-[0.2em]" style={{ color: "var(--cave-dim)" }}>
-          Landing — design pending
-        </div>
-      </main>
+      <LandingDeck stats={stats} atRisk={atRisk} suggestions={suggestions} source={source} />
     </>
-  );
-}
-
-function Teaser({ label, value, tone }: { label: string; value: number; tone?: string }) {
-  return (
-    <div
-      className="min-w-[130px] rounded-lg border px-4 py-3 text-left"
-      style={{ borderColor: "var(--cave-line)", background: "var(--cave-panel)" }}
-    >
-      <div className="text-2xl font-semibold tabular-nums" style={{ color: tone ?? "var(--cave-txt)" }}>
-        {value}
-      </div>
-      <div className="mt-0.5 text-[10px] uppercase tracking-wide" style={{ color: "var(--cave-dim)" }}>
-        {label}
-      </div>
-    </div>
   );
 }

@@ -517,3 +517,26 @@ html.light .cave-nav {
   border-bottom-color: var(--cave-line2) !important;
   box-shadow: inset 0 2px 0 rgba(176,132,43,.4);   /* thin gold letterhead rule */
 }
+
+/* ── Landing deck: CTA, hero rise-in, launch-tile hover ───────────────────── */
+.cave-cta {
+  color: #03181e;
+  background: linear-gradient(180deg, var(--cave-cy), #1899b4);
+  box-shadow: 0 8px 26px rgba(0,0,0,.4), 0 0 18px rgba(53,224,255,.28);
+  transition: transform .15s, box-shadow .15s, filter .15s;
+}
+.cave-cta:hover { transform: translateY(-2px); filter: brightness(1.06); }
+html.light .cave-cta {
+  color: #fffdf9;
+  background: linear-gradient(180deg, #c9a24a, #b0842b);
+  box-shadow: 0 8px 22px rgba(20,27,46,.18), 0 0 16px rgba(176,132,43,.28);
+}
+
+/* staggered rise-in on load — the deck boots into view */
+.landing-rise { opacity: 0; animation: landing-rise .7s cubic-bezier(.2,.7,.2,1) forwards; }
+@keyframes landing-rise { 0% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: none; } }
+
+/* launch tiles lift + accent on hover */
+.cave-tile { transition: transform .16s ease, box-shadow .16s ease; }
+.cave-tile:hover { transform: translateY(-3px); box-shadow: 0 10px 26px rgba(0,0,0,.34); }
+html.light .cave-tile:hover { box-shadow: 0 10px 24px rgba(20,27,46,.12), 0 0 0 1px rgba(176,132,43,.25); }
