@@ -271,35 +271,70 @@ html.calm [aria-label="Critical"] { box-shadow: 0 0 9px #dc2626, 0 0 2px #dc2626
 /* compact/dense table rows */
 .cave-dense td, .cave-dense th { padding-top: 3px !important; padding-bottom: 3px !important; }
 
-/* ── Light theme (html.light) — restores the remapped surfaces to light ───── */
+/* ── BRUCE WAYNE persona (html.light) ──────────────────────────────────────
+   Light mode isn't the dark theme inverted — it's Bruce Wayne's OTHER
+   computer: the Wayne Enterprises executive terminal. Warm parchment ground,
+   champagne-gold accent, deep-navy ink, serif chrome, quiet luxury. Same
+   structure, second personality. Only cosmetics change here. */
 :root.light {
   color-scheme: light;
-  --cave-bg: #f1f5f9;
-  --cave-panel: #ffffff;
-  --cave-panel2: #f8fafc;
-  --cave-line: #e2e8f0;
-  --cave-line2: #cbd5e1;
-  --cave-cy: #0e7490;
-  --cave-txt: #0f172a;
-  --cave-dim: #64748b;
+  --cave-bg: #f4efe6;        /* warm parchment */
+  --cave-panel: #fffdf9;     /* ivory card */
+  --cave-panel2: #faf6ee;    /* recessed warm */
+  --cave-line: #e7dcc7;      /* warm hairline */
+  --cave-line2: #d8c9a9;     /* warm rule */
+  --cave-cy: #b0842b;        /* champagne gold — the Wayne accent */
+  --cave-txt: #1b2136;       /* deep navy ink */
+  --cave-dim: #9b917d;       /* warm muted */
 }
 html.light, html.light body {
-  background: radial-gradient(1200px 600px at 80% -10%, rgba(14, 116, 144, 0.05), transparent), #f1f5f9;
+  background:
+    radial-gradient(1200px 700px at 78% -8%, rgba(176, 132, 43, 0.07), transparent 62%),
+    radial-gradient(900px 600px at 0% 110%, rgba(176, 132, 43, 0.045), transparent 60%),
+    #f4efe6;
   color: var(--cave-txt);
+  /* refined executive sans replaces the mono terminal face */
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-variant-numeric: tabular-nums;   /* keep ledger columns aligned */
 }
-html.light .cave-brand { text-shadow: none; }
-html.light .bg-slate-100 { background-color: #f1f5f9 !important; }
-html.light .bg-slate-200 { background-color: #e2e8f0 !important; }
-html.light .hover\:bg-slate-50:hover, html.light .hover\:bg-slate-100:hover { background-color: #f1f5f9 !important; }
-html.light .bg-indigo-50 { background-color: #eef2ff !important; }
-html.light .hover\:bg-indigo-50:hover { background-color: #eef2ff !important; }
-html.light .bg-indigo-100 { background-color: #e0e7ff !important; }
-html.light .bg-indigo-600 { background-color: #4f46e5 !important; }
-html.light .hover\:bg-indigo-700:hover { background-color: #4338ca !important; }
-html.light .text-slate-700, html.light .text-slate-600 { color: #334155 !important; }
-html.light .text-indigo-600, html.light .text-indigo-700 { color: #4338ca !important; }
-html.light .table-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; }
-html.light .table-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+/* serif wordmark + a warm top rule read as old-money letterhead, not HUD */
+html.light .cave-brand {
+  text-shadow: none;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+}
+html.light .cave-decode { font-family: system-ui, -apple-system, sans-serif; }
+/* executive cards: soft warm lift + a thin gold top rule, no HUD glow */
+html.light .cave-brk {
+  box-shadow: 0 2px 14px rgba(20, 27, 46, 0.07), 0 1px 3px rgba(20, 27, 46, 0.05);
+}
+html.light .cave-brk:hover { box-shadow: 0 8px 22px rgba(20, 27, 46, 0.10); }
+html.light .cave-brk::before, html.light .cave-brk::after { opacity: 0.85; }
+/* quiet the loud ambient cyan overlays for the calm executive read */
+html.light body::after { opacity: 0.14; }
+html.light body::before { opacity: 0.35; }
+html.light .cave-field { opacity: 0.5; }
+html.light .cave-crt { opacity: 0.12; }
+html.light .cave-scancycle { opacity: 0.6; }
+/* boot splash in Wayne livery — parchment + gold, not black */
+html.light .cave-boot { background: #f4efe6; }
+/* brand hover: a gentle brass shimmer, not the RGB glitch */
+html.light .cave-brand:hover { animation: none; text-shadow: 0 0 12px rgba(176, 132, 43, 0.4); }
+/* surface remaps → warm/brass */
+html.light .bg-slate-100 { background-color: #f2ebdd !important; }
+html.light .bg-slate-200 { background-color: #e7dcc7 !important; }
+html.light .hover\:bg-slate-50:hover, html.light .hover\:bg-slate-100:hover { background-color: #f6efe0 !important; }
+html.light .bg-indigo-50 { background-color: rgba(176, 132, 43, 0.09) !important; }
+html.light .hover\:bg-indigo-50:hover { background-color: rgba(176, 132, 43, 0.14) !important; }
+html.light .bg-indigo-100 { background-color: rgba(176, 132, 43, 0.16) !important; }
+html.light .bg-indigo-600 { background-color: #b0842b !important; }
+html.light .hover\:bg-indigo-700:hover { background-color: #8a6416 !important; }
+html.light .text-slate-700, html.light .text-slate-600 { color: #5a6072 !important; }
+html.light .text-indigo-600, html.light .text-indigo-700 { color: #8a6416 !important; }
+html.light .hover\:bg-indigo-50:hover { text-shadow: 0 0 8px rgba(176, 132, 43, 0.3); }
+html.light .table-scroll::-webkit-scrollbar-thumb { background: #d8c9a9; }
+html.light .table-scroll::-webkit-scrollbar-track { background: #f4efe6; }
 /* keep sticky table header crisp over scrolling rows */
 .table-scroll {
   overflow: auto;

@@ -61,6 +61,10 @@ export default function BatFX() {
     window.addEventListener("resize", resize);
     function frame() {
       ctx!.clearRect(0, 0, w, h);
+      // Bruce Wayne persona (html.light): brass data-field; Batman: cyan.
+      const wayne = document.documentElement.classList.contains("light");
+      const dotColor = wayne ? "rgba(176,132,43,0.42)" : "rgba(53,224,255,0.5)";
+      const linkColor = wayne ? "rgba(176,132,43,0.09)" : "rgba(53,224,255,0.08)";
       for (const p of pts) {
         p.x += p.vx; p.y += p.vy;
         if (p.x < 0 || p.x > 1) p.vx *= -1;
@@ -68,11 +72,11 @@ export default function BatFX() {
         const px = p.x * w, py = p.y * h;
         ctx!.beginPath();
         ctx!.arc(px, py, p.r, 0, Math.PI * 2);
-        ctx!.fillStyle = "rgba(53,224,255,0.5)";
+        ctx!.fillStyle = dotColor;
         ctx!.fill();
       }
       // faint links between near particles
-      ctx!.strokeStyle = "rgba(53,224,255,0.08)";
+      ctx!.strokeStyle = linkColor;
       ctx!.lineWidth = 0.5;
       for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
         const dx = (pts[i].x - pts[j].x) * w, dy = (pts[i].y - pts[j].y) * h;
