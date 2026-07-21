@@ -14,6 +14,7 @@ export default function BatFX() {
   const vRef = useRef<HTMLDivElement>(null);
   const retRef = useRef<HTMLDivElement>(null);
   const coordRef = useRef<HTMLDivElement>(null);
+  const luxRef = useRef<HTMLDivElement>(null); // Wayne warm-spotlight (light mode)
 
   // targeting scope + click ripple
   useEffect(() => {
@@ -24,6 +25,7 @@ export default function BatFX() {
       if (hRef.current) hRef.current.style.top = e.clientY + "px";
       if (vRef.current) vRef.current.style.left = e.clientX + "px";
       if (retRef.current) { retRef.current.style.left = e.clientX + "px"; retRef.current.style.top = e.clientY + "px"; }
+      if (luxRef.current) { luxRef.current.style.left = e.clientX + "px"; luxRef.current.style.top = e.clientY + "px"; }
       if (coordRef.current) {
         coordRef.current.style.left = e.clientX + 16 + "px";
         coordRef.current.style.top = e.clientY + 14 + "px";
@@ -196,6 +198,7 @@ export default function BatFX() {
   return (
     <>
       <canvas ref={canvasRef} className="cave-field" aria-hidden="true" />
+      <div ref={luxRef} className="cave-luxspot" aria-hidden="true" />
       <div className="cave-crt" aria-hidden="true" />
       <div className="cave-scancycle" aria-hidden="true" />
       <div ref={scopeRef} className="cave-scope" aria-hidden="true">
@@ -208,6 +211,19 @@ export default function BatFX() {
         <span className="track">
           {[...TICK, ...TICK].map((s, i) => (
             <span key={i}>{s}&nbsp;&nbsp;·&nbsp;&nbsp;</span>
+          ))}
+        </span>
+      </div>
+      {/* Bruce Wayne market tape — shown only in light mode (see globals.css) */}
+      <div className="cave-ticker cave-ticker-wayne" aria-hidden="true">
+        <span className="track">
+          {[0, 1].map((k) => (
+            <span key={k}>
+              <b>WAYNE ENTERPRISES</b>&nbsp;&nbsp;·&nbsp;&nbsp;NYSE: WYE&nbsp;
+              <span className="up">▲ 312.40 (+1.8%)</span>&nbsp;&nbsp;·&nbsp;&nbsp;APPLIED SCIENCES DIVISION&nbsp;&nbsp;·&nbsp;&nbsp;
+              PORTFOLIO SYNCED&nbsp;&nbsp;·&nbsp;&nbsp;826 CLIENTS UNDER MANAGEMENT&nbsp;&nbsp;·&nbsp;&nbsp;
+              <span className="dn">GOTHAM IDX ▼ 0.4%</span>&nbsp;&nbsp;·&nbsp;&nbsp;PRIVATE &amp; CONFIDENTIAL&nbsp;&nbsp;·&nbsp;&nbsp;MARKETS OPEN&nbsp;&nbsp;·&nbsp;&nbsp;
+            </span>
           ))}
         </span>
       </div>

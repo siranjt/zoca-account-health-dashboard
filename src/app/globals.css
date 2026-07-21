@@ -309,14 +309,7 @@ html.light .cave-decode { font-family: system-ui, -apple-system, sans-serif; }
 html.light .cave-brk {
   box-shadow: 0 2px 14px rgba(20, 27, 46, 0.07), 0 1px 3px rgba(20, 27, 46, 0.05);
 }
-html.light .cave-brk:hover { box-shadow: 0 8px 22px rgba(20, 27, 46, 0.10); }
-html.light .cave-brk::before, html.light .cave-brk::after { opacity: 0.85; }
-/* quiet the loud ambient cyan overlays for the calm executive read */
-html.light body::after { opacity: 0.14; }
-html.light body::before { opacity: 0.35; }
-html.light .cave-field { opacity: 0.5; }
-html.light .cave-crt { opacity: 0.12; }
-html.light .cave-scancycle { opacity: 0.6; }
+html.light .cave-brk:hover { box-shadow: 0 8px 22px rgba(20, 27, 46, 0.12); }
 /* boot splash in Wayne livery — parchment + gold, not black */
 html.light .cave-boot { background: #f4efe6; }
 /* brand hover: a gentle brass shimmer, not the RGB glitch */
@@ -383,3 +376,94 @@ html.light .table-scroll::-webkit-scrollbar-track { background: #f4efe6; }
   border-radius: 8px;
 }
 .table-scroll::-webkit-scrollbar-track { background: var(--cave-panel); }
+
+/* ══ BRUCE WAYNE MOTION LAYER (html.light) ═══════════════════════════════════
+   Wayne's terminal is as alive as the Batcave — but the vocabulary is quiet
+   luxury, not tactical HUD: gilded light gliding over marble, a warm desk-lamp
+   pool that follows the hand, brass glints on the cards, a Wayne Enterprises
+   market tape. Same motion budget as Batman, different personality. All of it
+   is decorative/additive — no structure changes. The html.calm toggle still
+   quiets both personas. */
+
+/* the HUD crosshair belongs to Batman; Wayne gets a warm spotlight instead */
+html.light .cave-scope { display: none; }
+.cave-luxspot {
+  position: fixed; left: 50%; top: 40%; width: 520px; height: 520px;
+  margin: -260px 0 0 -260px; border-radius: 50%; pointer-events: none;
+  z-index: 0; opacity: 0; transition: opacity .45s ease;
+  background: radial-gradient(circle, rgba(184,146,63,.16), rgba(184,146,63,.05) 42%, transparent 70%);
+}
+html.light .cave-luxspot { opacity: 1; }
+
+/* gilded light gliding down marble — the Wayne answer to the scanline sweep */
+html.light body::after {
+  opacity: .8;
+  background: linear-gradient(rgba(176,132,43,0), rgba(176,132,43,.085) 50%, rgba(176,132,43,0));
+}
+html.light body::before { background: rgba(176,132,43,.12); opacity: .5; }
+html.light .cave-scancycle {
+  opacity: 1;
+  background: linear-gradient(rgba(176,132,43,0), rgba(176,132,43,.12), rgba(176,132,43,0));
+}
+html.light .cave-crt { opacity: .1; }
+html.light .cave-field { opacity: .55; }
+
+/* refresh overlay reworded + gilded */
+html.light .cave-scanning::before {
+  background: linear-gradient(rgba(176,132,43,0), rgba(176,132,43,.16), rgba(176,132,43,0));
+}
+html.light .cave-scanning::after { content: "SYNCING LEDGER…"; text-shadow: 0 0 8px rgba(176,132,43,.5); }
+
+/* emblem breathes in brass */
+html.light .cave-emblem { animation: wayne-emblem 3.4s ease-in-out infinite; }
+@keyframes wayne-emblem {
+  0%,100% { filter: drop-shadow(0 0 6px rgba(176,132,43,.4)); }
+  50%     { filter: drop-shadow(0 0 13px rgba(176,132,43,.75)); }
+}
+
+/* cards catch the light — a slow brass glint round the edge, plus the lift */
+html.light .cave-brk { animation: wayne-cardsheen 6.5s ease-in-out infinite; }
+@keyframes wayne-cardsheen {
+  0%,100% { box-shadow: 0 2px 14px rgba(20,27,46,.07), 0 1px 3px rgba(20,27,46,.05); }
+  50%     { box-shadow: 0 3px 17px rgba(20,27,46,.08), 0 0 0 1px rgba(176,132,43,.14), 0 1px 3px rgba(20,27,46,.05); }
+}
+html.light .cave-brk:hover { animation: none; box-shadow: 0 9px 24px rgba(20,27,46,.13), 0 0 0 1px rgba(176,132,43,.25); }
+
+/* KPI value change flashes gold, not cyan */
+html.light .cave-flash { animation: wayne-flash .75s ease-out; }
+@keyframes wayne-flash {
+  0%   { color: #b0842b; text-shadow: 0 0 14px rgba(176,132,43,.9); }
+  100% { text-shadow: 0 0 0 rgba(176,132,43,0); }
+}
+
+/* gold click-ripple + a warm second ring like a dropped coin */
+html.light .cave-ripple { box-shadow: 0 0 10px rgba(176,132,43,.5); }
+
+/* target-list rows: a gilded left rule that grows + warm wash on hover */
+html.light .cave-row-red > td:first-child::before   { background: #9e2b25; box-shadow: none; }
+html.light .cave-row-yellow > td:first-child::before { background: #b7791f; box-shadow: none; }
+html.light .cave-row-green > td:first-child::before  { background: #2f6b4f; box-shadow: none; }
+html.light .cave-row:hover { background: linear-gradient(90deg, rgba(176,132,43,.10), rgba(176,132,43,.02)) !important; }
+html.light .cave-row:hover > td:first-child::before { box-shadow: 0 0 10px rgba(176,132,43,.4); }
+
+/* KPI numbers warm up on hover */
+html.light .cave-kpis .tabular-nums:hover { text-shadow: 0 0 9px rgba(176,132,43,.35); transition: text-shadow .2s; }
+
+/* bat-signal easter egg, cast in gold (Shift+B still works in the penthouse) */
+html.light .cave-signal::before { background: radial-gradient(circle, rgba(176,132,43,.30), transparent 62%); }
+
+/* ── Wayne Enterprises market tape (replaces the bat telemetry ticker) ────── */
+.cave-ticker-wayne { display: none; }
+html.light .cave-ticker { display: none; }
+html.light .cave-ticker-wayne {
+  display: block;
+  background: linear-gradient(180deg, transparent, rgba(244,239,230,.96));
+  border-top: 1px solid var(--cave-line2);
+}
+html.light .cave-ticker-wayne .track {
+  font-family: Georgia, "Times New Roman", serif;
+  color: #7a6a4a; text-transform: none; letter-spacing: .1em;
+}
+html.light .cave-ticker-wayne b { color: #b0842b; font-weight: 600; }
+html.light .cave-ticker-wayne .up { color: #2f6b4f; }
+html.light .cave-ticker-wayne .dn { color: #9e2b25; }
