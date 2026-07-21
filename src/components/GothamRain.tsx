@@ -15,12 +15,12 @@ export default function GothamRain() {
     const ctx = cv.getContext("2d");
     if (!ctx) return;
     let raf = 0, w = 0, h = 0;
-    const N = 130;
+    const N = 220;
     type Drop = { x: number; y: number; len: number; vy: number; a: number };
     let drops: Drop[] = [];
     const rand = (a: number, b: number) => a + Math.random() * (b - a);
     function seed() {
-      drops = Array.from({ length: N }, () => ({ x: Math.random() * w, y: Math.random() * h, len: rand(9, 22), vy: rand(7, 14), a: rand(0.06, 0.22) }));
+      drops = Array.from({ length: N }, () => ({ x: Math.random() * w, y: Math.random() * h, len: rand(12, 30), vy: rand(9, 17), a: rand(0.18, 0.5) }));
     }
     function resize() { w = cv!.width = window.innerWidth; h = cv!.height = window.innerHeight; seed(); }
     resize();
@@ -34,8 +34,8 @@ export default function GothamRain() {
         d.x += slant;
         if (d.y - d.len > h) { d.y = rand(-40, -4); d.x = Math.random() * w; }
         if (d.x > w) d.x = -4;
-        ctx!.strokeStyle = `rgba(150,205,255,${d.a})`;
-        ctx!.lineWidth = 1;
+        ctx!.strokeStyle = `rgba(200,225,255,${d.a})`;
+        ctx!.lineWidth = 1.3;
         ctx!.beginPath();
         ctx!.moveTo(d.x, d.y);
         ctx!.lineTo(d.x - slant * (d.len / d.vy) * 3, d.y - d.len);

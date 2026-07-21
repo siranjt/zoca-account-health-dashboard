@@ -556,7 +556,7 @@ html.light .cave-tile:hover { box-shadow: 0 10px 24px rgba(20,27,46,.12), 0 0 0 
 html.light .geo-scan { background: linear-gradient(90deg, transparent, rgba(176,132,43,.14), transparent); }
 
 /* ══ GOTHAM RAIN (Batman-side ambient storm) ═════════════════════════════ */
-.gotham-rain { position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .55; }
+.gotham-rain { position: fixed; inset: 0; pointer-events: none; z-index: 12; opacity: .85; mix-blend-mode: screen; }
 html.light .gotham-rain,
 html.calm .gotham-rain { display: none; }            /* clear skies in the penthouse / calm mode */
 /* distant lightning flash */
@@ -575,29 +575,54 @@ html.calm .gotham-lightning { display: none; }
 /* ══ DETECTIVE MODE (Arkham-style vision lens) ═══════════════════════════ */
 .detective-tint { position: fixed; inset: 0; pointer-events: none; z-index: 2147483200; display: none; }
 .detective-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 2147483201; display: none; }
-html.detective .detective-tint { display: block; background: rgba(28,86,170,.30); mix-blend-mode: color; }
+/* the whole deck is "processed": recoloured cold blue + high contrast, with a
+   deep blue wash on top for the vision-mode look */
+html.detective .detective-tint {
+  display: block;
+  background: rgba(20,80,190,.42);
+  mix-blend-mode: color;
+  backdrop-filter: saturate(1.5) contrast(1.28) brightness(.9) hue-rotate(8deg);
+  -webkit-backdrop-filter: saturate(1.5) contrast(1.28) brightness(.9) hue-rotate(8deg);
+}
 html.detective .detective-overlay {
   display: block;
   background:
-    repeating-linear-gradient(0deg, rgba(150,205,255,.05) 0 1px, transparent 1px 3px),
-    radial-gradient(125% 125% at 50% 42%, transparent 52%, rgba(3,16,44,.62));
+    repeating-linear-gradient(0deg, rgba(160,210,255,.06) 0 1px, transparent 1px 3px),
+    radial-gradient(130% 130% at 50% 40%, transparent 44%, rgba(2,12,38,.78));
   animation: detective-scan 5.5s linear infinite;
 }
-@keyframes detective-scan { 0% { background-position: 0 0, 0 0; } 100% { background-position: 0 6px, 0 0; } }
-.detective-hud {
-  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
-  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10px; letter-spacing: .28em;
-  color: #9fd6ff; text-shadow: 0 0 12px rgba(120,190,255,.8);
-  border: 1px solid rgba(120,190,255,.4); border-radius: 6px; padding: 5px 12px;
-  background: rgba(6,24,58,.55); animation: detective-hud 1.8s ease-in-out infinite;
+@keyframes detective-scan { 0% { background-position: 0 0, 0 0; } 100% { background-position: 0 7px, 0 0; } }
+/* moving horizontal scan bar sweeping the whole viewport */
+.detective-scanline {
+  position: fixed; left: 0; right: 0; height: 120px; pointer-events: none;
+  background: linear-gradient(rgba(120,200,255,0), rgba(120,200,255,.16) 50%, rgba(120,200,255,0));
+  animation: detective-sweep 3.2s linear infinite;
 }
-@keyframes detective-hud { 0%,100% { opacity: .65; } 50% { opacity: 1; } }
-/* X-ray highlight: the data lights up under detective vision */
+@keyframes detective-sweep { 0% { transform: translateY(-140px); } 100% { transform: translateY(102vh); } }
+/* screen-corner targeting brackets */
+.det-corner { position: fixed; width: 34px; height: 34px; pointer-events: none; border: 2px solid rgba(140,205,255,.85); box-shadow: 0 0 12px rgba(120,190,255,.7); }
+.det-corner.tl { top: 62px; left: 14px; border-right: 0; border-bottom: 0; }
+.det-corner.tr { top: 62px; right: 14px; border-left: 0; border-bottom: 0; }
+.det-corner.bl { bottom: 14px; left: 14px; border-right: 0; border-top: 0; }
+.det-corner.br { bottom: 14px; right: 14px; border-left: 0; border-top: 0; }
+.detective-hud {
+  position: fixed; left: 50%; top: 60px; transform: translateX(-50%);
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10px; letter-spacing: .3em;
+  color: #b7e2ff; text-shadow: 0 0 14px rgba(120,190,255,.9);
+  border: 1px solid rgba(140,205,255,.55); border-radius: 6px; padding: 5px 14px;
+  background: rgba(6,24,58,.6); animation: detective-hud 1.4s ease-in-out infinite;
+}
+@keyframes detective-hud { 0%,100% { opacity: .6; } 50% { opacity: 1; } }
+/* X-ray highlight: the data lights up hard under detective vision */
 html.detective [aria-label="At risk"],
-html.detective [aria-label="Critical"] { box-shadow: 0 0 16px #ff6b6b, 0 0 5px #fff !important; }
-html.detective [aria-label="Monitor"] { box-shadow: 0 0 12px #ffd479, 0 0 3px #fff !important; }
-html.detective [aria-label="Healthy"] { box-shadow: 0 0 12px #6ee7a8, 0 0 3px #fff !important; }
-html.detective .cave-row-red { outline: 1px solid rgba(255,107,107,.55); outline-offset: -1px; }
-html.detective .cave-kpis .tabular-nums { text-shadow: 0 0 12px rgba(150,205,255,.7); }
+html.detective [aria-label="Critical"] { box-shadow: 0 0 22px #ff5252, 0 0 7px #fff !important; }
+html.detective [aria-label="Monitor"] { box-shadow: 0 0 16px #ffd479, 0 0 4px #fff !important; }
+html.detective [aria-label="Healthy"] { box-shadow: 0 0 16px #6ee7a8, 0 0 4px #fff !important; }
+html.detective .cave-row-red { outline: 1.5px solid rgba(255,82,82,.75); outline-offset: -1px; animation: detective-threat 1.4s ease-in-out infinite; }
+@keyframes detective-threat { 0%,100% { outline-color: rgba(255,82,82,.4); } 50% { outline-color: rgba(255,82,82,.95); } }
+html.detective .cave-kpis .tabular-nums { text-shadow: 0 0 16px rgba(150,205,255,.9); }
+html.detective .cave-brand,
+html.detective .nm { text-shadow: 0 0 10px rgba(150,205,255,.8) !important; }
 html.detective .cave-brk::before,
-html.detective .cave-brk::after { border-color: #7fd0ff !important; opacity: 1 !important; box-shadow: 0 0 8px rgba(120,190,255,.7); }
+html.detective .cave-brk::after { border-color: #8cd0ff !important; opacity: 1 !important; box-shadow: 0 0 10px rgba(120,190,255,.9); }
+html.detective .cave-brk { box-shadow: inset 0 0 30px rgba(60,130,220,.16) !important; }

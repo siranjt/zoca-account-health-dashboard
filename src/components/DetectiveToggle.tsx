@@ -37,7 +37,12 @@ export default function DetectiveToggle() {
       {/* fixed vision overlays — shown only while html.detective is set */}
       <div className="detective-tint" aria-hidden="true" />
       <div className="detective-overlay" aria-hidden="true">
-        <span className="detective-hud">◤◢ DETECTIVE MODE · SCANNING</span>
+        <span className="det-corner tl" />
+        <span className="det-corner tr" />
+        <span className="det-corner bl" />
+        <span className="det-corner br" />
+        <span className="detective-scanline" />
+        <span className="detective-hud">◤◢ DETECTIVE MODE · SCANNING…</span>
       </div>
     </>
   );
