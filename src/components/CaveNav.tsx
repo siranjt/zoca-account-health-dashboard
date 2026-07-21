@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import ThemeToggle from "./ThemeToggle";
+import CalmToggle from "./CalmToggle";
 
 /**
  * CAVE//OS top navigation bar — shared across Landing, Overview and Detail.
@@ -64,6 +65,7 @@ export default function CaveNav() {
         <kbd className="rounded px-1 text-[10px]" style={{ background: "var(--cave-line)", color: "#a7c3c8" }}>⌘K</kbd>
       </button>
 
+      <CalmToggle />
       <ThemeToggle />
 
       <div className="flex items-center gap-1 text-sm">

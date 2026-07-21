@@ -199,6 +199,26 @@ html.light .cave-ticker{background:linear-gradient(180deg,transparent,rgba(241,2
 @keyframes cave-sigpulse{0%{transform:scale(.2);opacity:.6}100%{transform:scale(1.5);opacity:0}}
 @keyframes cave-sigemblem{0%{transform:scale(.5);opacity:0}22%{opacity:1}100%{transform:scale(1.12);opacity:0}}
 
+/* ── CALM MODE (html.calm): dim ambient FX, keep interactions ───────────── */
+html.calm body::after,
+html.calm body::before,
+html.calm .cave-scancycle,
+html.calm .cave-field,
+html.calm .cave-crt,
+html.calm .cave-scope,
+html.calm .cave-radar,
+html.calm .cave-ticker,
+html.calm .cave-boot { display: none !important; }
+html.calm .cave-emblem,
+html.calm .cave-brk::before,
+html.calm .cave-brk::after,
+html.calm .cave-alarm,
+html.calm .cave-pulse,
+html.calm [aria-label="At risk"],
+html.calm [aria-label="Critical"] { animation: none !important; }
+html.calm [aria-label="At risk"],
+html.calm [aria-label="Critical"] { box-shadow: 0 0 9px #dc2626, 0 0 2px #dc2626 !important; }
+
 /* health-dot hover sonar ping */
 [aria-label="Healthy"],[aria-label="Monitor"],[aria-label="At risk"],[aria-label="Critical"]{position:relative}
 [aria-label="Healthy"]:hover::after,[aria-label="Monitor"]:hover::after,[aria-label="At risk"]:hover::after,[aria-label="Critical"]:hover::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:1px solid currentColor;animation:cave-dotping 1s ease-out infinite}
