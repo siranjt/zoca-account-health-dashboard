@@ -167,6 +167,38 @@ body::before{content:"";position:fixed;inset:0 0 auto 0;pointer-events:none;z-in
 @keyframes cave-tick{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 html.light .cave-ticker{background:linear-gradient(180deg,transparent,rgba(241,245,249,.9))}
 
+/* brand glitch on hover */
+.cave-brand:hover{animation:cave-glitch .34s steps(2) 2}
+@keyframes cave-glitch{
+  0%{text-shadow:0 0 14px rgba(53,224,255,.4)}
+  25%{text-shadow:-2px 0 #ff5c6c,2px 0 #35e0ff;transform:translateX(1px)}
+  50%{text-shadow:2px 0 #ff5c6c,-2px 0 #35e0ff;transform:translateX(-1px)}
+  75%{text-shadow:-1px 0 #35e0ff,1px 0 #ff5c6c}
+  100%{text-shadow:0 0 14px rgba(53,224,255,.4);transform:none}
+}
+
+/* boot progress bar + percentage */
+.cave-boot .prog{width:min(60vw,520px);height:3px;background:var(--cave-line);position:relative;overflow:hidden;opacity:0;animation:cave-bootlines 1.5s .35s ease forwards}
+.cave-boot .prog i{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,var(--cave-cydim,#17808f),var(--cave-cy));box-shadow:0 0 10px var(--cave-cy);animation:cave-bootbar 1s .4s ease-out forwards}
+@keyframes cave-bootbar{to{width:100%}}
+.cave-boot .pct{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.2em;color:var(--cave-cy)}
+
+/* metric-cell hover glow */
+.hover\:bg-indigo-50:hover{text-shadow:0 0 8px rgba(53,224,255,.3)}
+
+/* table scan-in on mount */
+.cave-scanin{animation:cave-scanin .6s ease-out}
+@keyframes cave-scanin{0%{opacity:0;transform:translateY(7px)}100%{opacity:1;transform:none}}
+
+/* bat-signal easter egg (Shift+B) */
+.cave-signal{position:fixed;inset:0;z-index:2147483360;pointer-events:none;display:flex;align-items:center;justify-content:center;animation:cave-sigfade 1.7s ease-out forwards}
+.cave-signal::before{content:"";position:absolute;width:60vmax;height:60vmax;border-radius:50%;background:radial-gradient(circle,rgba(53,224,255,.28),transparent 62%);animation:cave-sigpulse 1.7s ease-out forwards}
+.cave-signal svg{width:190px;height:auto;filter:drop-shadow(0 0 44px var(--cave-cy));animation:cave-sigemblem 1.7s ease-out forwards}
+.cave-signal svg path{fill:var(--cave-cy)}
+@keyframes cave-sigfade{0%{opacity:0}12%{opacity:1}72%{opacity:1}100%{opacity:0}}
+@keyframes cave-sigpulse{0%{transform:scale(.2);opacity:.6}100%{transform:scale(1.5);opacity:0}}
+@keyframes cave-sigemblem{0%{transform:scale(.5);opacity:0}22%{opacity:1}100%{transform:scale(1.12);opacity:0}}
+
 /* target-list row treatment: health-colored accent bar + hover scan */
 .cave-row > td:first-child{position:relative}
 .cave-row > td:first-child::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;opacity:.9}

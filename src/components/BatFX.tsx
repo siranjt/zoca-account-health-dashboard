@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Ambient bat-computer effects — all decorative, fixed, pointer-events:none, and
 // additive (no layout/behavior impact): targeting-scope crosshair that tracks
 // the cursor, an ambient particle data-field, a cyan click-ripple, and a live
 // telemetry clock in the nav. Animations always run (no reduced-motion gate).
 export default function BatFX() {
+  const [signal, setSignal] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scopeRef = useRef<HTMLDivElement>(null);
   const hRef = useRef<HTMLDivElement>(null);
@@ -135,6 +136,33 @@ export default function BatFX() {
     return () => obs.disconnect();
   }, []);
 
+  // boot % counter (runs alongside the CSS boot bar)
+  useEffect(() => {
+    const el = document.getElementById("cave-pct");
+    if (!el) return;
+    let p = 0;
+    const id = setInterval(() => {
+      p = Math.min(100, p + Math.round(6 + Math.random() * 12));
+      el.textContent = p + "%";
+      if (p >= 100) clearInterval(id);
+    }, 70);
+    return () => clearInterval(id);
+  }, []);
+
+  // Shift+B → fire the bat-signal
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (t && /^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
+      if (e.shiftKey && (e.key === "B" || e.key === "b")) {
+        setSignal(true);
+        setTimeout(() => setSignal(false), 1700);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const TICK = ["◈ UPLINK NOMINAL", "826 UNITS TRACKED", "THREAT MATRIX ARMED", "ENCRYPTED FEED", "SCAN CYCLE COMPLETE", "GRID SYNCED", "WAYNE ENTERPRISES R&D", "CAVE//OS v4"];
 
   return (
@@ -154,6 +182,11 @@ export default function BatFX() {
           ))}
         </span>
       </div>
+      {signal && (
+        <div className="cave-signal" aria-hidden="true">
+          <svg viewBox="0 0 100 44"><path d="M50 3 C48 11 45 14 41 12 C43 16 42 19 39 20 C33 15 25 16 20 23 C26 21 30 23 31 27 C25 28 20 32 18 39 C24 34 33 33 37 37 C40 30 45 28 50 33 C55 28 60 30 63 37 C67 33 76 34 82 39 C80 32 75 28 69 27 C70 23 74 21 80 23 C75 16 67 15 61 20 C58 19 57 16 59 12 C55 14 52 11 50 3 Z" /></svg>
+        </div>
+      )}
     </>
   );
 }

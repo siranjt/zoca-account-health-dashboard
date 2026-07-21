@@ -37,6 +37,8 @@ export default function RootLayout({
             &gt; SYNCING UNITS … <b>OK</b><br />
             &gt; THREAT MATRIX ARMED
           </div>
+          <div className="prog"><i /></div>
+          <div className="pct" id="cave-pct">0%</div>
         </div>
         {children}
         <BatFX />

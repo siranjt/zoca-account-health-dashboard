@@ -672,7 +672,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
       {viewMode === "board" && <BoardView rows={rows} pinned={pinned} togglePin={togglePin} />}
       {viewMode === "map" && <MapView rows={rows} />}
 
-      <div className={`relative cave-brk ${viewMode !== "table" ? "hidden" : ""}`}>
+      <div className={`relative cave-brk cave-scanin ${viewMode !== "table" ? "hidden" : ""}`}>
         <div className="cave-radar"><b></b><i></i></div>
         <div
           className={`table-scroll rounded-lg border border-slate-200 bg-white shadow-sm transition-opacity ${dense ? "cave-dense" : ""} ${
