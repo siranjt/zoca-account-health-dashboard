@@ -20,13 +20,19 @@ export type ChartData = {
   mrrTier: { green: number; yellow: number; red: number };
   leadSpark: number[];
   reviewSpark: number[];
+  funnel: { profile: number; website: number; book: number; leads: number };
+  rankBands: { top3: number; r410: number; r1120: number; r20p: number };
+  visibility: number; // avg % of tracked keywords ranking top-3
+  mrrBands: number[]; // counts per band, see MRR_BANDS labels in LandingCharts
+  scatter: { x: number; y: number; c: "green" | "yellow" | "red" }[];
+  adoption: { online: number; total: number; photos: number };
 };
 
 export default async function Landing() {
   let stats: LandingStats = { total: 0, greens: 0, yellows: 0, reds: 0, avg: 0, mrr: 0 };
   let atRisk: RiskItem[] = [];
   let suggestions: string[] = [];
-  let charts: ChartData = { hist: Array(10).fill(0), mix: { green: 0, yellow: 0, red: 0 }, dims: { engagement: 0, value: 0, product: 0 }, amLoad: [], vitals: { leads: 0, reviews: 0 }, mrrTier: { green: 0, yellow: 0, red: 0 }, leadSpark: [], reviewSpark: [] };
+  let charts: ChartData = { hist: Array(10).fill(0), mix: { green: 0, yellow: 0, red: 0 }, dims: { engagement: 0, value: 0, product: 0 }, amLoad: [], vitals: { leads: 0, reviews: 0 }, mrrTier: { green: 0, yellow: 0, red: 0 }, leadSpark: [], reviewSpark: [], funnel: { profile: 0, website: 0, book: 0, leads: 0 }, rankBands: { top3: 0, r410: 0, r1120: 0, r20p: 0 }, visibility: 0, mrrBands: [0, 0, 0, 0, 0], scatter: [], adoption: { online: 0, total: 0, photos: 0 } };
   let source: "mock" | "metabase" = "mock";
 
   try {
@@ -76,7 +82,29 @@ export default async function Landing() {
     };
     const leadSpark = ds(A.map((a) => a.leadsReceived || 0));
     const reviewSpark = ds(A.map((a) => a.reviewsReceived || 0));
-    charts = { hist, mix: { green: greens, yellow: yellows, red: reds.length }, dims, amLoad, vitals, mrrTier, leadSpark, reviewSpark };
+    const sum = (sel: (a: (typeof A)[number]) => number) => A.reduce((s, a) => s + (sel(a) || 0), 0);
+    // acquisition funnel (book-wide click cascade → leads)
+    const funnel = { profile: sum((a) => a.profileClicks), website: sum((a) => a.websiteClicks), book: sum((a) => a.bookOnlineClicks || 0), leads: sum((a) => a.leadsReceived) };
+    // keyword-rank bands (from each account's average current rank)
+    const rankBands = { top3: 0, r410: 0, r1120: 0, r20p: 0 };
+    A.forEach((a) => {
+      const r = a.avgCurrentRank;
+      if (r == null || r <= 0) return;
+      if (r <= 3) rankBands.top3++;
+      else if (r <= 10) rankBands.r410++;
+      else if (r <= 20) rankBands.r1120++;
+      else rankBands.r20p++;
+    });
+    // visibility: mean % of tracked keywords in the top 3 (include zeros)
+    const t3 = A.map((a) => a.keywordsTop3Pct).filter((n): n is number => n != null);
+    const visibility = t3.length ? Math.round((t3.reduce((s, n) => s + n, 0) / t3.length) * 10) / 10 : 0;
+    // MRR distribution across plan bands
+    const MRR_BAND_DEFS: [number, number][] = [[0, 99], [100, 199], [200, 299], [300, 449], [450, Infinity]];
+    const mrrBands = MRR_BAND_DEFS.map(([lo, hi]) => A.filter((a) => a.mrr != null && a.mrr >= lo && a.mrr <= hi).length);
+    // leads↔reviews engagement scatter (tier-coloured)
+    const scatter = A.map((a) => ({ x: a.leadsReceived || 0, y: a.reviewsReceived || 0, c: a.health.color }));
+    const adoption = { online: A.filter((a) => a.bookOnlineActive).length, total: A.length, photos: sum((a) => a.photosUploaded) };
+    charts = { hist, mix: { green: greens, yellow: yellows, red: reds.length }, dims, amLoad, vitals, mrrTier, leadSpark, reviewSpark, funnel, rankBands, visibility, mrrBands, scatter, adoption };
 
     // AM carrying the most at-risk accounts → a data-aware Alfred suggestion
     const topAM = [...amLoad].sort((x, y) => y.red - x.red)[0];

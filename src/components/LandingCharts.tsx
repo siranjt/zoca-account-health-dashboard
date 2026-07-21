@@ -37,9 +37,17 @@ export default function LandingCharts({ charts, avg }: { charts: ChartData; avg:
           <DimRadar dims={charts.dims} on={on} />
           <HandlerLoad amLoad={charts.amLoad} on={on} tc={tc} />
         </div>
-        <div className="grid gap-3 lg:grid-cols-2">
+        <Funnel funnel={charts.funnel} on={on} />
+        <div className="grid gap-3 lg:grid-cols-3">
+          <RankBands bands={charts.rankBands} on={on} tc={tc} />
+          <VisibilityGauge v={charts.visibility} on={on} />
+          <MrrBands bands={charts.mrrBands} on={on} />
+        </div>
+        <Scatter pts={charts.scatter} on={on} tc={tc} />
+        <div className="grid gap-3 lg:grid-cols-3">
           <MrrByTier mrr={charts.mrrTier} on={on} tc={tc} />
           <Signals lead={charts.leadSpark} review={charts.reviewSpark} on={on} />
+          <Adoption a={charts.adoption} on={on} />
         </div>
       </div>
     </section>
@@ -267,6 +275,186 @@ function HandlerLoad({ amLoad, on, tc }: { amLoad: { name: string; total: number
             </div>
           </div>
         ))}
+      </div>
+    </Card>
+  );
+}
+
+/* ── H · acquisition funnel (book-wide click cascade → leads) ───────────── */
+function Funnel({ funnel, on }: { funnel: { profile: number; website: number; book: number; leads: number }; on: boolean }) {
+  const stages = [
+    { k: "Profile views", v: funnel.profile },
+    { k: "Website clicks", v: funnel.website },
+    { k: "Book-online clicks", v: funnel.book },
+    { k: "Leads", v: funnel.leads },
+  ];
+  const max = Math.max(1, funnel.profile);
+  return (
+    <Card title="Acquisition Funnel" note="book-wide totals">
+      <div className="flex flex-col gap-2.5 pt-1">
+        {stages.map((s, i) => {
+          const pct = (s.v / max) * 100;
+          const conv = i > 0 && stages[i - 1].v > 0 ? (s.v / stages[i - 1].v) * 100 : null;
+          return (
+            <div key={s.k}>
+              <div className="mb-1 flex items-center justify-between text-[11px]">
+                <span style={{ color: "var(--cave-dim)" }}>{s.k}</span>
+                <span className="tabular-nums font-semibold" style={{ color: "var(--cave-txt)" }}>
+                  {fmt(s.v)}{conv != null && <span style={{ color: "var(--cave-cy)" }}> · {conv.toFixed(1)}%</span>}
+                </span>
+              </div>
+              <div className="h-3 overflow-hidden rounded-sm" style={{ background: "var(--cave-line)" }}>
+                <div className="h-full rounded-sm" style={{ width: on ? `${Math.max(pct, 0.7)}%` : "0%", background: "var(--cave-cy)", boxShadow: "0 0 8px var(--cave-cy)", transition: `width .85s cubic-bezier(.2,.7,.2,1) ${i * 0.09}s` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+/* ── I · keyword-rank bands (donut) ─────────────────────────────────────── */
+function RankBands({ bands, on, tc }: { bands: { top3: number; r410: number; r1120: number; r20p: number }; on: boolean; tc: Tier }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const segs = [
+    { l: "Top 3", v: bands.top3, c: tc.green },
+    { l: "4–10", v: bands.r410, c: "var(--cave-cy)" },
+    { l: "11–20", v: bands.r1120, c: tc.yellow },
+    { l: "20+", v: bands.r20p, c: tc.red },
+  ];
+  const total = Math.max(1, segs.reduce((s, x) => s + x.v, 0));
+  let acc = 0;
+  const R = 54, cx = 70, cy = 70;
+  const center = hover != null ? segs[hover] : null;
+  return (
+    <Card title="Keyword Rank" note="avg current rank">
+      <div className="flex items-center gap-4">
+        <svg viewBox="0 0 140 140" width="132" height="132" style={{ transform: on ? "scale(1)" : "scale(.6)", opacity: on ? 1 : 0, transition: "transform .6s cubic-bezier(.2,.7,.2,1), opacity .6s" }}>
+          <circle cx={cx} cy={cy} r={R} fill="none" stroke="var(--cave-line)" strokeWidth={12} opacity={0.5} />
+          {segs.map((s, i) => {
+            const pct = (s.v / total) * 100;
+            const el = <circle key={i} cx={cx} cy={cy} r={R} fill="none" stroke={s.c} strokeWidth={hover === i ? 15 : 12} pathLength={100} strokeDasharray={`${pct} ${100 - pct}`} strokeDashoffset={-acc} transform={`rotate(-90 ${cx} ${cy})`} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} style={{ filter: `drop-shadow(0 0 4px ${s.c})`, transition: "stroke-width .15s", cursor: "default" }} />;
+            acc += pct;
+            return el;
+          })}
+          <text x={cx} y={cy - 2} textAnchor="middle" fontSize={22} fontWeight={700} fill={center ? center.c : "var(--cave-cy)"}>{center ? center.v : bands.r20p}</text>
+          <text x={cx} y={cy + 13} textAnchor="middle" fontSize={8} letterSpacing="1" fill="var(--cave-dim)">{center ? center.l.toUpperCase() : "RANK 20+"}</text>
+        </svg>
+        <div className="flex flex-col gap-1.5 text-xs">
+          {segs.map((s, i) => (
+            <div key={i} className="flex items-center gap-2" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} style={{ cursor: "default" }}>
+              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: s.c }} />
+              <span className="tabular-nums font-semibold" style={{ color: "var(--cave-txt)" }}>{s.v}</span>
+              <span style={{ color: "var(--cave-dim)" }}>{s.l}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/* ── J · visibility gauge (avg % keywords in top 3) ─────────────────────── */
+function VisibilityGauge({ v, on }: { v: number; on: boolean }) {
+  const val = Math.max(0, Math.min(100, v));
+  const cx = 80, cy = 78, R = 56;
+  // 180° gauge across the top: left (180°) → right (0°)
+  const arc = (frac: number) => {
+    const a = Math.PI * (1 - frac); // 0→π
+    return [cx + R * Math.cos(a), cy - R * Math.sin(a)];
+  };
+  const [ex, ey] = arc(1);
+  const [sx, sy] = arc(0);
+  const bg = `M${sx.toFixed(1)},${sy.toFixed(1)} A${R},${R} 0 0 1 ${ex.toFixed(1)},${ey.toFixed(1)}`;
+  const len = Math.PI * R;
+  return (
+    <Card title="Visibility" note="keywords ranking top-3">
+      <div className="flex flex-col items-center">
+        <svg viewBox="0 0 160 96" width="100%" height="96" role="img" aria-label="Visibility gauge">
+          <path d={bg} fill="none" stroke="var(--cave-line)" strokeWidth={11} strokeLinecap="round" />
+          <path d={bg} fill="none" stroke="var(--cave-cy)" strokeWidth={11} strokeLinecap="round" pathLength={100}
+            strokeDasharray={`${val} 100`} style={{ strokeDashoffset: on ? 0 : val, transition: "stroke-dashoffset 1s cubic-bezier(.2,.7,.2,1) .1s", filter: "drop-shadow(0 0 5px var(--cave-cy))" }} />
+          <text x={cx} y={cy - 8} textAnchor="middle" fontSize={26} fontWeight={700} fill="var(--cave-cy)">{val.toFixed(1)}%</text>
+          <text x={cx} y={cy + 8} textAnchor="middle" fontSize={8.5} letterSpacing="1.4" fill="var(--cave-dim)">TOP-3 SHARE</text>
+          <text x={cx - R} y={cy + 12} textAnchor="middle" fontSize={8} fill="var(--cave-dim)">0</text>
+          <text x={cx + R} y={cy + 12} textAnchor="middle" fontSize={8} fill="var(--cave-dim)">100</text>
+        </svg>
+      </div>
+    </Card>
+  );
+}
+
+/* ── K · MRR distribution (bands) ───────────────────────────────────────── */
+const MRR_BANDS = ["<$100", "$100–199", "$200–299", "$300–449", "$450+"];
+function MrrBands({ bands, on }: { bands: number[]; on: boolean }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const W = 300, H = 130, padB = 24, padT = 12;
+  const max = Math.max(1, ...bands);
+  const bw = (W - 10) / bands.length;
+  return (
+    <Card title="MRR Distribution" note="accounts per band">
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="none" style={{ maxHeight: 140 }} role="img" aria-label="MRR band distribution">
+        {bands.map((c, i) => {
+          const full = H - padT - padB;
+          const h = (c / max) * full;
+          const x = 5 + i * bw;
+          const y = padT + (full - h);
+          const hot = hover === i;
+          return (
+            <g key={i} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} style={{ cursor: "default" }}>
+              <rect x={x + 3} y={y} width={bw - 8} height={Math.max(h, c > 0 ? 2 : 0)} rx={1.5} fill="var(--cave-cy)" style={{ transformBox: "fill-box", transformOrigin: "bottom", transform: on ? "scaleY(1)" : "scaleY(0)", transition: `transform .7s cubic-bezier(.2,.7,.2,1) ${i * 0.05}s`, filter: hot ? "drop-shadow(0 0 6px var(--cave-cy))" : "none", opacity: hover == null || hot ? 1 : 0.55 }} />
+              <text x={x + (bw - 5) / 2} y={y - 4} textAnchor="middle" fontSize={10} fontWeight={700} fill="var(--cave-txt)">{c}</text>
+              <text x={x + (bw - 5) / 2} y={H - 8} textAnchor="middle" fontSize={7.5} fill="var(--cave-dim)">{MRR_BANDS[i]}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </Card>
+  );
+}
+
+/* ── L · leads↔reviews engagement scatter ───────────────────────────────── */
+function Scatter({ pts, on, tc }: { pts: { x: number; y: number; c: "green" | "yellow" | "red" }[]; on: boolean; tc: Tier }) {
+  const W = 660, H = 260, padL = 30, padB = 24, padT = 12;
+  const XMAX = 150, YMAX = 50;
+  const px = (x: number) => padL + (Math.min(x, XMAX) / XMAX) * (W - padL - 12);
+  const py = (y: number) => H - padB - (Math.min(y, YMAX) / YMAX) * (H - padB - padT);
+  const col = (c: string) => (c === "red" ? tc.red : c === "yellow" ? tc.yellow : tc.green);
+  const reds = pts.filter((p) => p.c === "red");
+  const rest = pts.filter((p) => p.c !== "red");
+  return (
+    <Card title="Engagement Map" note={`${pts.length} accounts · leads × reviews`}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="none" style={{ maxHeight: 280 }} role="img" aria-label="Leads vs reviews scatter">
+        {[0, 0.25, 0.5, 0.75, 1].map((g) => { const y = padT + (H - padT - padB) * g; return <line key={`h${g}`} x1={padL} y1={y} x2={W - 6} y2={y} stroke="var(--cave-line)" strokeWidth={1} opacity={0.4} />; })}
+        {[0, 0.25, 0.5, 0.75, 1].map((g) => { const x = padL + (W - padL - 12) * g; return <line key={`v${g}`} x1={x} y1={padT} x2={x} y2={H - padB} stroke="var(--cave-line)" strokeWidth={1} opacity={0.4} />; })}
+        <g style={{ opacity: on ? 1 : 0, transition: "opacity .7s ease" }}>
+          {rest.map((p, i) => <circle key={`a${i}`} cx={px(p.x)} cy={py(p.y)} r={2.1} fill={col(p.c)} opacity={0.55} />)}
+          {reds.map((p, i) => <circle key={`r${i}`} cx={px(p.x)} cy={py(p.y)} r={2.6} fill={tc.red} opacity={0.85} style={{ filter: `drop-shadow(0 0 3px ${tc.red})` }} />)}
+        </g>
+        <text x={W - 6} y={H - 8} textAnchor="end" fontSize={9} fill="var(--cave-dim)">LEADS →</text>
+        <text x={4} y={padT + 8} fontSize={9} fill="var(--cave-dim)">REVIEWS ↑</text>
+      </svg>
+    </Card>
+  );
+}
+
+/* ── M · product adoption ───────────────────────────────────────────────── */
+function Adoption({ a, on }: { a: { online: number; total: number; photos: number }; on: boolean }) {
+  const pct = a.total ? Math.round((a.online / a.total) * 100) : 0;
+  const C = 100, r = 26, cx = 34, cy = 34;
+  return (
+    <Card title="Adoption" note="online booking · media">
+      <div className="flex items-center gap-4 pt-1">
+        <svg viewBox="0 0 68 68" width="68" height="68" style={{ transform: on ? "scale(1)" : "scale(.6)", opacity: on ? 1 : 0, transition: "transform .6s, opacity .6s" }}>
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--cave-line)" strokeWidth={7} />
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--cave-cy)" strokeWidth={7} pathLength={C} strokeLinecap="round" strokeDasharray={`${pct} ${C - pct}`} transform={`rotate(-90 ${cx} ${cy})`} style={{ filter: "drop-shadow(0 0 4px var(--cave-cy))" }} />
+          <text x={cx} y={cy + 4} textAnchor="middle" fontSize={14} fontWeight={700} fill="var(--cave-cy)">{pct}%</text>
+        </svg>
+        <div className="flex flex-col gap-2 text-xs">
+          <div><span className="tabular-nums text-lg font-semibold" style={{ color: "var(--cave-txt)" }}>{fmt(a.online)}</span> <span style={{ color: "var(--cave-dim)" }}>booking-active</span></div>
+          <div><span className="tabular-nums text-lg font-semibold" style={{ color: "var(--cave-txt)" }}>{fmt(a.photos)}</span> <span style={{ color: "var(--cave-dim)" }}>photos uploaded</span></div>
+        </div>
       </div>
     </Card>
   );
