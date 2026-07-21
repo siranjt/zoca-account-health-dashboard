@@ -145,9 +145,27 @@ body::before{content:"";position:fixed;inset:0 0 auto 0;pointer-events:none;z-in
 .cave-boot .lines b{color:var(--green,#25e39a)}
 @keyframes cave-bootlines{0%{opacity:0}40%{opacity:0}100%{opacity:1}}
 
-/* control hover glow */
+/* control hover glow + corner-bracket focus on hover */
 .cave-brk{transition:box-shadow .16s}
 .cave-brk:hover{box-shadow:inset 0 0 26px rgba(53,224,255,.07)}
+.cave-brk::before,.cave-brk::after{transition:width .18s,height .18s,box-shadow .18s}
+.cave-brk:hover::before,.cave-brk:hover::after{width:15px;height:15px;box-shadow:0 0 8px var(--cave-cy);opacity:1}
+
+/* KPI number flash when the value changes (BatFX MutationObserver) */
+.cave-flash{animation:cave-flash .7s ease-out}
+@keyframes cave-flash{0%{color:var(--cave-cy);text-shadow:0 0 14px rgba(53,224,255,.9)}100%{text-shadow:0 0 0 rgba(53,224,255,0)}}
+
+/* threat alarm — pulses the critical count */
+.cave-alarm{animation:cave-alarm 1.4s ease-in-out infinite}
+@keyframes cave-alarm{0%,100%{text-shadow:0 0 6px rgba(220,38,38,.55)}50%{text-shadow:0 0 16px rgba(220,38,38,1)}}
+
+/* bottom telemetry ticker (BatFX) */
+.cave-ticker{position:fixed;left:0;right:0;bottom:0;z-index:28;height:19px;overflow:hidden;pointer-events:none;background:linear-gradient(180deg,transparent,rgba(4,8,10,.9));border-top:1px solid var(--cave-line)}
+.cave-ticker .track{display:inline-block;white-space:nowrap;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:9px;letter-spacing:.22em;color:var(--cave-dim);text-transform:uppercase;padding:4px 0;animation:cave-tick 34s linear infinite}
+.cave-ticker b{color:var(--cave-cy)}
+.cave-ticker .amber{color:#d97706}.cave-ticker .red{color:#dc2626}
+@keyframes cave-tick{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+html.light .cave-ticker{background:linear-gradient(180deg,transparent,rgba(241,245,249,.9))}
 
 /* target-list row treatment: health-colored accent bar + hover scan */
 .cave-row > td:first-child{position:relative}

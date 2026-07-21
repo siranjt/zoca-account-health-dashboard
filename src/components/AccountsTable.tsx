@@ -485,7 +485,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
         {loading && <span className="text-slate-400">· refreshing…</span>}
       </div>
 
-      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="cave-kpis mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <Kpi label="Accounts shown" value={formatNumber(rows.length)} />
         <Kpi label={`Leads · ${windowDays}d`} value={formatNumber(kpi.leads)} />
         <Kpi label={`Reviews · ${windowDays}d`} value={formatNumber(kpi.reviews)} />
@@ -498,7 +498,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               <span className="text-slate-300"> / </span>
               <button onClick={() => setColorFilter((c) => (c === "yellow" ? "all" : "yellow"))} style={{ color: "#d97706" }} className="hover:underline" title="Filter monitor">{kpi.yellow}</button>
               <span className="text-slate-300"> / </span>
-              <button onClick={() => setColorFilter((c) => (c === "red" ? "all" : "red"))} style={{ color: "#dc2626" }} className="hover:underline" title="Filter at-risk">{kpi.red}</button>
+              <button onClick={() => setColorFilter((c) => (c === "red" ? "all" : "red"))} style={{ color: "#dc2626" }} className="cave-alarm hover:underline" title="Filter at-risk">{kpi.red}</button>
             </span>
           }
         />

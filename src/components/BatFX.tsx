@@ -100,6 +100,43 @@ export default function BatFX() {
     return () => clearInterval(id);
   }, []);
 
+  // decode / scramble-in effect for [.cave-decode] headings on mount
+  useEffect(() => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789/·◤◢";
+    const timers: ReturnType<typeof setInterval>[] = [];
+    document.querySelectorAll<HTMLElement>(".cave-decode").forEach((el) => {
+      const final = el.textContent || "";
+      let f = 0;
+      const id = setInterval(() => {
+        f++;
+        el.textContent = final
+          .split("")
+          .map((c, i) => (i < f / 2 || c === " " ? c : chars[Math.floor(Math.random() * chars.length)]))
+          .join("");
+        if (f / 2 >= final.length) { el.textContent = final; clearInterval(id); }
+      }, 45);
+      timers.push(id);
+    });
+    return () => timers.forEach(clearInterval);
+  }, []);
+
+  // flash KPI numbers when their value changes (filters / window)
+  useEffect(() => {
+    const root = document.querySelector(".cave-kpis");
+    if (!root) return;
+    const obs = new MutationObserver((muts) => {
+      for (const m of muts) {
+        const node = m.type === "characterData" ? m.target.parentElement : (m.target as HTMLElement);
+        const el = (node && "closest" in node ? node.closest(".tabular-nums") : null) as HTMLElement | null;
+        if (el) { el.classList.remove("cave-flash"); void el.offsetWidth; el.classList.add("cave-flash"); }
+      }
+    });
+    obs.observe(root, { subtree: true, childList: true, characterData: true });
+    return () => obs.disconnect();
+  }, []);
+
+  const TICK = ["◈ UPLINK NOMINAL", "826 UNITS TRACKED", "THREAT MATRIX ARMED", "ENCRYPTED FEED", "SCAN CYCLE COMPLETE", "GRID SYNCED", "WAYNE ENTERPRISES R&D", "CAVE//OS v4"];
+
   return (
     <>
       <canvas ref={canvasRef} className="cave-field" aria-hidden="true" />
@@ -109,6 +146,13 @@ export default function BatFX() {
         <div ref={vRef} className="cave-xv" />
         <div ref={retRef} className="cave-reticle"><span className="a" /><span className="b" /><span className="c" /><span className="d" /><i /></div>
         <div ref={coordRef} className="cave-coord" />
+      </div>
+      <div className="cave-ticker" aria-hidden="true">
+        <span className="track">
+          {[...TICK, ...TICK].map((s, i) => (
+            <span key={i}>{s}&nbsp;&nbsp;·&nbsp;&nbsp;</span>
+          ))}
+        </span>
       </div>
     </>
   );

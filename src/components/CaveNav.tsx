@@ -35,7 +35,7 @@ export default function CaveNav() {
         <span className="cave-brand text-sm font-bold tracking-[0.3em]" style={{ color: "var(--cave-cy)" }}>
           CAVE//OS
         </span>
-        <span className="hidden text-[10px] uppercase tracking-[0.18em] sm:inline" style={{ color: "var(--cave-dim)" }}>
+        <span className="cave-decode hidden text-[10px] uppercase tracking-[0.18em] sm:inline" style={{ color: "var(--cave-dim)" }}>
           Bat-Computer · Account Health Grid
         </span>
       </Link>

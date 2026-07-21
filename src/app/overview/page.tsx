@@ -21,7 +21,7 @@ export default async function OverviewPage() {
         <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
             <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400/70">Overview</div>
-            <h1 className="text-2xl font-semibold tracking-tight">Account Health Dashboard</h1>
+            <h1 className="cave-decode text-2xl font-semibold tracking-tight">Account Health Dashboard</h1>
           </div>
           <div className="flex items-center gap-4 text-sm">
             <span className="flex items-center gap-1.5">
