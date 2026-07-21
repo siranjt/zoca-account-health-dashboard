@@ -3,20 +3,27 @@ import CaveNav from "@/components/CaveNav";
 import LandingDeck from "@/components/LandingDeck";
 
 // Landing / home — the cover screen the team passes through daily. A cinematic
-// hero (dual-persona, Batman ⇄ Bruce Wayne) over a live launchpad: book
-// snapshot, quick-launch tiles, an at-risk board, and an Ask-Alfred prompt with
-// data-aware suggestions. All figures are computed live from the book here and
+// hero (dual-persona, Batman ⇄ Bruce Wayne) over a live launchpad + a tactical
+// readout of live charts. All figures are computed live from the book here and
 // handed to the client deck as plain props.
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export type LandingStats = { total: number; greens: number; yellows: number; reds: number; avg: number; mrr: number };
 export type RiskItem = { id: string; name: string; city: string | null; state: string | null; am: string | null; score: number | null; reason: string | null };
+export type ChartData = {
+  hist: number[]; // 10 buckets of composite score (0-9 → 0-100)
+  mix: { green: number; yellow: number; red: number };
+  dims: { engagement: number; value: number; product: number };
+  amLoad: { name: string; total: number; red: number }[];
+  vitals: { leads: number; reviews: number };
+};
 
 export default async function Landing() {
   let stats: LandingStats = { total: 0, greens: 0, yellows: 0, reds: 0, avg: 0, mrr: 0 };
   let atRisk: RiskItem[] = [];
   let suggestions: string[] = [];
+  let charts: ChartData = { hist: Array(10).fill(0), mix: { green: 0, yellow: 0, red: 0 }, dims: { engagement: 0, value: 0, product: 0 }, amLoad: [], vitals: { leads: 0, reviews: 0 } };
   let source: "mock" | "metabase" = "mock";
 
   try {
@@ -24,40 +31,44 @@ export default async function Landing() {
     const A = p.accounts;
     source = p.source;
     const reds = A.filter((a) => a.health.color === "red");
+    const greens = A.filter((a) => a.health.color === "green").length;
+    const yellows = A.filter((a) => a.health.color === "yellow").length;
     const comps = A.map((a) => a.health.composite ?? 0).filter((n) => n > 0);
     const avg = comps.length ? comps.reduce((s, n) => s + n, 0) / comps.length : 0;
     const mrr = A.reduce((s, a) => s + (a.mrr ?? 0), 0);
-    stats = {
-      total: A.length,
-      greens: A.filter((a) => a.health.color === "green").length,
-      yellows: A.filter((a) => a.health.color === "yellow").length,
-      reds: reds.length,
-      avg: Math.round(avg * 10) / 10,
-      mrr: Math.round(mrr),
-    };
+    stats = { total: A.length, greens, yellows, reds: reds.length, avg: Math.round(avg * 10) / 10, mrr: Math.round(mrr) };
+
     atRisk = [...reds]
       .sort((a, b) => (a.health.composite ?? 999) - (b.health.composite ?? 999))
       .slice(0, 6)
-      .map((a) => ({
-        id: a.entityId,
-        name: a.name,
-        city: a.city,
-        state: a.state,
-        am: a.accountManager,
-        score: a.health.composite,
-        reason: a.health.reason,
-      }));
+      .map((a) => ({ id: a.entityId, name: a.name, city: a.city, state: a.state, am: a.accountManager, score: a.health.composite, reason: a.health.reason }));
+
+    // ── chart aggregations (no extra queries — all from the book in memory) ──
+    const hist = Array(10).fill(0);
+    A.forEach((a) => { const c = a.health.composite; if (c != null && c >= 0) hist[Math.min(9, Math.floor(c / 10))]++; });
+    const avgOf = (sel: (a: (typeof A)[number]) => number | null | undefined) => {
+      const v = A.map(sel).filter((n): n is number => n != null && n > 0);
+      return v.length ? Math.round(v.reduce((s, n) => s + n, 0) / v.length) : 0;
+    };
+    const dims = { engagement: avgOf((a) => a.health.engagement), value: avgOf((a) => a.health.value), product: avgOf((a) => a.health.product) };
+    const amMap: Record<string, { name: string; total: number; red: number }> = {};
+    A.forEach((a) => {
+      const m = a.accountManager || "Unassigned";
+      (amMap[m] ??= { name: m, total: 0, red: 0 }).total++;
+      if (a.health.color === "red") amMap[m].red++;
+    });
+    const amLoad = Object.values(amMap).sort((x, y) => y.total - x.total).slice(0, 6);
+    const vitals = { leads: A.reduce((s, a) => s + (a.leadsReceived || 0), 0), reviews: A.reduce((s, a) => s + (a.reviewsReceived || 0), 0) };
+    charts = { hist, mix: { green: greens, yellow: yellows, red: reds.length }, dims, amLoad, vitals };
 
     // AM carrying the most at-risk accounts → a data-aware Alfred suggestion
-    const amCount: Record<string, number> = {};
-    reds.forEach((a) => { if (a.accountManager) amCount[a.accountManager] = (amCount[a.accountManager] ?? 0) + 1; });
-    const topAM = Object.entries(amCount).sort((x, y) => y[1] - x[1])[0]?.[0];
+    const topAM = [...amLoad].sort((x, y) => y.red - x.red)[0];
     const worst = atRisk[0];
     suggestions = [
       worst ? `Why is ${worst.name} at risk?` : `Which 3 accounts need attention most?`,
       `Give me a health summary of the book`,
       `Which accounts declined the most this month?`,
-      topAM ? `How is ${topAM}'s book doing?` : `Compare the two worst accounts`,
+      topAM && topAM.red > 0 ? `How is ${topAM.name}'s book doing?` : `Compare the two worst accounts`,
     ];
   } catch {
     /* keep zeros if the book can't load */
@@ -66,7 +77,7 @@ export default async function Landing() {
   return (
     <>
       <CaveNav />
-      <LandingDeck stats={stats} atRisk={atRisk} suggestions={suggestions} source={source} />
+      <LandingDeck stats={stats} atRisk={atRisk} suggestions={suggestions} charts={charts} source={source} />
     </>
   );
 }

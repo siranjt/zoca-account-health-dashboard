@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { LandingStats, RiskItem } from "@/app/page";
+import type { LandingStats, RiskItem, ChartData } from "@/app/page";
+import LandingCharts from "./LandingCharts";
 
 // The landing deck: a cinematic hero over a live launchpad. Everything is
 // dual-persona — it reads the active theme (html.light = Bruce Wayne) and
@@ -13,11 +14,13 @@ export default function LandingDeck({
   stats,
   atRisk,
   suggestions,
+  charts,
   source,
 }: {
   stats: LandingStats;
   atRisk: RiskItem[];
   suggestions: string[];
+  charts: ChartData;
   source: "mock" | "metabase";
 }) {
   const [light, setLight] = useState(false);
@@ -162,6 +165,9 @@ export default function LandingDeck({
           )}
         </div>
       </section>
+
+      {/* ── TACTICAL READOUT (live charts) ───────────────────────────────── */}
+      {stats.total > 0 && <LandingCharts charts={charts} />}
 
       {/* ── AT-RISK BOARD + ASK ALFRED ───────────────────────────────────── */}
       <section className="mt-14 grid gap-6 lg:grid-cols-2">
