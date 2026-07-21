@@ -558,7 +558,8 @@ html.light .geo-scan { background: linear-gradient(90deg, transparent, rgba(176,
 /* ══ GOTHAM RAIN (Batman-side ambient storm) ═════════════════════════════ */
 .gotham-rain { position: fixed; inset: 0; pointer-events: none; z-index: 12; opacity: .85; mix-blend-mode: screen; }
 html.light .gotham-rain,
-html.calm .gotham-rain { display: none; }            /* clear skies in the penthouse / calm mode */
+html.calm .gotham-rain,
+html.rain-off .gotham-rain { display: none; }        /* clear skies: penthouse / calm / rain toggled off */
 /* distant lightning flash */
 .gotham-lightning {
   position: fixed; inset: 0; pointer-events: none; z-index: 1;
@@ -570,7 +571,8 @@ html.calm .gotham-rain { display: none; }            /* clear skies in the penth
   1.6% { opacity: .9; } 3% { opacity: .2; } 4.2% { opacity: .7; } 6% { opacity: 0; }
 }
 html.light .gotham-lightning,
-html.calm .gotham-lightning { display: none; }
+html.calm .gotham-lightning,
+html.rain-off .gotham-lightning { display: none; }
 
 /* ══ DETECTIVE MODE (Arkham-style vision lens) ═══════════════════════════ */
 .detective-tint { position: fixed; inset: 0; pointer-events: none; z-index: 2147483200; display: none; }
