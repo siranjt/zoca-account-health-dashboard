@@ -22,8 +22,104 @@ export default function LandingCharts({ charts }: { charts: ChartData }) {
           <DimRadar dims={charts.dims} on={on} />
           <HandlerLoad amLoad={charts.amLoad} on={on} />
         </div>
+        <GeoGrid geo={charts.geo} on={on} />
+        <div className="grid gap-3 lg:grid-cols-2">
+          <MrrByTier mrr={charts.mrrTier} on={on} />
+          <Signals lead={charts.leadSpark} review={charts.reviewSpark} on={on} />
+        </div>
       </div>
     </section>
+  );
+}
+
+/* ── E · geographic threat grid (tactical map of the book) ──────────────── */
+function GeoGrid({ geo, on }: { geo: { lat: number; lng: number; c: "green" | "yellow" | "red" }[]; on: boolean }) {
+  const W = 660, H = 280;
+  const LNG0 = -125, LNG1 = -66, LAT0 = 24, LAT1 = 50;
+  const proj = (lng: number, lat: number): [number, number] => [
+    Math.max(0, Math.min(W, ((lng - LNG0) / (LNG1 - LNG0)) * W)),
+    Math.max(0, Math.min(H, ((LAT1 - lat) / (LAT1 - LAT0)) * H)),
+  ];
+  const col = (c: string) => (c === "red" ? "#dc2626" : c === "yellow" ? "#d97706" : "#16a34a");
+  const pts = geo
+    .filter((g) => g.lng >= LNG0 - 8 && g.lng <= LNG1 + 8 && g.lat >= LAT0 - 5 && g.lat <= LAT1 + 6)
+    .map((g) => { const [x, y] = proj(g.lng, g.lat); return { x, y, c: g.c }; });
+  const reds = pts.filter((p) => p.c === "red");
+  const others = pts.filter((p) => p.c !== "red");
+  return (
+    <Card title="Geo Threat Grid" note={`${pts.length} located · ${reds.length} critical`}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="none" style={{ maxHeight: 300 }} role="img" aria-label="Geographic threat map">
+        {Array.from({ length: 9 }).map((_, i) => { const x = (i / 8) * W; return <line key={`v${i}`} x1={x} y1={0} x2={x} y2={H} stroke="var(--cave-line)" strokeWidth={1} opacity={0.35} />; })}
+        {Array.from({ length: 5 }).map((_, i) => { const y = (i / 4) * H; return <line key={`h${i}`} x1={0} y1={y} x2={W} y2={y} stroke="var(--cave-line)" strokeWidth={1} opacity={0.35} />; })}
+        <line x1={W / 2} y1={0} x2={W / 2} y2={H} stroke="var(--cave-cy)" strokeWidth={1} opacity={0.12} />
+        <line x1={0} y1={H / 2} x2={W} y2={H / 2} stroke="var(--cave-cy)" strokeWidth={1} opacity={0.12} />
+        <g style={{ opacity: on ? 1 : 0, transition: "opacity .7s ease" }}>
+          {others.map((p, i) => <circle key={`n${i}`} cx={p.x} cy={p.y} r={1.7} fill={col(p.c)} opacity={0.7} />)}
+          {reds.map((p, i) => <circle key={`r${i}`} className="geo-blip" cx={p.x} cy={p.y} r={2.6} fill="#dc2626" style={{ filter: "drop-shadow(0 0 5px #dc2626)", animationDelay: `${(i % 8) * 0.12}s` }} />)}
+        </g>
+      </svg>
+    </Card>
+  );
+}
+
+/* ── F · MRR by tier ────────────────────────────────────────────────────── */
+function MrrByTier({ mrr, on }: { mrr: { green: number; yellow: number; red: number }; on: boolean }) {
+  const tiers: { k: "red" | "yellow" | "green"; c: string; l: string }[] = [
+    { k: "red", c: "#dc2626", l: "critical" },
+    { k: "yellow", c: "#d97706", l: "monitor" },
+    { k: "green", c: "#16a34a", l: "healthy" },
+  ];
+  const max = Math.max(1, mrr.green, mrr.yellow, mrr.red);
+  return (
+    <Card title="MRR by Tier" note="revenue at risk">
+      <div className="flex flex-col gap-3 pt-1">
+        {tiers.map((t, i) => (
+          <div key={t.k}>
+            <div className="mb-1 flex items-center justify-between text-[11px]">
+              <span style={{ color: "var(--cave-dim)" }}>{t.l}</span>
+              <span className="tabular-nums font-semibold" style={{ color: "var(--cave-txt)" }}>${fmt(mrr[t.k])}</span>
+            </div>
+            <div className="h-2.5 overflow-hidden rounded-sm" style={{ background: "var(--cave-line)" }}>
+              <div className="h-full rounded-sm" style={{ width: on ? `${(mrr[t.k] / max) * 100}%` : "0%", background: t.c, boxShadow: `0 0 7px ${t.c}`, transition: `width .8s cubic-bezier(.2,.7,.2,1) ${i * 0.08}s` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/* ── G · signal traces (lead / review distribution sparklines) ──────────── */
+function Signals({ lead, review, on }: { lead: number[]; review: number[]; on: boolean }) {
+  return (
+    <Card title="Signal Traces" note="per-account · sorted">
+      <Spark label="LEADS" data={lead} on={on} delay={0} />
+      <Spark label="REVIEWS" data={review} on={on} delay={0.15} />
+    </Card>
+  );
+}
+function Spark({ label, data, on, delay }: { label: string; data: number[]; on: boolean; delay: number }) {
+  const W = 300, H = 46;
+  if (data.length < 2) return <div className="mt-1 text-[10px]" style={{ color: "var(--cave-dim)" }}>{label}: no signal</div>;
+  const max = Math.max(1, ...data);
+  const n = data.length;
+  const pts = data.map((v, i) => [(i / (n - 1)) * W, H - 2 - (v / max) * (H - 6)] as [number, number]);
+  const line = "M" + pts.map((p) => p.join(",")).join(" L");
+  const area = `M0,${H} L` + pts.map((p) => p.join(",")).join(" L") + ` L${W},${H} Z`;
+  const peak = Math.max(...data);
+  const gid = `sg-${label}`;
+  return (
+    <div className="mt-1">
+      <div className="mb-0.5 flex justify-between text-[9px] uppercase tracking-[0.12em]" style={{ color: "var(--cave-dim)" }}>
+        <span>{label}</span><span>peak {fmt(peak)}</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id={gid} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--cave-cy)" stopOpacity="0.35" /><stop offset="1" stopColor="var(--cave-cy)" stopOpacity="0" /></linearGradient></defs>
+        <path d={area} fill={`url(#${gid})`} style={{ opacity: on ? 1 : 0, transition: `opacity .6s ${delay}s` }} />
+        <path d={line} fill="none" stroke="var(--cave-cy)" strokeWidth={1.5} pathLength={100} style={{ strokeDasharray: 100, strokeDashoffset: on ? 0 : 100, transition: `stroke-dashoffset 1s ease ${delay}s`, filter: "drop-shadow(0 0 4px var(--cave-cy))" }} />
+        <circle cx={W} cy={pts[pts.length - 1][1]} r={2.5} fill="var(--cave-cy)" style={{ opacity: on ? 1 : 0, transition: `opacity .4s ${delay + 0.8}s` }} />
+      </svg>
+    </div>
   );
 }
 
