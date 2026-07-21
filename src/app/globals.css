@@ -467,3 +467,35 @@ html.light .cave-ticker-wayne .track {
 html.light .cave-ticker-wayne b { color: #b0842b; font-weight: 600; }
 html.light .cave-ticker-wayne .up { color: #2f6b4f; }
 html.light .cave-ticker-wayne .dn { color: #9e2b25; }
+
+/* ── Wayne refinements: pocket-watch radar + gold-leaf nav ────────────────── */
+/* the radar ornament becomes a Wayne pocket-watch: slow gold hand, rim ticks,
+   a brass hub — reads as horology, not sonar */
+html.light .cave-radar i {
+  animation-duration: 12s;
+  height: 1px;
+  background: linear-gradient(90deg, #b0842b, transparent);
+}
+html.light .cave-radar b {
+  background: repeating-conic-gradient(from 0deg, #b0842b 0deg .8deg, transparent .8deg 30deg);
+  -webkit-mask: radial-gradient(circle, transparent 60%, #000 62%);
+  mask: radial-gradient(circle, transparent 60%, #000 62%);
+  opacity: .55;
+  border-color: var(--cave-line2);
+}
+html.light .cave-radar::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 5px; height: 5px;
+  margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: #b0842b; z-index: 3;
+  box-shadow: 0 0 6px rgba(176,132,43,.6);
+}
+html.light .cave-radar::after { border-color: #b0842b; } /* ping ring in gold */
+
+/* gold-leaf hover on the nav links: a centre-out gilt underline + warm ink */
+html.light .cave-navlink { position: relative; }
+html.light .cave-navlink::after {
+  content: ""; position: absolute; left: 12px; right: 12px; bottom: 5px; height: 1px;
+  background: linear-gradient(90deg, transparent, #b0842b, transparent);
+  transform: scaleX(0); transform-origin: center; transition: transform .28s ease;
+}
+html.light .cave-navlink:hover::after { transform: scaleX(1); }
+html.light .cave-navlink:hover { color: #8a6416 !important; text-shadow: 0 0 10px rgba(176,132,43,.28); }

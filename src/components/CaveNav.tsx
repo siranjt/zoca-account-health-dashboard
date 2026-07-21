@@ -75,7 +75,7 @@ export default function CaveNav() {
             <Link
               key={`${l.href}-${i}`}
               href={l.href}
-              className="rounded-md px-3 py-1.5 font-medium no-underline transition-colors"
+              className="cave-navlink rounded-md px-3 py-1.5 font-medium no-underline transition-colors"
               style={
                 active
                   ? { color: "var(--cave-cy)", background: "rgba(53,224,255,.1)", border: "1px solid var(--cave-line2)" }
