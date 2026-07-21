@@ -199,6 +199,24 @@ html.light .cave-ticker{background:linear-gradient(180deg,transparent,rgba(241,2
 @keyframes cave-sigpulse{0%{transform:scale(.2);opacity:.6}100%{transform:scale(1.5);opacity:0}}
 @keyframes cave-sigemblem{0%{transform:scale(.5);opacity:0}22%{opacity:1}100%{transform:scale(1.12);opacity:0}}
 
+/* health-dot hover sonar ping */
+[aria-label="Healthy"],[aria-label="Monitor"],[aria-label="At risk"],[aria-label="Critical"]{position:relative}
+[aria-label="Healthy"]:hover::after,[aria-label="Monitor"]:hover::after,[aria-label="At risk"]:hover::after,[aria-label="Critical"]:hover::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:1px solid currentColor;animation:cave-dotping 1s ease-out infinite}
+[aria-label="Healthy"]:hover::after{border-color:#16a34a}
+[aria-label="Monitor"]:hover::after{border-color:#d97706}
+[aria-label="At risk"]:hover::after,[aria-label="Critical"]:hover::after{border-color:#dc2626}
+@keyframes cave-dotping{0%{transform:scale(.7);opacity:.8}100%{transform:scale(2.2);opacity:0}}
+
+/* periodic full-screen scan cycle */
+.cave-scancycle{position:fixed;left:0;right:0;top:0;height:70px;pointer-events:none;z-index:30;background:linear-gradient(rgba(53,224,255,0),rgba(53,224,255,.1),rgba(53,224,255,0));opacity:0;animation:cave-scancycle 17s ease-in-out infinite}
+@keyframes cave-scancycle{0%,68%{transform:translateY(-80px);opacity:0}70%{opacity:1}84%{transform:translateY(102vh);opacity:1}86%,100%{opacity:0}}
+
+/* "scanning" overlay while data refreshes */
+.cave-scanning{position:absolute;inset:0;z-index:6;pointer-events:none;overflow:hidden}
+.cave-scanning::before{content:"";position:absolute;left:0;right:0;height:70px;background:linear-gradient(rgba(53,224,255,0),rgba(53,224,255,.14),rgba(53,224,255,0));animation:cave-scanbar 1s linear infinite}
+.cave-scanning::after{content:"SCANNING GRID…";position:absolute;top:8px;left:50%;transform:translateX(-50%);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:9px;letter-spacing:.3em;color:var(--cave-cy);text-shadow:0 0 8px var(--cave-cy)}
+@keyframes cave-scanbar{0%{top:-70px}100%{top:100%}}
+
 /* target-list row treatment: health-colored accent bar + hover scan */
 .cave-row > td:first-child{position:relative}
 .cave-row > td:first-child::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;opacity:.9}

@@ -149,18 +149,42 @@ export default function BatFX() {
     return () => clearInterval(id);
   }, []);
 
-  // Shift+B → fire the bat-signal
+  // Shift+B (or the nav emblem click) → fire the bat-signal
   useEffect(() => {
+    function fire() { setSignal(true); setTimeout(() => setSignal(false), 1700); }
     function onKey(e: KeyboardEvent) {
       const t = e.target as HTMLElement | null;
       if (t && /^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
-      if (e.shiftKey && (e.key === "B" || e.key === "b")) {
-        setSignal(true);
-        setTimeout(() => setSignal(false), 1700);
-      }
+      if (e.shiftKey && (e.key === "B" || e.key === "b")) fire();
     }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("cave-batsignal", fire as EventListener);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("cave-batsignal", fire as EventListener); };
+  }, []);
+
+  // one-time count-up for the KPI numbers on load
+  useEffect(() => {
+    const t = setTimeout(() => {
+      document.querySelectorAll<HTMLElement>(".cave-kpis .tabular-nums").forEach((el) => {
+        const raw = (el.textContent || "").trim();
+        if (raw.includes("/") || !/\d/.test(raw)) return; // skip non-single-number cells
+        const pre = raw.slice(0, raw.search(/[\d.]/));
+        const post = raw.slice(raw.length - (raw.match(/[^\d.,]*$/)?.[0].length || 0));
+        const target = parseFloat(raw.replace(/[^0-9.]/g, ""));
+        if (!isFinite(target)) return;
+        const dec = raw.includes(".");
+        const t0 = performance.now(), dur = 850;
+        function step(now: number) {
+          const p = Math.min(1, (now - t0) / dur);
+          const v = target * (1 - Math.pow(1 - p, 3));
+          el.textContent = pre + (dec ? v.toFixed(1) : Math.round(v).toLocaleString("en-US")) + post;
+          if (p < 1) requestAnimationFrame(step);
+          else el.textContent = raw;
+        }
+        requestAnimationFrame(step);
+      });
+    }, 220);
+    return () => clearTimeout(t);
   }, []);
 
   const TICK = ["◈ UPLINK NOMINAL", "826 UNITS TRACKED", "THREAT MATRIX ARMED", "ENCRYPTED FEED", "SCAN CYCLE COMPLETE", "GRID SYNCED", "WAYNE ENTERPRISES R&D", "CAVE//OS v4"];
@@ -169,6 +193,7 @@ export default function BatFX() {
     <>
       <canvas ref={canvasRef} className="cave-field" aria-hidden="true" />
       <div className="cave-crt" aria-hidden="true" />
+      <div className="cave-scancycle" aria-hidden="true" />
       <div ref={scopeRef} className="cave-scope" aria-hidden="true">
         <div ref={hRef} className="cave-xh" />
         <div ref={vRef} className="cave-xv" />

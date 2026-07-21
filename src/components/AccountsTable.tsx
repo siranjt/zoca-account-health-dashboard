@@ -674,6 +674,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
 
       <div className={`relative cave-brk cave-scanin ${viewMode !== "table" ? "hidden" : ""}`}>
         <div className="cave-radar"><b></b><i></i></div>
+        {loading && <div className="cave-scanning" aria-hidden="true" />}
         <div
           className={`table-scroll rounded-lg border border-slate-200 bg-white shadow-sm transition-opacity ${dense ? "cave-dense" : ""} ${
             loading ? "pointer-events-none opacity-60" : ""
