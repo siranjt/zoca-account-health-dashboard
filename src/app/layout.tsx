@@ -28,7 +28,16 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <div className="cave-boot" aria-hidden="true"><div className="ln" /><div className="tx">◤◢ CAVE//OS · BAT-COMPUTER ONLINE</div></div>
+        <div className="cave-boot" aria-hidden="true">
+          <div className="ln" />
+          <div className="tx">◤◢ CAVE//OS · BAT-COMPUTER ONLINE</div>
+          <div className="lines">
+            &gt; INITIALIZING TACTICAL GRID<br />
+            &gt; UPLINK METABASE … <b>OK</b><br />
+            &gt; SYNCING UNITS … <b>OK</b><br />
+            &gt; THREAT MATRIX ARMED
+          </div>
+        </div>
         {children}
         <BatFX />
         <CommandPalette />

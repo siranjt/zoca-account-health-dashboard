@@ -40,8 +40,10 @@ export default function CaveNav() {
         </span>
       </Link>
 
-      <span className="cave-live ml-3 hidden text-[9px] uppercase tracking-[0.2em] md:inline-flex" title="Live Metabase feed">
+      <span className="cave-live ml-3 hidden items-center gap-1.5 text-[9px] uppercase tracking-[0.2em] md:inline-flex" title="Live Metabase feed">
         <b className="cave-pulse" style={{ display: "inline-block" }}></b> Live feed
+        <span className="text-slate-500">·</span>
+        <span id="cave-clock" className="tabular-nums" style={{ color: "var(--cave-cy)" }}>--:--:--</span>
       </span>
 
       <button

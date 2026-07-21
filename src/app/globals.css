@@ -56,7 +56,6 @@ body::after{
 }
 @keyframes cave-scan{0%{transform:translateY(-200px)}100%{transform:translateY(105vh)}}
 html.light body::after{opacity:.25}
-@media (prefers-reduced-motion:reduce){ body::after{display:none} .cave-pulse,.cave-radar i{animation:none!important} }
 
 /* corner-bracket frame (2 diagonal corners) — add class to any panel */
 .cave-brk{position:relative}
@@ -112,13 +111,43 @@ html.light .cave-crt{opacity:.25}
 .cave-brk::before,.cave-brk::after{animation:cave-brkpulse 3s ease-in-out infinite}
 @keyframes cave-brkpulse{0%,100%{opacity:.45}50%{opacity:.9}}
 
-@media (prefers-reduced-motion:reduce){
-  .cave-boot{display:none}
-  .cave-crt{animation:none}
-  .cave-radar::after{display:none}
-  .cave-emblem,.cave-brk::before,.cave-brk::after{animation:none}
-  [aria-label="At risk"],[aria-label="Critical"]{animation:none;box-shadow:0 0 9px #dc2626,0 0 2px #dc2626 !important}
-}
+/* second, faster scanline for CRT depth */
+body::before{content:"";position:fixed;inset:0 0 auto 0;pointer-events:none;z-index:29;height:2px;background:rgba(53,224,255,.1);animation:cave-scan2 3.4s linear infinite}
+@keyframes cave-scan2{0%{transform:translateY(-6px)}100%{transform:translateY(102vh)}}
+
+/* ambient particle data-field (canvas from BatFX) */
+.cave-field{position:fixed;inset:0;pointer-events:none;z-index:-1;opacity:.5}
+
+/* targeting scope — crosshair that tracks the cursor (BatFX) */
+.cave-xh,.cave-xv{position:fixed;pointer-events:none;z-index:2147483338;background:rgba(53,224,255,.14);opacity:0;transition:opacity .25s}
+.cave-xh{left:0;right:0;height:1px}
+.cave-xv{top:0;bottom:0;width:1px}
+.cave-scope.on .cave-xh,.cave-scope.on .cave-xv{opacity:1}
+.cave-reticle{position:fixed;width:24px;height:24px;pointer-events:none;z-index:2147483339;transform:translate(-50%,-50%);opacity:0;transition:opacity .25s}
+.cave-scope.on .cave-reticle{opacity:.85}
+.cave-reticle span{position:absolute;width:6px;height:6px;border:1px solid var(--cave-cy)}
+.cave-reticle .a{top:0;left:0;border-right:0;border-bottom:0}
+.cave-reticle .b{top:0;right:0;border-left:0;border-bottom:0}
+.cave-reticle .c{bottom:0;left:0;border-right:0;border-top:0}
+.cave-reticle .d{bottom:0;right:0;border-left:0;border-top:0}
+.cave-reticle i{position:absolute;left:50%;top:50%;width:3px;height:3px;background:var(--cave-cy);border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 6px var(--cave-cy)}
+.cave-coord{position:fixed;pointer-events:none;z-index:2147483339;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:8.5px;letter-spacing:.12em;color:var(--cave-cy);text-shadow:0 0 6px rgba(53,224,255,.6);opacity:0;transition:opacity .25s}
+.cave-scope.on .cave-coord{opacity:.8}
+
+/* row target-lock: accent bar snaps wider + brighter on hover */
+.cave-row:hover > td:first-child::before{top:2px;bottom:2px;width:4px}
+.cave-row-red:hover > td:first-child::before{box-shadow:0 0 13px #dc2626}
+.cave-row-yellow:hover > td:first-child::before{box-shadow:0 0 13px #d97706}
+.cave-row-green:hover > td:first-child::before{box-shadow:0 0 13px #16a34a}
+
+/* richer multi-line boot */
+.cave-boot .lines{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;letter-spacing:.16em;color:var(--cave-dim);text-align:left;line-height:2;opacity:0;animation:cave-bootlines 1.5s .4s ease forwards}
+.cave-boot .lines b{color:var(--green,#25e39a)}
+@keyframes cave-bootlines{0%{opacity:0}40%{opacity:0}100%{opacity:1}}
+
+/* control hover glow */
+.cave-brk{transition:box-shadow .16s}
+.cave-brk:hover{box-shadow:inset 0 0 26px rgba(53,224,255,.07)}
 
 /* target-list row treatment: health-colored accent bar + hover scan */
 .cave-row > td:first-child{position:relative}
@@ -183,10 +212,6 @@ html.light .text-slate-700, html.light .text-slate-600 { color: #334155 !importa
 html.light .text-indigo-600, html.light .text-indigo-700 { color: #4338ca !important; }
 html.light .table-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; }
 html.light .table-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
-@media (prefers-reduced-motion: reduce) {
-  .cave-loadbar > i { animation: none; left: 0; width: 100%; opacity: 0.4; }
-}
-
 /* keep sticky table header crisp over scrolling rows */
 .table-scroll {
   overflow: auto;
