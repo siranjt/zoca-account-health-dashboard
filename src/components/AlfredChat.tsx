@@ -30,7 +30,7 @@ function renderAlfred(text: string, index: Idx[]): React.ReactNode {
   let cur = 0;
   picked.forEach((f, i) => {
     if (f.start > cur) nodes.push(text.slice(cur, f.start));
-    nodes.push(<a key={i} href={`/account/${f.id}`} style={{ color: "#8FF0FF", textDecoration: "underline" }}>{text.slice(f.start, f.end)}</a>);
+    nodes.push(<a key={i} href={`/account/${f.id}`} className="cave-lnk">{text.slice(f.start, f.end)}</a>);
     cur = f.end;
   });
   if (cur < text.length) nodes.push(text.slice(cur));
@@ -76,6 +76,30 @@ const CSS = `
 .cave-in input{flex:1;background:#0a1216;border:1px solid var(--bd2);border-radius:8px;color:var(--cy2);font-family:var(--mono);font-size:13px;padding:10px 12px;outline:none}
 .cave-in input:focus{border-color:var(--cy)}
 .cave-in button{background:linear-gradient(180deg,var(--cy2),#1899B4);border:0;color:#03181e;font-size:15px;width:42px;border-radius:8px;cursor:pointer;font-weight:700}
+.cave-lnk{color:var(--cy2);text-decoration:underline}
+
+/* ── Bruce Wayne livery — Alfred as the estate's butler (html.light) ──────── */
+html.light .cave-launch{font-family:Georgia,"Times New Roman",serif;background:linear-gradient(180deg,rgba(176,132,43,.18),rgba(176,132,43,.06));border:1px solid #b0842b;color:#8a6416;box-shadow:0 8px 26px rgba(20,27,46,.18),0 0 14px rgba(176,132,43,.25)}
+html.light .cave-launch:hover{background:rgba(176,132,43,.24)}
+html.light .cave-chat{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:linear-gradient(180deg,#fffdf9,#faf6ee);border-left:1px solid #b0842b;box-shadow:-14px 0 50px rgba(20,27,46,.18)}
+html.light .cave-head{border-bottom:1px solid #e7dcc7}
+html.light .cave-title{font-family:Georgia,"Times New Roman",serif;color:#1b2136;text-shadow:none}
+html.light .cave-sub{color:#9b917d}
+html.light .cave-head button{border-color:#d8c9a9;color:#9b917d}
+html.light .cave-head button:hover{border-color:#b0842b;color:#8a6416}
+html.light .cave-msg.user{background:linear-gradient(180deg,rgba(176,132,43,.16),rgba(176,132,43,.05));border:1px solid rgba(176,132,43,.4);color:#5a4a20}
+html.light .cave-msg.alf{background:#faf6ee;border:1px solid #e7dcc7;color:#1b2136}
+html.light .cave-who{color:#9b917d}
+html.light .cave-msg.alf .cave-who{color:#b0842b;opacity:1}
+html.light .cave-typing{background:#faf6ee;border:1px solid #e7dcc7}
+html.light .cave-typing i{background:#b0842b}
+html.light .cave-chip{border-color:#d8c9a9;color:#7a6a4a}
+html.light .cave-chip:hover{border-color:#b0842b;color:#8a6416;background:rgba(176,132,43,.08)}
+html.light .cave-in{border-top:1px solid #e7dcc7}
+html.light .cave-in input{background:#fffdf9;border:1px solid #d8c9a9;color:#1b2136;font-family:system-ui,sans-serif}
+html.light .cave-in input:focus{border-color:#b0842b}
+html.light .cave-in button{background:linear-gradient(180deg,#c9a24a,#b0842b);color:#fffdf9}
+html.light .cave-lnk{color:#8a6416}
 `;
 
 export default function AlfredChat() {
@@ -84,8 +108,18 @@ export default function AlfredChat() {
   const [busy, setBusy] = useState(false);
   const [input, setInput] = useState("");
   const [index, setIndex] = useState<Idx[]>([]);
+  const [light, setLight] = useState(false); // Wayne persona when html.light
   const logRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  // track the active persona so Alfred's voice matches the theme
+  useEffect(() => {
+    const upd = () => setLight(document.documentElement.classList.contains("light"));
+    upd();
+    const obs = new MutationObserver(upd);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
 
   // account name index for linkifying Alfred's answers
   useEffect(() => {
@@ -187,12 +221,12 @@ export default function AlfredChat() {
   return (
     <div className="cave">
       <style>{CSS}</style>
-      <button className="cave-launch" onClick={() => setOpen((o) => !o)}>◤◢ ASK ALFRED</button>
+      <button className="cave-launch" onClick={() => setOpen((o) => !o)}>{light ? "⌾ RING FOR ALFRED" : "◤◢ ASK ALFRED"}</button>
       <div className={"cave-chat" + (open ? " open" : "")}>
         <div className="cave-head">
           <div className="t">
-            <div className="cave-title">◤◢ ALFRED</div>
-            <div className="cave-sub">{busy ? "reasoning…" : "online · account health analyst"}</div>
+            <div className="cave-title">{light ? "⌾ ALFRED" : "◤◢ ALFRED"}</div>
+            <div className="cave-sub">{busy ? (light ? "attending…" : "reasoning…") : (light ? "at your service · Wayne Manor" : "online · account health analyst")}</div>
           </div>
           <button title="clear" onClick={() => setMsgs([])}>⟲</button>
           <button title="close" onClick={() => setOpen(false)}>✕</button>

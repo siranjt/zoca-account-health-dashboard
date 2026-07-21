@@ -499,3 +499,13 @@ html.light .cave-navlink::after {
 }
 html.light .cave-navlink:hover::after { transform: scaleX(1); }
 html.light .cave-navlink:hover { color: #8a6416 !important; text-shadow: 0 0 10px rgba(176,132,43,.28); }
+
+/* ── Wayne visibility patch: make the watch + gilt underline findable ─────── */
+/* the pocket-watch was too faint to spot — bring it up in light mode */
+html.light .cave-radar { opacity: .9; }
+html.light .cave-radar b { opacity: .8; }
+html.light .cave-radar i { box-shadow: 0 0 5px rgba(176,132,43,.5); }
+/* nav gilt underline: thicker, and PERSISTENT under the active tab so it's seen */
+html.light .cave-navlink::after { height: 2px; bottom: 4px; }
+html.light .cave-navlink-active::after { transform: scaleX(1); }
+html.light .cave-navlink-active { color: #8a6416 !important; }
