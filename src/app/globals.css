@@ -509,3 +509,11 @@ html.light .cave-radar i { box-shadow: 0 0 5px rgba(176,132,43,.5); }
 html.light .cave-navlink::after { height: 2px; bottom: 4px; }
 html.light .cave-navlink-active::after { transform: scaleX(1); }
 html.light .cave-navlink-active { color: #8a6416 !important; }
+
+/* ── top nav bar: sync ground to the persona (was hardcoded dark inline) ──── */
+.cave-nav { background: linear-gradient(180deg, rgba(9,19,24,.96), rgba(5,11,14,.92)); }
+html.light .cave-nav {
+  background: linear-gradient(180deg, rgba(255,253,249,.97), rgba(250,246,238,.93));
+  border-bottom-color: var(--cave-line2) !important;
+  box-shadow: inset 0 2px 0 rgba(176,132,43,.4);   /* thin gold letterhead rule */
+}

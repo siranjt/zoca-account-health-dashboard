@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import ThemeToggle from "./ThemeToggle";
 import CalmToggle from "./CalmToggle";
 
@@ -14,6 +15,16 @@ export default function CaveNav() {
   const path = usePathname() || "/";
   const onDetail = path.startsWith("/account/");
 
+  // sync the bar's wording to the active persona (Batman dark / Wayne light)
+  const [light, setLight] = useState(false);
+  useEffect(() => {
+    const upd = () => setLight(document.documentElement.classList.contains("light"));
+    upd();
+    const obs = new MutationObserver(upd);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+
   const links: { href: string; label: string; match: (p: string) => boolean }[] = [
     { href: "/", label: "Home", match: (p) => p === "/" },
     { href: "/overview", label: "Overview", match: (p) => p === "/overview" || p.startsWith("/account") },
@@ -22,9 +33,8 @@ export default function CaveNav() {
 
   return (
     <nav
-      className="sticky top-0 z-40 flex items-center gap-4 border-b px-4 py-2.5"
+      className="cave-nav sticky top-0 z-40 flex items-center gap-4 border-b px-4 py-2.5"
       style={{
-        background: "linear-gradient(180deg, rgba(9,19,24,.96), rgba(5,11,14,.92))",
         borderColor: "var(--cave-line)",
         backdropFilter: "blur(6px)",
       }}
@@ -44,12 +54,12 @@ export default function CaveNav() {
           CAVE//OS
         </span>
         <span className="cave-decode hidden text-[10px] uppercase tracking-[0.18em] sm:inline" style={{ color: "var(--cave-dim)" }}>
-          Bat-Computer · Account Health Grid
+          {light ? "Wayne Enterprises · Account Portfolio" : "Bat-Computer · Account Health Grid"}
         </span>
       </Link>
 
       <span className="cave-live ml-3 hidden items-center gap-1.5 text-[9px] uppercase tracking-[0.2em] md:inline-flex" title="Live Metabase feed">
-        <b className="cave-pulse" style={{ display: "inline-block" }}></b> Live feed
+        <b className="cave-pulse" style={{ display: "inline-block" }}></b> {light ? "Markets open" : "Live feed"}
         <span className="text-slate-500">·</span>
         <span id="cave-clock" className="tabular-nums" style={{ color: "var(--cave-cy)" }}>--:--:--</span>
       </span>
