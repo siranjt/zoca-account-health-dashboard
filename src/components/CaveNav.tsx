@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import ThemeToggle from "./ThemeToggle";
 import CalmToggle from "./CalmToggle";
+import DetectiveToggle from "./DetectiveToggle";
 
 /**
  * CAVE//OS top navigation bar — shared across Landing, Overview and Detail.
@@ -75,6 +76,7 @@ export default function CaveNav() {
         <kbd className="rounded px-1 text-[10px]" style={{ background: "var(--cave-line)", color: "#a7c3c8" }}>⌘K</kbd>
       </button>
 
+      <DetectiveToggle />
       <CalmToggle />
       <ThemeToggle />
 

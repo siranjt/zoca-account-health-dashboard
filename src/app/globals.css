@@ -554,3 +554,50 @@ html.light .cave-tile:hover { box-shadow: 0 10px 24px rgba(20,27,46,.12), 0 0 0 
 }
 @keyframes geo-scan { 0% { transform: translateX(-60px); } 50% { transform: translateX(660px); } 100% { transform: translateX(-60px); } }
 html.light .geo-scan { background: linear-gradient(90deg, transparent, rgba(176,132,43,.14), transparent); }
+
+/* ══ GOTHAM RAIN (Batman-side ambient storm) ═════════════════════════════ */
+.gotham-rain { position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .55; }
+html.light .gotham-rain,
+html.calm .gotham-rain { display: none; }            /* clear skies in the penthouse / calm mode */
+/* distant lightning flash */
+.gotham-lightning {
+  position: fixed; inset: 0; pointer-events: none; z-index: 1;
+  background: radial-gradient(120% 90% at 70% 0%, rgba(150,205,255,.14), transparent 55%);
+  opacity: 0; animation: gotham-lightning 14s ease-out infinite;
+}
+@keyframes gotham-lightning {
+  0%, 100% { opacity: 0; }
+  1.6% { opacity: .9; } 3% { opacity: .2; } 4.2% { opacity: .7; } 6% { opacity: 0; }
+}
+html.light .gotham-lightning,
+html.calm .gotham-lightning { display: none; }
+
+/* ══ DETECTIVE MODE (Arkham-style vision lens) ═══════════════════════════ */
+.detective-tint { position: fixed; inset: 0; pointer-events: none; z-index: 2147483200; display: none; }
+.detective-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 2147483201; display: none; }
+html.detective .detective-tint { display: block; background: rgba(28,86,170,.30); mix-blend-mode: color; }
+html.detective .detective-overlay {
+  display: block;
+  background:
+    repeating-linear-gradient(0deg, rgba(150,205,255,.05) 0 1px, transparent 1px 3px),
+    radial-gradient(125% 125% at 50% 42%, transparent 52%, rgba(3,16,44,.62));
+  animation: detective-scan 5.5s linear infinite;
+}
+@keyframes detective-scan { 0% { background-position: 0 0, 0 0; } 100% { background-position: 0 6px, 0 0; } }
+.detective-hud {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10px; letter-spacing: .28em;
+  color: #9fd6ff; text-shadow: 0 0 12px rgba(120,190,255,.8);
+  border: 1px solid rgba(120,190,255,.4); border-radius: 6px; padding: 5px 12px;
+  background: rgba(6,24,58,.55); animation: detective-hud 1.8s ease-in-out infinite;
+}
+@keyframes detective-hud { 0%,100% { opacity: .65; } 50% { opacity: 1; } }
+/* X-ray highlight: the data lights up under detective vision */
+html.detective [aria-label="At risk"],
+html.detective [aria-label="Critical"] { box-shadow: 0 0 16px #ff6b6b, 0 0 5px #fff !important; }
+html.detective [aria-label="Monitor"] { box-shadow: 0 0 12px #ffd479, 0 0 3px #fff !important; }
+html.detective [aria-label="Healthy"] { box-shadow: 0 0 12px #6ee7a8, 0 0 3px #fff !important; }
+html.detective .cave-row-red { outline: 1px solid rgba(255,107,107,.55); outline-offset: -1px; }
+html.detective .cave-kpis .tabular-nums { text-shadow: 0 0 12px rgba(150,205,255,.7); }
+html.detective .cave-brk::before,
+html.detective .cave-brk::after { border-color: #7fd0ff !important; opacity: 1 !important; box-shadow: 0 0 8px rgba(120,190,255,.7); }
