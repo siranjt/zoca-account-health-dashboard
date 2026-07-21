@@ -78,9 +78,47 @@ html.light body::after{opacity:.25}
 @keyframes cave-spin{to{transform:rotate(360deg)}}
 
 /* glow on the health traffic-lights (bat-computer threat status) */
-[aria-label="At risk"],[aria-label="Critical"]{box-shadow:0 0 9px #dc2626,0 0 2px #dc2626 !important}
 [aria-label="Monitor"]{box-shadow:0 0 9px #d97706,0 0 2px #d97706 !important}
 [aria-label="Healthy"]{box-shadow:0 0 9px #16a34a,0 0 2px #16a34a !important}
+/* critical/at-risk units PULSE — draw the eye */
+[aria-label="At risk"],[aria-label="Critical"]{animation:cave-threat 1.7s ease-in-out infinite}
+@keyframes cave-threat{0%,100%{box-shadow:0 0 6px #dc2626,0 0 2px #dc2626}50%{box-shadow:0 0 15px #dc2626,0 0 5px #dc2626}}
+
+/* ── extra battech animations (all reduced-motion-safe) ─────────────────── */
+/* power-on / boot sequence (rendered once in layout) */
+.cave-boot{position:fixed;inset:0;z-index:2147483300;background:#04080a;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;animation:cave-bootfade 1.7s ease-in forwards}
+.cave-boot .ln{width:min(60vw,520px);height:2px;background:linear-gradient(90deg,transparent,var(--cave-cy),transparent);box-shadow:0 0 16px var(--cave-cy);transform:scaleX(0);animation:cave-bootline .9s .1s ease-out forwards}
+.cave-boot .tx{font-family:"IBM Plex Mono",ui-monospace,monospace;letter-spacing:.42em;color:var(--cave-cy);font-size:12px;text-shadow:0 0 12px var(--cave-cy);opacity:0;animation:cave-boottx 1.3s .35s ease forwards}
+@keyframes cave-bootfade{0%,55%{opacity:1}100%{opacity:0;visibility:hidden}}
+@keyframes cave-bootline{to{transform:scaleX(1)}}
+@keyframes cave-boottx{0%{opacity:0}30%{opacity:.25}45%{opacity:1}55%{opacity:.4}65%{opacity:1}100%{opacity:1}}
+
+/* subtle CRT vignette + flicker overlay */
+.cave-crt{position:fixed;inset:0;pointer-events:none;z-index:31;background:radial-gradient(130% 130% at 50% 50%,transparent 58%,rgba(0,0,0,.22));opacity:.6;animation:cave-flicker 4s steps(40) infinite}
+@keyframes cave-flicker{0%,96%{opacity:.6}97%{opacity:.44}98%{opacity:.62}99%{opacity:.5}100%{opacity:.6}}
+html.light .cave-crt{opacity:.25}
+
+/* click ripple (spawned by BatFX) */
+.cave-ripple{position:fixed;border:1px solid var(--cave-cy);border-radius:50%;pointer-events:none;z-index:2147483350;transform:translate(-50%,-50%);box-shadow:0 0 10px rgba(53,224,255,.5);animation:cave-ripple .6s ease-out forwards}
+@keyframes cave-ripple{0%{width:6px;height:6px;opacity:.75}100%{width:62px;height:62px;opacity:0}}
+
+/* radar ping ring */
+.cave-radar::after{content:"";position:absolute;inset:12px;border:1px solid var(--cave-cy);border-radius:50%;transform-origin:center;opacity:0;animation:cave-ping 4s ease-out infinite}
+@keyframes cave-ping{0%{transform:scale(.25);opacity:.55}80%,100%{transform:scale(1);opacity:0}}
+
+/* emblem breathing glow + corner-bracket pulse */
+.cave-emblem{animation:cave-emblem 3s ease-in-out infinite}
+@keyframes cave-emblem{0%,100%{filter:drop-shadow(0 0 7px rgba(53,224,255,.4))}50%{filter:drop-shadow(0 0 15px rgba(53,224,255,.75))}}
+.cave-brk::before,.cave-brk::after{animation:cave-brkpulse 3s ease-in-out infinite}
+@keyframes cave-brkpulse{0%,100%{opacity:.45}50%{opacity:.9}}
+
+@media (prefers-reduced-motion:reduce){
+  .cave-boot{display:none}
+  .cave-crt{animation:none}
+  .cave-radar::after{display:none}
+  .cave-emblem,.cave-brk::before,.cave-brk::after{animation:none}
+  [aria-label="At risk"],[aria-label="Critical"]{animation:none;box-shadow:0 0 9px #dc2626,0 0 2px #dc2626 !important}
+}
 
 /* target-list row treatment: health-colored accent bar + hover scan */
 .cave-row > td:first-child{position:relative}

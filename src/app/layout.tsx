@@ -4,6 +4,7 @@ import AlfredChat from "@/components/AlfredChat";
 import CommandPalette from "@/components/CommandPalette";
 import Toaster from "@/components/Toaster";
 import ShortcutsHelp from "@/components/ShortcutsHelp";
+import BatFX from "@/components/BatFX";
 
 export const metadata: Metadata = {
   title: "CAVE//OS — Account Health Command Deck",
@@ -27,7 +28,9 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <div className="cave-boot" aria-hidden="true"><div className="ln" /><div className="tx">◤◢ CAVE//OS · BAT-COMPUTER ONLINE</div></div>
         {children}
+        <BatFX />
         <CommandPalette />
         <ShortcutsHelp />
         <Toaster />
