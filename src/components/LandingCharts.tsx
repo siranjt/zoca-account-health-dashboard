@@ -8,23 +8,38 @@ import type { ChartData } from "@/app/page";
 // threat ring, a targeting radar of the book's health dimensions, and handler
 // load bars. Everything is token-coloured (cyan in Batman, gold in Wayne) with
 // fixed traffic-light semantics. Draw-in animates once on mount.
-export default function LandingCharts({ charts }: { charts: ChartData }) {
+// Tier colours are persona-aware: Batman runs hot (electric red/amber/green);
+// Bruce Wayne runs quiet-luxury (oxblood / brass / forest).
+export type Tier = { red: string; yellow: string; green: string };
+const BAT_TIER: Tier = { red: "#dc2626", yellow: "#d97706", green: "#16a34a" };
+const WAYNE_TIER: Tier = { red: "#9e2b25", yellow: "#b7791f", green: "#2f6b4f" };
+
+export default function LandingCharts({ charts, avg }: { charts: ChartData; avg: number }) {
   const [on, setOn] = useState(false);
+  const [light, setLight] = useState(false);
   useEffect(() => { const t = setTimeout(() => setOn(true), 60); return () => clearTimeout(t); }, []);
+  useEffect(() => {
+    const upd = () => setLight(document.documentElement.classList.contains("light"));
+    upd();
+    const obs = new MutationObserver(upd);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+  const tc = light ? WAYNE_TIER : BAT_TIER;
 
   return (
     <section className="mt-16">
       <SectionLabel>Tactical Readout</SectionLabel>
       <div className="grid gap-3">
-        <Spectrum hist={charts.hist} on={on} vitals={charts.vitals} />
+        <Spectrum hist={charts.hist} on={on} vitals={charts.vitals} tc={tc} avg={avg} />
         <div className="grid gap-3 lg:grid-cols-3">
-          <ThreatRing mix={charts.mix} on={on} />
+          <ThreatRing mix={charts.mix} on={on} tc={tc} />
           <DimRadar dims={charts.dims} on={on} />
-          <HandlerLoad amLoad={charts.amLoad} on={on} />
+          <HandlerLoad amLoad={charts.amLoad} on={on} tc={tc} />
         </div>
-        <GeoGrid geo={charts.geo} on={on} />
+        <GeoGrid geo={charts.geo} on={on} tc={tc} />
         <div className="grid gap-3 lg:grid-cols-2">
-          <MrrByTier mrr={charts.mrrTier} on={on} />
+          <MrrByTier mrr={charts.mrrTier} on={on} tc={tc} />
           <Signals lead={charts.leadSpark} review={charts.reviewSpark} on={on} />
         </div>
       </div>
@@ -33,41 +48,49 @@ export default function LandingCharts({ charts }: { charts: ChartData }) {
 }
 
 /* ── E · geographic threat grid (tactical map of the book) ──────────────── */
-function GeoGrid({ geo, on }: { geo: { lat: number; lng: number; c: "green" | "yellow" | "red" }[]; on: boolean }) {
+function GeoGrid({ geo, on, tc }: { geo: { lat: number; lng: number; c: "green" | "yellow" | "red" }[]; on: boolean; tc: Tier }) {
   const W = 660, H = 280;
   const LNG0 = -125, LNG1 = -66, LAT0 = 24, LAT1 = 50;
   const proj = (lng: number, lat: number): [number, number] => [
     Math.max(0, Math.min(W, ((lng - LNG0) / (LNG1 - LNG0)) * W)),
     Math.max(0, Math.min(H, ((LAT1 - lat) / (LAT1 - LAT0)) * H)),
   ];
-  const col = (c: string) => (c === "red" ? "#dc2626" : c === "yellow" ? "#d97706" : "#16a34a");
+  const col = (c: string) => (c === "red" ? tc.red : c === "yellow" ? tc.yellow : tc.green);
   const pts = geo
     .filter((g) => g.lng >= LNG0 - 8 && g.lng <= LNG1 + 8 && g.lat >= LAT0 - 5 && g.lat <= LAT1 + 6)
     .map((g) => { const [x, y] = proj(g.lng, g.lat); return { x, y, c: g.c }; });
   const reds = pts.filter((p) => p.c === "red");
   const others = pts.filter((p) => p.c !== "red");
+  const lngTicks = [-120, -105, -90, -75];
+  const latTicks = [45, 38, 31];
   return (
     <Card title="Geo Threat Grid" note={`${pts.length} located · ${reds.length} critical`}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="none" style={{ maxHeight: 300 }} role="img" aria-label="Geographic threat map">
-        {Array.from({ length: 9 }).map((_, i) => { const x = (i / 8) * W; return <line key={`v${i}`} x1={x} y1={0} x2={x} y2={H} stroke="var(--cave-line)" strokeWidth={1} opacity={0.35} />; })}
-        {Array.from({ length: 5 }).map((_, i) => { const y = (i / 4) * H; return <line key={`h${i}`} x1={0} y1={y} x2={W} y2={y} stroke="var(--cave-line)" strokeWidth={1} opacity={0.35} />; })}
-        <line x1={W / 2} y1={0} x2={W / 2} y2={H} stroke="var(--cave-cy)" strokeWidth={1} opacity={0.12} />
-        <line x1={0} y1={H / 2} x2={W} y2={H / 2} stroke="var(--cave-cy)" strokeWidth={1} opacity={0.12} />
-        <g style={{ opacity: on ? 1 : 0, transition: "opacity .7s ease" }}>
-          {others.map((p, i) => <circle key={`n${i}`} cx={p.x} cy={p.y} r={1.7} fill={col(p.c)} opacity={0.7} />)}
-          {reds.map((p, i) => <circle key={`r${i}`} className="geo-blip" cx={p.x} cy={p.y} r={2.6} fill="#dc2626" style={{ filter: "drop-shadow(0 0 5px #dc2626)", animationDelay: `${(i % 8) * 0.12}s` }} />)}
-        </g>
-      </svg>
+      <div className="relative overflow-hidden rounded">
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="none" style={{ maxHeight: 300 }} role="img" aria-label="Geographic threat map">
+          {Array.from({ length: 9 }).map((_, i) => { const x = (i / 8) * W; return <line key={`v${i}`} x1={x} y1={0} x2={x} y2={H} stroke="var(--cave-line)" strokeWidth={1} opacity={0.35} />; })}
+          {Array.from({ length: 5 }).map((_, i) => { const y = (i / 4) * H; return <line key={`h${i}`} x1={0} y1={y} x2={W} y2={y} stroke="var(--cave-line)" strokeWidth={1} opacity={0.35} />; })}
+          <line x1={W / 2} y1={0} x2={W / 2} y2={H} stroke="var(--cave-cy)" strokeWidth={1} opacity={0.12} />
+          <line x1={0} y1={H / 2} x2={W} y2={H / 2} stroke="var(--cave-cy)" strokeWidth={1} opacity={0.12} />
+          {lngTicks.map((t) => { const [x] = proj(t, LAT0); return <text key={`lng${t}`} x={x} y={H - 5} textAnchor="middle" fontSize={8} fill="var(--cave-dim)">{Math.abs(t)}°W</text>; })}
+          {latTicks.map((t) => { const [, y] = proj(LNG0, t); return <text key={`lat${t}`} x={4} y={y + 3} fontSize={8} fill="var(--cave-dim)">{t}°N</text>; })}
+          <g style={{ opacity: on ? 1 : 0, transition: "opacity .7s ease" }}>
+            {others.map((p, i) => <circle key={`n${i}`} cx={p.x} cy={p.y} r={1.7} fill={col(p.c)} opacity={0.7} />)}
+            {reds.map((p, i) => <circle key={`r${i}`} className="geo-blip" cx={p.x} cy={p.y} r={2.6} fill={tc.red} style={{ filter: `drop-shadow(0 0 5px ${tc.red})`, animationDelay: `${(i % 8) * 0.12}s` }} />)}
+          </g>
+        </svg>
+        {/* horizontal radar sweep passing across the grid */}
+        <div className="geo-scan pointer-events-none absolute inset-y-0 left-0 w-[46px]" aria-hidden="true" />
+      </div>
     </Card>
   );
 }
 
 /* ── F · MRR by tier ────────────────────────────────────────────────────── */
-function MrrByTier({ mrr, on }: { mrr: { green: number; yellow: number; red: number }; on: boolean }) {
+function MrrByTier({ mrr, on, tc }: { mrr: { green: number; yellow: number; red: number }; on: boolean; tc: Tier }) {
   const tiers: { k: "red" | "yellow" | "green"; c: string; l: string }[] = [
-    { k: "red", c: "#dc2626", l: "critical" },
-    { k: "yellow", c: "#d97706", l: "monitor" },
-    { k: "green", c: "#16a34a", l: "healthy" },
+    { k: "red", c: tc.red, l: "critical" },
+    { k: "yellow", c: tc.yellow, l: "monitor" },
+    { k: "green", c: tc.green, l: "healthy" },
   ];
   const max = Math.max(1, mrr.green, mrr.yellow, mrr.red);
   return (
@@ -124,12 +147,14 @@ function Spark({ label, data, on, delay }: { label: string; data: number[]; on: 
 }
 
 /* ── A · composite-score spectrum analyzer ──────────────────────────────── */
-function Spectrum({ hist, on, vitals }: { hist: number[]; on: boolean; vitals: { leads: number; reviews: number } }) {
+function Spectrum({ hist, on, vitals, tc, avg }: { hist: number[]; on: boolean; vitals: { leads: number; reviews: number }; tc: Tier; avg: number }) {
   const [hover, setHover] = useState<number | null>(null);
   const max = Math.max(1, ...hist);
   const W = 660, H = 200, padL = 30, padB = 26, padT = 14;
   const bw = (W - padL - 10) / hist.length;
-  const barColor = (i: number) => (i < 4 ? "#dc2626" : i < 7 ? "#d97706" : "#16a34a");
+  const barColor = (i: number) => (i < 4 ? tc.red : i < 7 ? tc.yellow : tc.green);
+  const plotW = W - padL - 10;
+  const avgX = padL + Math.max(0, Math.min(100, avg)) / 100 * plotW;
   return (
     <Card title="Composite Spectrum" note={`${sum(hist)} scored · leads ${fmt(vitals.leads)} · reviews ${fmt(vitals.reviews)}`}>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="none" style={{ maxHeight: 210 }} role="img" aria-label="Composite score distribution">
@@ -137,6 +162,12 @@ function Spectrum({ hist, on, vitals }: { hist: number[]; on: boolean; vitals: {
           const y = padT + (H - padT - padB) * g;
           return <line key={g} x1={padL} y1={y} x2={W - 6} y2={y} stroke="var(--cave-line)" strokeWidth={1} opacity={0.5} />;
         })}
+        {avg > 0 && (
+          <g style={{ opacity: on ? 1 : 0, transition: "opacity .5s .5s" }}>
+            <line x1={avgX} y1={padT} x2={avgX} y2={H - padB} stroke="var(--cave-cy)" strokeWidth={1.2} strokeDasharray="4 3" opacity={0.9} />
+            <text x={avgX} y={padT - 3} textAnchor="middle" fontSize={9} fill="var(--cave-cy)">AVG {avg.toFixed(0)}</text>
+          </g>
+        )}
         {hist.map((c, i) => {
           const full = H - padT - padB;
           const h = (c / max) * full;
@@ -166,13 +197,13 @@ function Spectrum({ hist, on, vitals }: { hist: number[]; on: boolean; vitals: {
 }
 
 /* ── B · threat ring (health mix donut) ─────────────────────────────────── */
-function ThreatRing({ mix, on }: { mix: { green: number; yellow: number; red: number }; on: boolean }) {
+function ThreatRing({ mix, on, tc }: { mix: { green: number; yellow: number; red: number }; on: boolean; tc: Tier }) {
   const [hover, setHover] = useState<null | "green" | "yellow" | "red">(null);
   const total = Math.max(1, mix.green + mix.yellow + mix.red);
   const segs: { k: "green" | "yellow" | "red"; v: number; c: string }[] = [
-    { k: "green", v: mix.green, c: "#16a34a" },
-    { k: "yellow", v: mix.yellow, c: "#d97706" },
-    { k: "red", v: mix.red, c: "#dc2626" },
+    { k: "green", v: mix.green, c: tc.green },
+    { k: "yellow", v: mix.yellow, c: tc.yellow },
+    { k: "red", v: mix.red, c: tc.red },
   ];
   let acc = 0;
   const R = 54, cx = 70, cy = 70;
@@ -196,7 +227,7 @@ function ThreatRing({ mix, on }: { mix: { green: number; yellow: number; red: nu
             acc += pct;
             return el;
           })}
-          <text x={cx} y={cy - 3} textAnchor="middle" fontSize={26} fontWeight={700} fill={center ? center.c : "#dc2626"}>{center ? center.v : mix.red}</text>
+          <text x={cx} y={cy - 3} textAnchor="middle" fontSize={26} fontWeight={700} fill={center ? center.c : tc.red}>{center ? center.v : mix.red}</text>
           <text x={cx} y={cy + 14} textAnchor="middle" fontSize={9} letterSpacing="1.5" fill="var(--cave-dim)">{center ? center.k.toUpperCase() : "AT RISK"}</text>
         </svg>
         <div className="flex flex-col gap-2 text-xs">
@@ -230,6 +261,11 @@ function DimRadar({ dims, on }: { dims: { engagement: number; value: number; pro
           <polygon key={g} points={axes.map((ax) => pt(ax.a, R * g).join(",")).join(" ")} fill="none" stroke="var(--cave-line)" strokeWidth={1} opacity={0.6} />
         ))}
         {axes.map((ax) => { const [x, y] = pt(ax.a, R); return <line key={ax.k} x1={cx} y1={cy} x2={x} y2={y} stroke="var(--cave-line)" strokeWidth={1} opacity={0.6} />; })}
+        {/* rotating targeting sweep — batcomputer scope */}
+        <g className="radar-sweep" style={{ transformOrigin: `${cx}px ${cy}px` }}>
+          <line x1={cx} y1={cy} x2={cx + R} y2={cy} stroke="var(--cave-cy)" strokeWidth={1.4} opacity={0.55} />
+          <line x1={cx} y1={cy} x2={cx + R} y2={cy} stroke="var(--cave-cy)" strokeWidth={6} opacity={0.1} />
+        </g>
         <polygon points={poly} fill="var(--cave-cy)" fillOpacity={0.16} stroke="var(--cave-cy)" strokeWidth={1.5}
           style={{ transformBox: "fill-box", transformOrigin: "center", transform: on ? "scale(1)" : "scale(0)", transition: "transform .7s cubic-bezier(.2,.7,.2,1) .1s", filter: "drop-shadow(0 0 5px var(--cave-cy))" }} />
         {axes.map((ax) => {
@@ -249,7 +285,7 @@ function DimRadar({ dims, on }: { dims: { engagement: number; value: number; pro
 }
 
 /* ── D · handler load (top AMs, total + at-risk overlay) ─────────────────── */
-function HandlerLoad({ amLoad, on }: { amLoad: { name: string; total: number; red: number }[]; on: boolean }) {
+function HandlerLoad({ amLoad, on, tc }: { amLoad: { name: string; total: number; red: number }[]; on: boolean; tc: Tier }) {
   const [hover, setHover] = useState<number | null>(null);
   const max = Math.max(1, ...amLoad.map((a) => a.total));
   return (
@@ -261,12 +297,12 @@ function HandlerLoad({ amLoad, on }: { amLoad: { name: string; total: number; re
             <div className="mb-0.5 flex items-center justify-between text-[11px]">
               <span className="truncate" style={{ color: "var(--cave-txt)", maxWidth: 130 }}>{a.name}</span>
               <span className="tabular-nums" style={{ color: "var(--cave-dim)" }}>
-                {a.total}{a.red > 0 && <span style={{ color: "#dc2626" }}> · {a.red}▲</span>}
+                {a.total}{a.red > 0 && <span style={{ color: tc.red }}> · {a.red}▲</span>}
               </span>
             </div>
             <div className="relative h-2 overflow-hidden rounded-sm" style={{ background: "var(--cave-line)" }}>
               <div className="absolute left-0 top-0 h-full rounded-sm" style={{ width: on ? `${(a.total / max) * 100}%` : "0%", background: "var(--cave-cy)", boxShadow: hover === i ? "0 0 8px var(--cave-cy)" : "none", transition: `width .7s cubic-bezier(.2,.7,.2,1) ${i * 0.05}s` }} />
-              <div className="absolute left-0 top-0 h-full rounded-sm" style={{ width: on ? `${(a.red / max) * 100}%` : "0%", background: "#dc2626", boxShadow: "0 0 6px #dc2626", transition: `width .7s cubic-bezier(.2,.7,.2,1) ${i * 0.05 + 0.1}s` }} />
+              <div className="absolute left-0 top-0 h-full rounded-sm" style={{ width: on ? `${(a.red / max) * 100}%` : "0%", background: tc.red, boxShadow: `0 0 6px ${tc.red}`, transition: `width .7s cubic-bezier(.2,.7,.2,1) ${i * 0.05 + 0.1}s` }} />
             </div>
           </div>
         ))}

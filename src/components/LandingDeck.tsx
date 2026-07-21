@@ -167,7 +167,7 @@ export default function LandingDeck({
       </section>
 
       {/* ── TACTICAL READOUT (live charts) ───────────────────────────────── */}
-      {stats.total > 0 && <LandingCharts charts={charts} />}
+      {stats.total > 0 && <LandingCharts charts={charts} avg={stats.avg} />}
 
       {/* ── AT-RISK BOARD + ASK ALFRED ───────────────────────────────────── */}
       <section className="mt-14 grid gap-6 lg:grid-cols-2">
