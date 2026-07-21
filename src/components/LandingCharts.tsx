@@ -37,7 +37,6 @@ export default function LandingCharts({ charts, avg }: { charts: ChartData; avg:
           <DimRadar dims={charts.dims} on={on} />
           <HandlerLoad amLoad={charts.amLoad} on={on} tc={tc} />
         </div>
-        <GeoGrid geo={charts.geo} on={on} tc={tc} />
         <div className="grid gap-3 lg:grid-cols-2">
           <MrrByTier mrr={charts.mrrTier} on={on} tc={tc} />
           <Signals lead={charts.leadSpark} review={charts.reviewSpark} on={on} />
@@ -47,45 +46,7 @@ export default function LandingCharts({ charts, avg }: { charts: ChartData; avg:
   );
 }
 
-/* ── E · geographic threat grid (tactical map of the book) ──────────────── */
-function GeoGrid({ geo, on, tc }: { geo: { lat: number; lng: number; c: "green" | "yellow" | "red" }[]; on: boolean; tc: Tier }) {
-  const W = 660, H = 280;
-  const LNG0 = -125, LNG1 = -66, LAT0 = 24, LAT1 = 50;
-  const proj = (lng: number, lat: number): [number, number] => [
-    Math.max(0, Math.min(W, ((lng - LNG0) / (LNG1 - LNG0)) * W)),
-    Math.max(0, Math.min(H, ((LAT1 - lat) / (LAT1 - LAT0)) * H)),
-  ];
-  const col = (c: string) => (c === "red" ? tc.red : c === "yellow" ? tc.yellow : tc.green);
-  const pts = geo
-    .filter((g) => g.lng >= LNG0 - 8 && g.lng <= LNG1 + 8 && g.lat >= LAT0 - 5 && g.lat <= LAT1 + 6)
-    .map((g) => { const [x, y] = proj(g.lng, g.lat); return { x, y, c: g.c }; });
-  const reds = pts.filter((p) => p.c === "red");
-  const others = pts.filter((p) => p.c !== "red");
-  const lngTicks = [-120, -105, -90, -75];
-  const latTicks = [45, 38, 31];
-  return (
-    <Card title="Geo Threat Grid" note={`${pts.length} located · ${reds.length} critical`}>
-      <div className="relative overflow-hidden rounded">
-        <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="none" style={{ maxHeight: 300 }} role="img" aria-label="Geographic threat map">
-          {Array.from({ length: 9 }).map((_, i) => { const x = (i / 8) * W; return <line key={`v${i}`} x1={x} y1={0} x2={x} y2={H} stroke="var(--cave-line)" strokeWidth={1} opacity={0.35} />; })}
-          {Array.from({ length: 5 }).map((_, i) => { const y = (i / 4) * H; return <line key={`h${i}`} x1={0} y1={y} x2={W} y2={y} stroke="var(--cave-line)" strokeWidth={1} opacity={0.35} />; })}
-          <line x1={W / 2} y1={0} x2={W / 2} y2={H} stroke="var(--cave-cy)" strokeWidth={1} opacity={0.12} />
-          <line x1={0} y1={H / 2} x2={W} y2={H / 2} stroke="var(--cave-cy)" strokeWidth={1} opacity={0.12} />
-          {lngTicks.map((t) => { const [x] = proj(t, LAT0); return <text key={`lng${t}`} x={x} y={H - 5} textAnchor="middle" fontSize={8} fill="var(--cave-dim)">{Math.abs(t)}°W</text>; })}
-          {latTicks.map((t) => { const [, y] = proj(LNG0, t); return <text key={`lat${t}`} x={4} y={y + 3} fontSize={8} fill="var(--cave-dim)">{t}°N</text>; })}
-          <g style={{ opacity: on ? 1 : 0, transition: "opacity .7s ease" }}>
-            {others.map((p, i) => <circle key={`n${i}`} cx={p.x} cy={p.y} r={1.7} fill={col(p.c)} opacity={0.7} />)}
-            {reds.map((p, i) => <circle key={`r${i}`} className="geo-blip" cx={p.x} cy={p.y} r={2.6} fill={tc.red} style={{ filter: `drop-shadow(0 0 5px ${tc.red})`, animationDelay: `${(i % 8) * 0.12}s` }} />)}
-          </g>
-        </svg>
-        {/* horizontal radar sweep passing across the grid */}
-        <div className="geo-scan pointer-events-none absolute inset-y-0 left-0 w-[46px]" aria-hidden="true" />
-      </div>
-    </Card>
-  );
-}
-
-/* ── F · MRR by tier ────────────────────────────────────────────────────── */
+/* ── E · MRR by tier ────────────────────────────────────────────────────── */
 function MrrByTier({ mrr, on, tc }: { mrr: { green: number; yellow: number; red: number }; on: boolean; tc: Tier }) {
   const tiers: { k: "red" | "yellow" | "green"; c: string; l: string }[] = [
     { k: "red", c: tc.red, l: "critical" },

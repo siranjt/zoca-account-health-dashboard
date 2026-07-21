@@ -541,19 +541,9 @@ html.light .cave-cta {
 .cave-tile:hover { transform: translateY(-3px); box-shadow: 0 10px 26px rgba(0,0,0,.34); }
 html.light .cave-tile:hover { box-shadow: 0 10px 24px rgba(20,27,46,.12), 0 0 0 1px rgba(176,132,43,.25); }
 
-/* geo threat-grid critical blips pulse like a radar contact */
-.geo-blip { animation: geo-blip 1.7s ease-in-out infinite; }
-@keyframes geo-blip { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
-
-/* landing chart motion: radar sweep (health radar) + geo scan bar */
+/* landing chart motion: radar sweep (health radar) */
 .radar-sweep { animation: radar-sweep 4.5s linear infinite; }
 @keyframes radar-sweep { to { transform: rotate(360deg); } }
-.geo-scan {
-  background: linear-gradient(90deg, transparent, rgba(53,224,255,.12), transparent);
-  animation: geo-scan 6s ease-in-out infinite;
-}
-@keyframes geo-scan { 0% { transform: translateX(-60px); } 50% { transform: translateX(660px); } 100% { transform: translateX(-60px); } }
-html.light .geo-scan { background: linear-gradient(90deg, transparent, rgba(176,132,43,.14), transparent); }
 
 /* ══ GOTHAM RAIN (Batman-side ambient storm) ═════════════════════════════ */
 .gotham-rain { position: fixed; inset: 0; pointer-events: none; z-index: 12; opacity: .85; mix-blend-mode: screen; }
