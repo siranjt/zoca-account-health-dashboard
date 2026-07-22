@@ -24,7 +24,6 @@ export type ChartData = {
   rankBands: { top3: number; r410: number; r1120: number; r20p: number };
   visibility: number; // avg % of tracked keywords ranking top-3
   mrrBands: number[]; // counts per band, see MRR_BANDS labels in LandingCharts
-  scatter: { x: number; y: number; c: "green" | "yellow" | "red" }[];
   adoption: { online: number; total: number; photos: number };
 };
 
@@ -32,7 +31,7 @@ export default async function Landing() {
   let stats: LandingStats = { total: 0, greens: 0, yellows: 0, reds: 0, avg: 0, mrr: 0 };
   let atRisk: RiskItem[] = [];
   let suggestions: string[] = [];
-  let charts: ChartData = { hist: Array(10).fill(0), mix: { green: 0, yellow: 0, red: 0 }, dims: { engagement: 0, value: 0, product: 0 }, amLoad: [], vitals: { leads: 0, reviews: 0 }, mrrTier: { green: 0, yellow: 0, red: 0 }, leadSpark: [], reviewSpark: [], funnel: { profile: 0, website: 0, book: 0, leads: 0 }, rankBands: { top3: 0, r410: 0, r1120: 0, r20p: 0 }, visibility: 0, mrrBands: [0, 0, 0, 0, 0], scatter: [], adoption: { online: 0, total: 0, photos: 0 } };
+  let charts: ChartData = { hist: Array(10).fill(0), mix: { green: 0, yellow: 0, red: 0 }, dims: { engagement: 0, value: 0, product: 0 }, amLoad: [], vitals: { leads: 0, reviews: 0 }, mrrTier: { green: 0, yellow: 0, red: 0 }, leadSpark: [], reviewSpark: [], funnel: { profile: 0, website: 0, book: 0, leads: 0 }, rankBands: { top3: 0, r410: 0, r1120: 0, r20p: 0 }, visibility: 0, mrrBands: [0, 0, 0, 0, 0], adoption: { online: 0, total: 0, photos: 0 } };
   let source: "mock" | "metabase" = "mock";
 
   try {
@@ -101,10 +100,8 @@ export default async function Landing() {
     // MRR distribution across plan bands
     const MRR_BAND_DEFS: [number, number][] = [[0, 99], [100, 199], [200, 299], [300, 449], [450, Infinity]];
     const mrrBands = MRR_BAND_DEFS.map(([lo, hi]) => A.filter((a) => a.mrr != null && a.mrr >= lo && a.mrr <= hi).length);
-    // leads↔reviews engagement scatter (tier-coloured)
-    const scatter = A.map((a) => ({ x: a.leadsReceived || 0, y: a.reviewsReceived || 0, c: a.health.color }));
     const adoption = { online: A.filter((a) => a.bookOnlineActive).length, total: A.length, photos: sum((a) => a.photosUploaded) };
-    charts = { hist, mix: { green: greens, yellow: yellows, red: reds.length }, dims, amLoad, vitals, mrrTier, leadSpark, reviewSpark, funnel, rankBands, visibility, mrrBands, scatter, adoption };
+    charts = { hist, mix: { green: greens, yellow: yellows, red: reds.length }, dims, amLoad, vitals, mrrTier, leadSpark, reviewSpark, funnel, rankBands, visibility, mrrBands, adoption };
 
     // AM carrying the most at-risk accounts → a data-aware Alfred suggestion
     const topAM = [...amLoad].sort((x, y) => y.red - x.red)[0];

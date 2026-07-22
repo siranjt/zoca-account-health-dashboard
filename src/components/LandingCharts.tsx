@@ -43,7 +43,6 @@ export default function LandingCharts({ charts, avg }: { charts: ChartData; avg:
           <VisibilityGauge v={charts.visibility} on={on} />
           <MrrBands bands={charts.mrrBands} on={on} />
         </div>
-        <Scatter pts={charts.scatter} on={on} tc={tc} />
         <div className="grid gap-3 lg:grid-cols-3">
           <MrrByTier mrr={charts.mrrTier} on={on} tc={tc} />
           <Signals lead={charts.leadSpark} review={charts.reviewSpark} on={on} />
@@ -414,32 +413,7 @@ function MrrBands({ bands, on }: { bands: number[]; on: boolean }) {
   );
 }
 
-/* ── L · leads↔reviews engagement scatter ───────────────────────────────── */
-function Scatter({ pts, on, tc }: { pts: { x: number; y: number; c: "green" | "yellow" | "red" }[]; on: boolean; tc: Tier }) {
-  const W = 660, H = 260, padL = 30, padB = 24, padT = 12;
-  const XMAX = 150, YMAX = 50;
-  const px = (x: number) => padL + (Math.min(x, XMAX) / XMAX) * (W - padL - 12);
-  const py = (y: number) => H - padB - (Math.min(y, YMAX) / YMAX) * (H - padB - padT);
-  const col = (c: string) => (c === "red" ? tc.red : c === "yellow" ? tc.yellow : tc.green);
-  const reds = pts.filter((p) => p.c === "red");
-  const rest = pts.filter((p) => p.c !== "red");
-  return (
-    <Card title="Engagement Map" note={`${pts.length} accounts · leads × reviews`}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="none" style={{ maxHeight: 280 }} role="img" aria-label="Leads vs reviews scatter">
-        {[0, 0.25, 0.5, 0.75, 1].map((g) => { const y = padT + (H - padT - padB) * g; return <line key={`h${g}`} x1={padL} y1={y} x2={W - 6} y2={y} stroke="var(--cave-line)" strokeWidth={1} opacity={0.4} />; })}
-        {[0, 0.25, 0.5, 0.75, 1].map((g) => { const x = padL + (W - padL - 12) * g; return <line key={`v${g}`} x1={x} y1={padT} x2={x} y2={H - padB} stroke="var(--cave-line)" strokeWidth={1} opacity={0.4} />; })}
-        <g style={{ opacity: on ? 1 : 0, transition: "opacity .7s ease" }}>
-          {rest.map((p, i) => <circle key={`a${i}`} cx={px(p.x)} cy={py(p.y)} r={2.1} fill={col(p.c)} opacity={0.55} />)}
-          {reds.map((p, i) => <circle key={`r${i}`} cx={px(p.x)} cy={py(p.y)} r={2.6} fill={tc.red} opacity={0.85} style={{ filter: `drop-shadow(0 0 3px ${tc.red})` }} />)}
-        </g>
-        <text x={W - 6} y={H - 8} textAnchor="end" fontSize={9} fill="var(--cave-dim)">LEADS →</text>
-        <text x={4} y={padT + 8} fontSize={9} fill="var(--cave-dim)">REVIEWS ↑</text>
-      </svg>
-    </Card>
-  );
-}
-
-/* ── M · product adoption ───────────────────────────────────────────────── */
+/* ── L · product adoption ───────────────────────────────────────────────── */
 function Adoption({ a, on }: { a: { online: number; total: number; photos: number }; on: boolean }) {
   const pct = a.total ? Math.round((a.online / a.total) * 100) : 0;
   const C = 100, r = 26, cx = 34, cy = 34;
