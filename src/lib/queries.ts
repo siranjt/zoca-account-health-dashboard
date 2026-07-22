@@ -93,6 +93,60 @@ export function webActiveSql(): string {
   return `SELECT DISTINCT entity_id FROM entities.preferences WHERE attribute = 'discovery.web.isActive' AND value = 'true'`;
 }
 
+// Command Center (AI-agent web app) — shared base CTEs. AGENT conversations in
+// chat.*, mapped to their location entity_id, scoped to the CC agent pool
+// (entities.entity_agents, agent 0f6cf4a4…). Mirrors Metabase dashboard 194.
+const CC_BASE = `
+ccb AS (
+  SELECT DISTINCT cm.conversation_id, cm.created_at, ee.entity_id
+  FROM chat.messages cm
+  JOIN chat.conversations cc ON cc.id = cm.conversation_id AND cc.type = 'AGENT'
+  JOIN chat.conversation_members ccm ON cm.conversation_id = ccm.conversation_id
+  JOIN entities.entities ee ON ee.entity_id = ccm.member_id
+  WHERE cm.is_deleted = 'false' AND NOT COALESCE(ee.is_test, FALSE)
+),
+loc AS (
+  SELECT DISTINCT ccm.conversation_id, eer.entity_2_id AS location_entity_id
+  FROM chat.conversation_members ccm
+  JOIN chat.members cmm ON ccm.member_id = cmm.member_id
+  JOIN entities.users eu ON eu.entity_id = cmm.member_id
+  JOIN entities.entity_relationships eer ON eer.entity_1_id = eu.entity_id AND eer.relationship_type = 'HAS_LOCATION'
+  WHERE cmm.type = 'User' AND ccm.is_active = TRUE
+),
+final AS (
+  SELECT ccb.conversation_id, ccb.created_at, COALESCE(l.location_entity_id, ccb.entity_id) AS location_entity_id
+  FROM ccb LEFT JOIN loc l ON ccb.conversation_id = l.conversation_id
+),
+pool AS (
+  SELECT eea.entity_id FROM entities.entity_agents eea
+  JOIN entities.entities ee ON ee.entity_id = eea.entity_id AND NOT COALESCE(ee.is_test, FALSE) AND ee.is_active = TRUE
+  WHERE eea.agent_entity_id = '0f6cf4a4-67ee-48e5-bf2d-e72cd0351997' AND eea.is_active = TRUE
+)`;
+
+/** Per-entity Command Center usage: every pooled entity + its L28 active days
+ *  and conversation count (0 if enabled but inactive). Keyed by entity_id. */
+export function ccUsageSql(): string {
+  return `WITH ${CC_BASE},
+act AS (
+  SELECT f.location_entity_id, COUNT(DISTINCT f.created_at::date) AS days, COUNT(DISTINCT f.conversation_id) AS convos
+  FROM final f WHERE f.created_at >= NOW() - INTERVAL '28 days' GROUP BY 1
+)
+SELECT p.entity_id, COALESCE(a.days, 0) AS active_days_l28, COALESCE(a.convos, 0) AS conversations_l28
+FROM pool p LEFT JOIN act a ON a.location_entity_id = p.entity_id`;
+}
+
+/** Daily Command Center cohort series (for the landing adoption cluster):
+ *  active entities (DAU) and AGENT conversations per day over `days`. */
+export function ccDailySql(days = 30): string {
+  return `WITH ${CC_BASE}
+SELECT f.created_at::date AS d,
+  COUNT(DISTINCT f.location_entity_id) AS active,
+  COUNT(DISTINCT f.conversation_id) AS convos
+FROM final f JOIN pool p ON p.entity_id = f.location_entity_id
+WHERE f.created_at >= NOW() - INTERVAL '${days} days'
+GROUP BY 1 ORDER BY 1`;
+}
+
 // (Tickets now come from the Linear Metabase CSV via src/lib/tickets.ts — the
 // Beacon-parity source — not from hubspot.tickets. Removed the HubSpot query.)
 

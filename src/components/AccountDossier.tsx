@@ -253,6 +253,30 @@ export default function AccountDossier({
             alert={!!(pay && pay.unpaid_total_usd > 0) || !!(account.daysOverdue && account.daysOverdue > 0)}
           />
         </div>
+
+        {/* Command Center (AI-agent web app) usage — only for the CC-enabled pool */}
+        {account.ccEnabled && (
+          <div
+            className="cave-brk mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border bg-white px-4 py-3"
+            style={{ borderColor: "var(--cave-line)" }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--cave-cy)" }}>◉ Command Center</span>
+              {account.ccSegment && (
+                <span
+                  className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em]"
+                  title="Engagement segment by L28 active days (≥15 Core · ≥5 Regular · ≥1 Casual)"
+                  style={{ border: `1px solid ${CC_SEG_HEX[account.ccSegment]}`, color: CC_SEG_HEX[account.ccSegment], background: `${CC_SEG_HEX[account.ccSegment]}14` }}
+                >
+                  {account.ccSegment}
+                </span>
+              )}
+              {!account.ccSegment && <span className="text-[11px]" style={{ color: "var(--cave-dim)" }}>enabled · inactive (L28)</span>}
+            </div>
+            <CcStat label="Active days · L28" value={account.ccActiveDaysL28 != null ? `${account.ccActiveDaysL28} / 28` : "—"} />
+            <CcStat label="Conversations · L28" value={account.ccConversationsL28 != null ? formatNumber(account.ccConversationsL28) : "—"} />
+          </div>
+        )}
       </header>
 
       {/* ── section tabs ─────────────────────────────────────────────────── */}
@@ -895,6 +919,17 @@ function DataTable({ cols, rows, name = "data" }: { cols: Col[]; rows: Record<st
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+const CC_SEG_HEX: Record<"Core" | "Regular" | "Casual", string> = { Core: "#16a34a", Regular: "#d97706", Casual: "#8fa3a9" };
+
+function CcStat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[9px] uppercase tracking-[0.14em]" style={{ color: "var(--cave-dim)" }}>{label}</div>
+      <div className="tabular-nums text-base font-semibold" style={{ color: "var(--cave-txt)" }}>{value}</div>
     </div>
   );
 }

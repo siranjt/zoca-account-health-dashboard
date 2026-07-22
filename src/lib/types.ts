@@ -60,6 +60,13 @@ export interface AccountRow {
   /** Discovery Web (new web-app product) is activated for this account
    *  (entities.preferences → discovery.web.isActive = 'true'). */
   webAppActive: boolean;
+  /** Command Center (AI-agent web app) signal — a DISTINCT population from
+   *  webAppActive. ccEnabled = in the Command Center agent pool
+   *  (entities.entity_agents). Usage from chat.* over the last 28 days. */
+  ccEnabled: boolean;
+  ccActiveDaysL28: number | null; // distinct active days in last 28d (null if not enabled)
+  ccConversationsL28: number | null; // AGENT conversations in last 28d
+  ccSegment: "Core" | "Regular" | "Casual" | null; // ≥15 Core · ≥5 Regular · ≥1 Casual · else null
 
   keywordsTracked: number | null;
   keywordsTop3Pct: number | null;

@@ -13,6 +13,8 @@ import {
   timingSql,
   trendsSql,
   webActiveSql,
+  ccUsageSql,
+  ccDailySql,
   detailProfileWeeklySql,
   detailLeadsReviewsMonthlySql,
   detailRankTrendSql,
@@ -156,7 +158,7 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
   const cfg = readMetabaseConfig();
   if (!cfg) throw new Error("Metabase not configured (METABASE_BASE_URL / METABASE_API_KEY)");
 
-  const [master, timing, trends, ticketCounts, webActive] = await Promise.all([
+  const [master, timing, trends, ticketCounts, webActive, ccUsage] = await Promise.all([
     runDataset(cfg, masterSql(rangeArg.from, rangeArg.to)),
     runDataset(cfg, timingSql()),
     runDataset(cfg, trendsSql(rangeArg.from, rangeArg.to, rangeArg.days)),
@@ -164,9 +166,14 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
     // Discovery Web (new web-app product) activation — entities.preferences.
     // Degrade gracefully to "none active" if this side query fails.
     runDataset(cfg, webActiveSql()).catch(() => [] as Row[]),
+    // Command Center (AI-agent web app) per-entity usage — chat.* over 28d.
+    runDataset(cfg, ccUsageSql()).catch(() => [] as Row[]),
   ]);
 
   const webActiveSet = new Set<string>(webActive.map((r) => String(r.entity_id)));
+  const ccByEntity = new Map<string, { days: number; convos: number }>();
+  for (const r of ccUsage) ccByEntity.set(String(r.entity_id), { days: int0(r.active_days_l28), convos: int0(r.conversations_l28) });
+  const ccSegment = (days: number): AccountRow["ccSegment"] => (days >= 15 ? "Core" : days >= 5 ? "Regular" : days >= 1 ? "Casual" : null);
   const timingByEntity = new Map<string, Row>();
   for (const t of timing) timingByEntity.set(String(t.entity_id), t);
   const trendsByEntity = new Map<string, Row>();
@@ -194,6 +201,10 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
       bookOnlineClicks: r.book_online_active ? int0(r.book_online_clicks) : null,
       bookOnlineActive: r.book_online_active === true,
       webAppActive: webActiveSet.has(id),
+      ccEnabled: ccByEntity.has(id),
+      ccActiveDaysL28: ccByEntity.has(id) ? ccByEntity.get(id)!.days : null,
+      ccConversationsL28: ccByEntity.has(id) ? ccByEntity.get(id)!.convos : null,
+      ccSegment: ccByEntity.has(id) ? ccSegment(ccByEntity.get(id)!.days) : null,
       keywordsTracked: num(r.keywords_tracked),
       keywordsTop3Pct: num(r.keywords_top3_pct),
       avgCurrentRank: num(r.avg_current_rank),
@@ -215,6 +226,19 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
       sparkClicks: tr ? parseSpark(tr.clicks_spark) : [],
     };
   });
+}
+
+/** Daily Command Center cohort series (active entities + conversations) for the
+ *  landing adoption cluster. Independent of the book; degrades to []. */
+export async function getCcDailyFromMetabase(days = 30): Promise<{ d: string; active: number; convos: number }[]> {
+  const cfg = readMetabaseConfig();
+  if (!cfg) return [];
+  try {
+    const rows = await runDataset(cfg, ccDailySql(days));
+    return rows.map((r) => ({ d: String(r.d), active: int0(r.active), convos: int0(r.convos) }));
+  } catch {
+    return [];
+  }
 }
 
 function parseSpark(v: unknown): number[] {

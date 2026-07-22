@@ -42,6 +42,8 @@ type SortKey =
   | "daysOverdue"
   | "failedPayments"
   | "tenureDays"
+  | "ccActiveDaysL28"
+  | "ccConversationsL28"
   | "otherProducts";
 
 interface SortState {
@@ -50,6 +52,7 @@ interface SortState {
 }
 
 const HEALTH_RANK: Record<HealthColor, number> = { red: 0, yellow: 1, green: 2 };
+const CC_SEG_HEX: Record<"Core" | "Regular" | "Casual", string> = { Core: "#16a34a", Regular: "#d97706", Casual: "#8fa3a9" };
 const LS_KEY = "zoca-ahd-view-v1";
 const WINDOWS = [7, 30, 90, 180];
 
@@ -77,16 +80,16 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [mrrMin, setMrrMin] = useState<string>("");
   const [mrrMax, setMrrMax] = useState<string>("");
-  const [cols, setCols] = useState({ engagement: true, seo: true, timing: true, payments: true });
+  const [cols, setCols] = useState({ engagement: true, seo: true, timing: true, payments: true, webapp: true });
   const [metricRange, setMetricRange] = useState<{ key: keyof AccountRow; label: string; min: number; max: number } | null>(null);
   const [colMenu, setColMenu] = useState(false);
   useEffect(() => {
     try { const r = localStorage.getItem("zoca-ahd-cols"); if (r) setCols((c) => ({ ...c, ...JSON.parse(r) })); } catch { /* ignore */ }
   }, []);
-  function toggleColGroup(k: "engagement" | "seo" | "timing" | "payments") {
+  function toggleColGroup(k: "engagement" | "seo" | "timing" | "payments" | "webapp") {
     setCols((c) => { const n = { ...c, [k]: !c[k] }; try { localStorage.setItem("zoca-ahd-cols", JSON.stringify(n)); } catch { /* ignore */ } return n; });
   }
-  const colCount = 3 + (cols.engagement ? 6 : 0) + (cols.seo ? 3 : 0) + (cols.timing ? 3 : 0) + (cols.payments ? 4 : 0);
+  const colCount = 3 + (cols.engagement ? 6 : 0) + (cols.seo ? 3 : 0) + (cols.timing ? 3 : 0) + (cols.payments ? 4 : 0) + (cols.webapp ? 2 : 0);
   const [sort, setSort] = useState<SortState>({ key: "health", dir: "asc" });
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [pop, setPop] = useState<{ x: number; y: number; body: React.ReactNode } | null>(null);
@@ -320,7 +323,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   }, [rows]);
 
   function exportCsv() {
-    const cols = ["Business", "City", "State", "AM", "Health", "Composite", "Leads", "Reviews", "Photos", "ProfileClicks", "WebsiteClicks", "BookOnline", "KWTracked", "Top3%", "AvgRank", "Impressions", "DaysToInvoice", "DaysOverdue", "MissedPayments", "TenureDays", "Products"];
+    const cols = ["Business", "City", "State", "AM", "Health", "Composite", "Leads", "Reviews", "Photos", "ProfileClicks", "WebsiteClicks", "BookOnline", "KWTracked", "Top3%", "AvgRank", "Impressions", "DaysToInvoice", "DaysOverdue", "MissedPayments", "TenureDays", "CCEnabled", "CCActiveDaysL28", "CCConversationsL28", "CCSegment", "Products"];
     const cell = (v: unknown) => {
       const s = v == null ? "" : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -333,6 +336,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
         a.bookOnlineActive ? a.bookOnlineClicks : "n/a", a.keywordsTracked, a.keywordsTop3Pct,
         a.avgCurrentRank, a.keywordImpressions,
         a.daysToInvoice, a.daysOverdue, a.failedPayments, a.tenureDays,
+        a.ccEnabled ? "yes" : "no", a.ccActiveDaysL28 ?? "", a.ccConversationsL28 ?? "", a.ccSegment ?? "",
         a.activeProducts.join(" | "),
       ].map(cell).join(","));
     }
@@ -655,7 +659,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
             <>
               <div className="fixed inset-0 z-20" onClick={() => setColMenu(false)} />
               <div className="absolute left-0 top-8 z-30 w-44 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
-                {([["engagement", "Engagement"], ["seo", "SEO / rankings"], ["timing", "Response timing"], ["payments", "Payments"]] as const).map(([k, label]) => (
+                {([["engagement", "Engagement"], ["seo", "SEO / rankings"], ["timing", "Response timing"], ["payments", "Payments"], ["webapp", "Web app (CC)"]] as const).map(([k, label]) => (
                   <label key={k} className="flex items-center gap-2 rounded px-1 py-1 text-xs hover:bg-slate-100">
                     <input type="checkbox" checked={cols[k]} onChange={() => toggleColGroup(k)} />
                     {label}
@@ -749,6 +753,14 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               </Th>
               <Th onClick={() => toggleSort("tenureDays")} active={sort} k="tenureDays" num onDistro={(e) => openPop(e, distro("tenureDays", "Tenure (days)"))}>
                 Tenure
+              </Th>
+              </>)}
+              {cols.webapp && (<>
+              <Th onClick={() => toggleSort("ccActiveDaysL28")} active={sort} k="ccActiveDaysL28" num onDistro={(e) => openPop(e, distro("ccActiveDaysL28", "Web app · L28 active days"))}>
+                Web L28
+              </Th>
+              <Th onClick={() => toggleSort("ccConversationsL28")} active={sort} k="ccConversationsL28" num onDistro={(e) => openPop(e, distro("ccConversationsL28", "Web app · conversations L28"))}>
+                Web convos
               </Th>
               </>)}
               <Th onClick={() => toggleSort("otherProducts")} active={sort} k="otherProducts">
@@ -878,6 +890,22 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
                     </td>
                     <td className="cursor-pointer px-3 py-2 text-right tabular-nums text-slate-700 hover:bg-indigo-50" onClick={(e) => openPop(e, metricPop(a, "payments"))}>
                       {formatTenure(a.tenureDays)}
+                    </td>
+                    </>)}
+                    {cols.webapp && (<>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {a.ccEnabled ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          {a.ccSegment && <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: CC_SEG_HEX[a.ccSegment] }} />}
+                          <span style={{ color: "var(--cave-txt)" }}>{a.ccActiveDaysL28}</span>
+                          <span className="text-slate-400">/28</span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                      {a.ccEnabled ? formatNumber(a.ccConversationsL28 ?? 0) : <span className="text-slate-300">—</span>}
                     </td>
                     </>)}
                     <td className="px-3 py-2">

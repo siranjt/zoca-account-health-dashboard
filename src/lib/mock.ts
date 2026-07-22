@@ -105,6 +105,10 @@ function toRow(s: Seed): AccountRow {
     profileClicks: s.profileClicks, websiteClicks: s.websiteClicks,
     bookOnlineClicks: s.bookOnline, bookOnlineActive: s.bookActive,
     webAppActive: s.bookActive && s.leads > 8, // deterministic stand-in for local/mock
+    ccEnabled: s.leads > 12,
+    ccActiveDaysL28: s.leads > 12 ? s.leads % 22 : null,
+    ccConversationsL28: s.leads > 12 ? Math.round(s.leads * 1.5) : null,
+    ccSegment: s.leads > 12 ? (s.leads % 22 >= 15 ? "Core" : s.leads % 22 >= 5 ? "Regular" : s.leads % 22 >= 1 ? "Casual" : null) : null,
     keywordsTracked: s.keywords, keywordsTop3Pct: s.top3, avgCurrentRank: s.avgRank,
     keywordImpressions: s.impressions,
     avgReceivedToOpenedMs: s.toOpened, avgReceivedToContactedMs: s.toContacted,
