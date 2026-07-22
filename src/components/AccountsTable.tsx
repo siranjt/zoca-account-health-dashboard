@@ -72,6 +72,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [query, setQuery] = useState("");
   const [colorFilter, setColorFilter] = useState<"all" | HealthColor>("all");
   const [amFilter, setAmFilter] = useState<string>("all");
+  const [ccFilter, setCcFilter] = useState<"all" | "enabled" | "Core" | "Regular" | "Casual" | "inactive">("all");
   const [onlyMultiProduct, setOnlyMultiProduct] = useState(false);
   const [onlyDeclining, setOnlyDeclining] = useState(false);
   const [overdueOnly, setOverdueOnly] = useState(false);
@@ -114,6 +115,8 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     if (color === "green" || color === "yellow" || color === "red") setColorFilter(color);
     if (q) setQuery(q);
     if (searchParams.get("web") === "1") setWebOnly(true);
+    const cc = searchParams.get("cc");
+    if (cc === "enabled" || cc === "Core" || cc === "Regular" || cc === "Casual" || cc === "inactive") setCcFilter(cc);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
@@ -155,7 +158,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   function saveView() {
     const name = window.prompt("Name this view:");
     if (!name) return;
-    const s = { query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, overdueOnly, ticketsOnly, webOnly, pinnedOnly, sort, groupBy };
+    const s = { query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, overdueOnly, ticketsOnly, webOnly, ccFilter, pinnedOnly, sort, groupBy };
     persistViews([...savedViews.filter((x) => x.name !== name), { name, s }]);
     window.dispatchEvent(new CustomEvent("cave-toast", { detail: { message: `Saved view "${name}"` } }));
   }
@@ -169,6 +172,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     setOverdueOnly(!!s.overdueOnly);
     setTicketsOnly(!!s.ticketsOnly);
     setWebOnly(!!s.webOnly);
+    setCcFilter(s.ccFilter || "all");
     setPinnedOnly(!!s.pinnedOnly);
     if (s.sort) setSort(s.sort);
     setGroupBy(s.groupBy || "none");
@@ -286,6 +290,9 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     if (overdueOnly) out = out.filter((a) => a.daysOverdue != null && a.daysOverdue > 0);
     if (ticketsOnly) out = out.filter((a) => a.openTickets > 0);
     if (webOnly) out = out.filter((a) => a.webAppActive);
+    if (ccFilter === "enabled") out = out.filter((a) => a.ccEnabled);
+    else if (ccFilter === "inactive") out = out.filter((a) => a.ccEnabled && !a.ccSegment);
+    else if (ccFilter !== "all") out = out.filter((a) => a.ccSegment === ccFilter);
     if (pinnedOnly) out = out.filter((a) => pinned.has(a.entityId));
     const lo = mrrMin === "" ? null : Number(mrrMin);
     const hi = mrrMax === "" ? null : Number(mrrMax);
@@ -304,7 +311,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
       return dir * cmp(a, b, sort.key);
     });
     return out;
-  }, [accounts, query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, overdueOnly, ticketsOnly, webOnly, pinnedOnly, mrrMin, mrrMax, metricRange, sort, pinned]);
+  }, [accounts, query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, overdueOnly, ticketsOnly, webOnly, ccFilter, pinnedOnly, mrrMin, mrrMax, metricRange, sort, pinned]);
 
   const kpi = useMemo(() => {
     const leads = rows.reduce((s, a) => s + a.leadsReceived, 0);
@@ -536,6 +543,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
         if (overdueOnly) chips.push({ label: "overdue", clear: () => setOverdueOnly(false) });
         if (ticketsOnly) chips.push({ label: "has tickets", clear: () => setTicketsOnly(false) });
         if (webOnly) chips.push({ label: "web app active", clear: () => setWebOnly(false) });
+        if (ccFilter !== "all") chips.push({ label: `CC: ${ccFilter}`, clear: () => setCcFilter("all") });
         if (pinnedOnly) chips.push({ label: "pinned only", clear: () => setPinnedOnly(false) });
         if (mrrMin || mrrMax) chips.push({ label: `MRR ${mrrMin || "0"}–${mrrMax || "∞"}`, clear: () => { setMrrMin(""); setMrrMax(""); } });
         if (metricRange) chips.push({ label: metricRange.label, clear: () => setMetricRange(null) });
@@ -591,6 +599,19 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               {m}
             </option>
           ))}
+        </select>
+        <select
+          value={ccFilter}
+          onChange={(e) => setCcFilter(e.target.value as typeof ccFilter)}
+          className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+          title="Filter by Command Center (web app) status"
+        >
+          <option value="all">All web app (CC)</option>
+          <option value="enabled">◉ CC enabled</option>
+          <option value="Core">CC · Core</option>
+          <option value="Regular">CC · Regular</option>
+          <option value="Casual">CC · Casual</option>
+          <option value="inactive">CC · inactive</option>
         </select>
         <span className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-500" title="Filter by MRR range">
           MRR
