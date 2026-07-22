@@ -1,4 +1,4 @@
-import { getAccountsPayload } from "@/lib/data";
+import { getAccountsPayload, getCcDaily } from "@/lib/data";
 import CaveNav from "@/components/CaveNav";
 import LandingDeck from "@/components/LandingDeck";
 
@@ -25,17 +25,23 @@ export type ChartData = {
   visibility: number; // avg % of tracked keywords ranking top-3
   mrrBands: number[]; // counts per band, see MRR_BANDS labels in LandingCharts
   adoption: { online: number; total: number; photos: number };
+  cc: {
+    enabled: number; active: number; // active = ≥1 active day in L28
+    seg: { core: number; regular: number; casual: number; inactive: number };
+    totalConvos: number; avgDays: number;
+    daily: { d: string; active: number; convos: number }[];
+  };
 };
 
 export default async function Landing() {
   let stats: LandingStats = { total: 0, greens: 0, yellows: 0, reds: 0, avg: 0, mrr: 0 };
   let atRisk: RiskItem[] = [];
   let suggestions: string[] = [];
-  let charts: ChartData = { hist: Array(10).fill(0), mix: { green: 0, yellow: 0, red: 0 }, dims: { engagement: 0, value: 0, product: 0 }, amLoad: [], vitals: { leads: 0, reviews: 0 }, mrrTier: { green: 0, yellow: 0, red: 0 }, leadSpark: [], reviewSpark: [], funnel: { profile: 0, website: 0, book: 0, leads: 0 }, rankBands: { top3: 0, r410: 0, r1120: 0, r20p: 0 }, visibility: 0, mrrBands: [0, 0, 0, 0, 0], adoption: { online: 0, total: 0, photos: 0 } };
+  let charts: ChartData = { hist: Array(10).fill(0), mix: { green: 0, yellow: 0, red: 0 }, dims: { engagement: 0, value: 0, product: 0 }, amLoad: [], vitals: { leads: 0, reviews: 0 }, mrrTier: { green: 0, yellow: 0, red: 0 }, leadSpark: [], reviewSpark: [], funnel: { profile: 0, website: 0, book: 0, leads: 0 }, rankBands: { top3: 0, r410: 0, r1120: 0, r20p: 0 }, visibility: 0, mrrBands: [0, 0, 0, 0, 0], adoption: { online: 0, total: 0, photos: 0 }, cc: { enabled: 0, active: 0, seg: { core: 0, regular: 0, casual: 0, inactive: 0 }, totalConvos: 0, avgDays: 0, daily: [] } };
   let source: "mock" | "metabase" = "mock";
 
   try {
-    const p = await getAccountsPayload();
+    const [p, ccDaily] = await Promise.all([getAccountsPayload(), getCcDaily()]);
     const A = p.accounts;
     source = p.source;
     const reds = A.filter((a) => a.health.color === "red");
@@ -101,7 +107,20 @@ export default async function Landing() {
     const MRR_BAND_DEFS: [number, number][] = [[0, 99], [100, 199], [200, 299], [300, 449], [450, Infinity]];
     const mrrBands = MRR_BAND_DEFS.map(([lo, hi]) => A.filter((a) => a.mrr != null && a.mrr >= lo && a.mrr <= hi).length);
     const adoption = { online: A.filter((a) => a.bookOnlineActive).length, total: A.length, photos: sum((a) => a.photosUploaded) };
-    charts = { hist, mix: { green: greens, yellow: yellows, red: reds.length }, dims, amLoad, vitals, mrrTier, leadSpark, reviewSpark, funnel, rankBands, visibility, mrrBands, adoption };
+    // Command Center (web-app) cohort — aggregated from the per-account CC fields
+    const ccPool = A.filter((a) => a.ccEnabled);
+    const ccActiveList = ccPool.filter((a) => (a.ccActiveDaysL28 || 0) > 0);
+    const seg = { core: 0, regular: 0, casual: 0, inactive: 0 };
+    ccPool.forEach((a) => { const s = a.ccSegment; if (s === "Core") seg.core++; else if (s === "Regular") seg.regular++; else if (s === "Casual") seg.casual++; else seg.inactive++; });
+    const cc = {
+      enabled: ccPool.length,
+      active: ccActiveList.length,
+      seg,
+      totalConvos: ccPool.reduce((s, a) => s + (a.ccConversationsL28 || 0), 0),
+      avgDays: ccActiveList.length ? Math.round((ccActiveList.reduce((s, a) => s + (a.ccActiveDaysL28 || 0), 0) / ccActiveList.length) * 10) / 10 : 0,
+      daily: ccDaily,
+    };
+    charts = { hist, mix: { green: greens, yellow: yellows, red: reds.length }, dims, amLoad, vitals, mrrTier, leadSpark, reviewSpark, funnel, rankBands, visibility, mrrBands, adoption, cc };
 
     // AM carrying the most at-risk accounts → a data-aware Alfred suggestion
     const topAM = [...amLoad].sort((x, y) => y.red - x.red)[0];

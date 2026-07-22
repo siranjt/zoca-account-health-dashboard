@@ -3,7 +3,7 @@
 // window (preset OR custom from/to date range), always excludes churned.
 // ===========================================================================
 
-import { getAccountsFromMetabase, getAccountDetailFromMetabase } from "./metabase";
+import { getAccountsFromMetabase, getAccountDetailFromMetabase, getCcDailyFromMetabase } from "./metabase";
 import { getMockAccounts, getMockAccountDetail } from "./mock";
 import { getPaymentDetail } from "./chargebee";
 import type { AccountDetail, AccountsPayload, AccountRow } from "./types";
@@ -105,6 +105,18 @@ export async function getAccountsPayload(input?: RangeInput): Promise<AccountsPa
 
   bookInflight.set(key, run);
   return run;
+}
+
+// Daily Command Center cohort series (active entities + conversations) for the
+// landing adoption cluster. Cached ~5 min; returns [] off-Metabase (mock landing
+// still gets the cohort aggregates it computes from the book).
+let ccDailyCache: { at: number; rows: { d: string; active: number; convos: number }[] } | null = null;
+export async function getCcDaily(): Promise<{ d: string; active: number; convos: number }[]> {
+  if (ccDailyCache && Date.now() - ccDailyCache.at < 300_000) return ccDailyCache.rows;
+  if (!useMetabase()) return [];
+  const rows = await getCcDailyFromMetabase(30).catch(() => []);
+  if (rows.length) ccDailyCache = { at: Date.now(), rows };
+  return rows;
 }
 
 export async function getAccountDetail(id: string, windowDaysOverride?: number): Promise<AccountDetail> {

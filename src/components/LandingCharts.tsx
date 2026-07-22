@@ -49,7 +49,102 @@ export default function LandingCharts({ charts, avg }: { charts: ChartData; avg:
           <Adoption a={charts.adoption} on={on} />
         </div>
       </div>
+
+      {charts.cc.enabled > 0 && (
+        <div className="mt-8">
+          <SectionLabel>Web App · Command Center</SectionLabel>
+          <div className="grid gap-3 lg:grid-cols-3">
+            <CcAdoption cc={charts.cc} on={on} />
+            <CcSegments cc={charts.cc} on={on} />
+            <CcTrend cc={charts.cc} on={on} />
+          </div>
+        </div>
+      )}
     </section>
+  );
+}
+
+/* ── N · Command Center adoption gauge (active ÷ enabled) ───────────────── */
+function CcAdoption({ cc, on }: { cc: ChartData["cc"]; on: boolean }) {
+  const pct = cc.enabled ? Math.round((cc.active / cc.enabled) * 100) : 0;
+  const val = Math.max(0, Math.min(100, pct));
+  const cx = 80, cy = 78, R = 56;
+  const arc = (f: number) => { const a = Math.PI * (1 - f); return [cx + R * Math.cos(a), cy - R * Math.sin(a)]; };
+  const [sx, sy] = arc(0); const [ex, ey] = arc(1);
+  const bg = `M${sx.toFixed(1)},${sy.toFixed(1)} A${R},${R} 0 0 1 ${ex.toFixed(1)},${ey.toFixed(1)}`;
+  return (
+    <Card title="CC Adoption" note={`${cc.active} active ÷ ${cc.enabled} enabled · L28`}>
+      <div className="flex flex-col items-center">
+        <svg viewBox="0 0 160 96" width="100%" height="96" role="img" aria-label="Command Center adoption">
+          <path d={bg} fill="none" stroke="var(--cave-line)" strokeWidth={11} strokeLinecap="round" />
+          <path d={bg} fill="none" stroke="var(--cave-cy)" strokeWidth={11} strokeLinecap="round" pathLength={100} strokeDasharray={`${val} 100`}
+            style={{ strokeDashoffset: on ? 0 : val, transition: "stroke-dashoffset 1s cubic-bezier(.2,.7,.2,1) .1s", filter: "drop-shadow(0 0 5px var(--cave-cy))" }} />
+          <text x={cx} y={cy - 8} textAnchor="middle" fontSize={26} fontWeight={700} fill="var(--cave-cy)">{val}%</text>
+          <text x={cx} y={cy + 8} textAnchor="middle" fontSize={8.5} letterSpacing="1.4" fill="var(--cave-dim)">ACTIVE · L28</text>
+        </svg>
+        <div className="mt-1 flex gap-5 text-xs">
+          <span><span className="tabular-nums font-semibold" style={{ color: "var(--cave-txt)" }}>{fmt(cc.totalConvos)}</span> <span style={{ color: "var(--cave-dim)" }}>convos</span></span>
+          <span><span className="tabular-nums font-semibold" style={{ color: "var(--cave-txt)" }}>{cc.avgDays}</span> <span style={{ color: "var(--cave-dim)" }}>avg days</span></span>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/* ── O · Command Center engagement segments (donut) ─────────────────────── */
+function CcSegments({ cc, on }: { cc: ChartData["cc"]; on: boolean }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const segs = [
+    { l: "Core", v: cc.seg.core, c: "#16a34a" },
+    { l: "Regular", v: cc.seg.regular, c: "#d97706" },
+    { l: "Casual", v: cc.seg.casual, c: "var(--cave-cy)" },
+    { l: "Inactive", v: cc.seg.inactive, c: "#8fa3a9" },
+  ];
+  const total = Math.max(1, segs.reduce((s, x) => s + x.v, 0));
+  let acc = 0;
+  const R = 54, cx = 70, cy = 70;
+  const center = hover != null ? segs[hover] : null;
+  return (
+    <Card title="CC Engagement" note="by L28 active days">
+      <div className="flex items-center gap-4">
+        <svg viewBox="0 0 140 140" width="132" height="132" style={{ transform: on ? "scale(1)" : "scale(.6)", opacity: on ? 1 : 0, transition: "transform .6s cubic-bezier(.2,.7,.2,1), opacity .6s" }}>
+          <circle cx={cx} cy={cy} r={R} fill="none" stroke="var(--cave-line)" strokeWidth={12} opacity={0.5} />
+          {segs.map((s, i) => {
+            const pct = (s.v / total) * 100;
+            const el = <circle key={i} cx={cx} cy={cy} r={R} fill="none" stroke={s.c} strokeWidth={hover === i ? 15 : 12} pathLength={100} strokeDasharray={`${pct} ${100 - pct}`} strokeDashoffset={-acc} transform={`rotate(-90 ${cx} ${cy})`} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} style={{ filter: `drop-shadow(0 0 4px ${s.c})`, transition: "stroke-width .15s", cursor: "default" }} />;
+            acc += pct;
+            return el;
+          })}
+          <text x={cx} y={cy - 2} textAnchor="middle" fontSize={22} fontWeight={700} fill={center ? center.c : "var(--cave-cy)"}>{center ? center.v : cc.enabled}</text>
+          <text x={cx} y={cy + 13} textAnchor="middle" fontSize={8} letterSpacing="1" fill="var(--cave-dim)">{center ? center.l.toUpperCase() : "ENABLED"}</text>
+        </svg>
+        <div className="flex flex-col gap-1.5 text-xs">
+          {segs.map((s, i) => (
+            <div key={i} className="flex items-center gap-2" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} style={{ cursor: "default" }}>
+              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: s.c }} />
+              <span className="tabular-nums font-semibold" style={{ color: "var(--cave-txt)" }}>{s.v}</span>
+              <span style={{ color: "var(--cave-dim)" }}>{s.l}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/* ── P · Command Center 30-day usage trend (DAU + conversations) ────────── */
+function CcTrend({ cc, on }: { cc: ChartData["cc"]; on: boolean }) {
+  const daily = cc.daily;
+  if (daily.length < 2) {
+    return <Card title="CC Usage · 30d" note="daily"><div className="py-8 text-center text-xs" style={{ color: "var(--cave-dim)" }}>Trend unavailable.</div></Card>;
+  }
+  const dau = daily.map((r) => r.active);
+  const convos = daily.map((r) => r.convos);
+  return (
+    <Card title="CC Usage · 30d" note="active entities + conversations">
+      <Spark label="ACTIVE / DAY" data={dau} on={on} delay={0} />
+      <Spark label="CONVERSATIONS / DAY" data={convos} on={on} delay={0.15} />
+    </Card>
   );
 }
 
