@@ -57,6 +57,9 @@ export interface AccountRow {
   websiteClicks: number;
   bookOnlineClicks: number | null;
   bookOnlineActive: boolean;
+  /** Discovery Web (new web-app product) is activated for this account
+   *  (entities.preferences → discovery.web.isActive = 'true'). */
+  webAppActive: boolean;
 
   keywordsTracked: number | null;
   keywordsTop3Pct: number | null;

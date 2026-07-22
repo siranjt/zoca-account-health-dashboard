@@ -104,6 +104,7 @@ function toRow(s: Seed): AccountRow {
     leadsReceived: s.leads, reviewsReceived: s.reviews, photosUploaded: s.photos,
     profileClicks: s.profileClicks, websiteClicks: s.websiteClicks,
     bookOnlineClicks: s.bookOnline, bookOnlineActive: s.bookActive,
+    webAppActive: s.bookActive && s.leads > 8, // deterministic stand-in for local/mock
     keywordsTracked: s.keywords, keywordsTop3Pct: s.top3, avgCurrentRank: s.avgRank,
     keywordImpressions: s.impressions,
     avgReceivedToOpenedMs: s.toOpened, avgReceivedToContactedMs: s.toContacted,

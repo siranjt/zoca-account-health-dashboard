@@ -618,3 +618,6 @@ html.detective .nm { text-shadow: 0 0 10px rgba(150,205,255,.8) !important; }
 html.detective .cave-brk::before,
 html.detective .cave-brk::after { border-color: #8cd0ff !important; opacity: 1 !important; box-shadow: 0 0 10px rgba(120,190,255,.9); }
 html.detective .cave-brk { box-shadow: inset 0 0 30px rgba(60,130,220,.16) !important; }
+
+/* Discovery-Web marker: cyan in Batman, brass in Wayne (border/text ride the token) */
+html.light .cave-web { background: rgba(176,132,43,.10) !important; }

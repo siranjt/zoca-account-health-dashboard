@@ -12,6 +12,7 @@ import {
   masterSql,
   timingSql,
   trendsSql,
+  webActiveSql,
   detailProfileWeeklySql,
   detailLeadsReviewsMonthlySql,
   detailRankTrendSql,
@@ -155,13 +156,17 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
   const cfg = readMetabaseConfig();
   if (!cfg) throw new Error("Metabase not configured (METABASE_BASE_URL / METABASE_API_KEY)");
 
-  const [master, timing, trends, ticketCounts] = await Promise.all([
+  const [master, timing, trends, ticketCounts, webActive] = await Promise.all([
     runDataset(cfg, masterSql(rangeArg.from, rangeArg.to)),
     runDataset(cfg, timingSql()),
     runDataset(cfg, trendsSql(rangeArg.from, rangeArg.to, rangeArg.days)),
     getTicketCountsByEntity(rangeArg.from), // Linear tickets (Beacon logic), keyed by lowercased entity_id
+    // Discovery Web (new web-app product) activation — entities.preferences.
+    // Degrade gracefully to "none active" if this side query fails.
+    runDataset(cfg, webActiveSql()).catch(() => [] as Row[]),
   ]);
 
+  const webActiveSet = new Set<string>(webActive.map((r) => String(r.entity_id)));
   const timingByEntity = new Map<string, Row>();
   for (const t of timing) timingByEntity.set(String(t.entity_id), t);
   const trendsByEntity = new Map<string, Row>();
@@ -188,6 +193,7 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
       websiteClicks: int0(r.website_clicks),
       bookOnlineClicks: r.book_online_active ? int0(r.book_online_clicks) : null,
       bookOnlineActive: r.book_online_active === true,
+      webAppActive: webActiveSet.has(id),
       keywordsTracked: num(r.keywords_tracked),
       keywordsTop3Pct: num(r.keywords_top3_pct),
       avgCurrentRank: num(r.avg_current_rank),

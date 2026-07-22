@@ -184,7 +184,18 @@ export default function AccountDossier({
           <div className="flex items-start gap-3">
             <span className="mt-1.5"><HealthDot health={h} /></span>
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{account.name}</h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{account.name}</h1>
+                {account.webAppActive && (
+                  <span
+                    className="cave-web inline-flex items-center rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]"
+                    title="Discovery Web active — live on the web app"
+                    style={{ border: "1px solid var(--cave-cy)", color: "var(--cave-cy)", background: "rgba(53,224,255,.08)" }}
+                  >
+                    ◉ Discovery Web
+                  </span>
+                )}
+              </div>
               <div className="mt-0.5 text-sm text-slate-400">
                 {[account.city, account.state].filter(Boolean).join(", ") || "—"}
                 {account.accountManager ? ` · AM ${account.accountManager}` : ""}

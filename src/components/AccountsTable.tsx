@@ -784,6 +784,15 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
                             >
                               {a.name}
                             </Link>
+                            {a.webAppActive && (
+                              <span
+                                className="cave-web ml-1.5 inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em]"
+                                title="Discovery Web active — live on the web app"
+                                style={{ border: "1px solid var(--cave-cy)", color: "var(--cave-cy)", background: "rgba(53,224,255,.08)" }}
+                              >
+                                ◉ Web
+                              </span>
+                            )}
                           </div>
                           <div className="text-xs text-slate-400">
                             {a.city ? (

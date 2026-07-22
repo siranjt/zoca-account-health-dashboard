@@ -86,6 +86,13 @@ SELECT entity_id,
 FROM j GROUP BY entity_id`;
 }
 
+/** Accounts with Discovery Web (the new web-app product) activated.
+ *  Source: entities.preferences → discovery.web.isActive = 'true', keyed by
+ *  entity_id. Mirrors Metabase card 4339 ("Discovery Enabled on Web App"). */
+export function webActiveSql(): string {
+  return `SELECT DISTINCT entity_id FROM entities.preferences WHERE attribute = 'discovery.web.isActive' AND value = 'true'`;
+}
+
 // (Tickets now come from the Linear Metabase CSV via src/lib/tickets.ts — the
 // Beacon-parity source — not from hubspot.tickets. Removed the HubSpot query.)
 
