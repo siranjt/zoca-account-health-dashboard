@@ -90,6 +90,13 @@ export interface AccountRow {
   /** display labels of active products, incl. "Discovery" */
   activeProducts: string[];
 
+  // --- visibility signals (GBP + HubSpot + geo) ---
+  gbpVerified: boolean | null; // GBP has Voice of Merchant (verified & owned)
+  websiteLive: boolean | null; // HubSpot is_website_live_on_gbp (null = unknown)
+  websiteUrl: string | null; // customer's website / landing page (GBP or HubSpot)
+  lastConnected: string | null; // HubSpot last-connected date (YYYY-MM-DD) — last AM touch
+  timezone: string | null; // IANA tz derived from lat/lng (for live local time)
+
   // --- trend cues (current vs previous window + 12-week sparklines) ---
   leadsDelta?: Delta;
   reviewsDelta?: Delta;
@@ -127,6 +134,7 @@ export interface AccountDetail {
   impressions?: { ym: string; impressions: number }[];
   reviewsDist?: { total: number; avg: number | null; last30: number; last90: number; dist: Record<string, number> } | null;
   comms?: { wk: string; chat: number; call: number; sms: number; email: number; meeting: number }[];
+  leadSources?: { bucket: string; n: number }[];
   mediaCadence?: { wk: string; live: number }[];
   forecast?: { predicted: number | null; actual: number } | null;
   // Row-level records (Retool "Reviews List" / "Lead Table")

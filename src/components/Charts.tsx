@@ -26,6 +26,45 @@ export function commsSeries(
     .filter((s) => s.values.some((v) => v > 0));
 }
 
+// Lead-source breakdown: horizontal bars, one per granular bucket, coloured by
+// channel family with each bucket's share of total leads.
+const LEAD_SOURCE_COLORS: Record<string, string> = {
+  "Google Maps": "#2a78d6",
+  "Apple Maps": "#64748b",
+  "Search (organic)": "#008300",
+  "AI Search": "#7c3aed",
+  Instagram: "#e1306c",
+  Facebook: "#1877f2",
+  "Other Social": "#eda100",
+  "Paid Ads": "#eb6834",
+  "SMS / Campaign": "#0ea5a4",
+  "Website / Direct": "#4a3aa7",
+  "Voice Call": "#0891b2",
+  Other: "#94a3b8",
+};
+export function LeadSourcesBars({ data }: { data: { bucket: string; n: number }[] }) {
+  const total = data.reduce((s, d) => s + d.n, 0);
+  if (!total) return <div className="py-6 text-center text-sm text-slate-400">No leads in this window.</div>;
+  const max = Math.max(...data.map((d) => d.n));
+  return (
+    <div className="space-y-1.5">
+      {data.map((d) => {
+        const color = LEAD_SOURCE_COLORS[d.bucket] ?? "#94a3b8";
+        const pct = Math.round((d.n / total) * 100);
+        return (
+          <div key={d.bucket} className="flex items-center gap-2 text-xs">
+            <span className="w-28 shrink-0 truncate text-slate-600" title={d.bucket}>{d.bucket}</span>
+            <div className="relative h-4 flex-1 overflow-hidden rounded bg-slate-100">
+              <div className="h-full rounded" style={{ width: `${Math.max(3, (d.n / max) * 100)}%`, background: color }} />
+            </div>
+            <span className="w-16 shrink-0 text-right tabular-nums text-slate-500">{d.n} · {pct}%</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ---- shared helpers --------------------------------------------------------
 function niceMax(v: number): number {
   if (v <= 5) return 5;

@@ -44,6 +44,10 @@ type SortKey =
   | "tenureDays"
   | "ccActiveDaysL28"
   | "ccConversationsL28"
+  | "gbpVerified"
+  | "websiteLive"
+  | "timezone"
+  | "lastConnected"
   | "otherProducts";
 
 interface SortState {
@@ -81,16 +85,16 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [mrrMin, setMrrMin] = useState<string>("");
   const [mrrMax, setMrrMax] = useState<string>("");
-  const [cols, setCols] = useState({ engagement: true, seo: true, timing: true, payments: true, webapp: true });
+  const [cols, setCols] = useState({ engagement: true, seo: true, timing: true, payments: true, webapp: true, visibility: true });
   const [metricRange, setMetricRange] = useState<{ key: keyof AccountRow; label: string; min: number; max: number } | null>(null);
   const [colMenu, setColMenu] = useState(false);
   useEffect(() => {
     try { const r = localStorage.getItem("zoca-ahd-cols"); if (r) setCols((c) => ({ ...c, ...JSON.parse(r) })); } catch { /* ignore */ }
   }, []);
-  function toggleColGroup(k: "engagement" | "seo" | "timing" | "payments" | "webapp") {
+  function toggleColGroup(k: "engagement" | "seo" | "timing" | "payments" | "webapp" | "visibility") {
     setCols((c) => { const n = { ...c, [k]: !c[k] }; try { localStorage.setItem("zoca-ahd-cols", JSON.stringify(n)); } catch { /* ignore */ } return n; });
   }
-  const colCount = 3 + (cols.engagement ? 6 : 0) + (cols.seo ? 3 : 0) + (cols.timing ? 3 : 0) + (cols.payments ? 4 : 0) + (cols.webapp ? 2 : 0);
+  const colCount = 3 + (cols.visibility ? 4 : 0) + (cols.engagement ? 6 : 0) + (cols.seo ? 3 : 0) + (cols.timing ? 3 : 0) + (cols.payments ? 4 : 0) + (cols.webapp ? 2 : 0);
   const [sort, setSort] = useState<SortState>({ key: "health", dir: "asc" });
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [pop, setPop] = useState<{ x: number; y: number; body: React.ReactNode } | null>(null);
@@ -330,7 +334,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   }, [rows]);
 
   function exportCsv() {
-    const cols = ["Business", "City", "State", "AM", "Health", "Composite", "Leads", "Reviews", "Photos", "ProfileClicks", "WebsiteClicks", "BookOnline", "KWTracked", "Top3%", "AvgRank", "Impressions", "DaysToInvoice", "DaysOverdue", "MissedPayments", "TenureDays", "CCEnabled", "CCActiveDaysL28", "CCConversationsL28", "CCSegment", "Products"];
+    const cols = ["Business", "City", "State", "AM", "GBPVerified", "WebsiteLive", "WebsiteURL", "Timezone", "LastTouch", "Health", "Composite", "Leads", "Reviews", "Photos", "ProfileClicks", "WebsiteClicks", "BookOnline", "KWTracked", "Top3%", "AvgRank", "Impressions", "DaysToInvoice", "DaysOverdue", "MissedPayments", "TenureDays", "CCEnabled", "CCActiveDaysL28", "CCConversationsL28", "CCSegment", "Products"];
     const cell = (v: unknown) => {
       const s = v == null ? "" : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -338,7 +342,11 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     const lines = [cols.join(",")];
     for (const a of rows) {
       lines.push([
-        a.name, a.city, a.state, a.accountManager, a.health.tierLabel, a.health.composite,
+        a.name, a.city, a.state, a.accountManager,
+        a.gbpVerified == null ? "" : a.gbpVerified ? "yes" : "no",
+        a.websiteLive == null ? "" : a.websiteLive ? "yes" : "no",
+        a.websiteUrl ?? "", a.timezone ?? "", a.lastConnected ?? "",
+        a.health.tierLabel, a.health.composite,
         a.leadsReceived, a.reviewsReceived, a.photosUploaded, a.profileClicks, a.websiteClicks,
         a.bookOnlineActive ? a.bookOnlineClicks : "n/a", a.keywordsTracked, a.keywordsTop3Pct,
         a.avgCurrentRank, a.keywordImpressions,
@@ -680,7 +688,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
             <>
               <div className="fixed inset-0 z-20" onClick={() => setColMenu(false)} />
               <div className="absolute left-0 top-8 z-30 w-44 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
-                {([["engagement", "Engagement"], ["seo", "SEO / rankings"], ["timing", "Response timing"], ["payments", "Payments"], ["webapp", "Web app (CC)"]] as const).map(([k, label]) => (
+                {([["visibility", "Visibility (GBP · site · touch)"], ["engagement", "Engagement"], ["seo", "SEO / rankings"], ["timing", "Response timing"], ["payments", "Payments"], ["webapp", "Web app (CC)"]] as const).map(([k, label]) => (
                   <label key={k} className="flex items-center gap-2 rounded px-1 py-1 text-xs hover:bg-slate-100">
                     <input type="checkbox" checked={cols[k]} onChange={() => toggleColGroup(k)} />
                     {label}
@@ -720,6 +728,20 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               <Th onClick={() => toggleSort("name")} active={sort} k="name" sticky>
                 Business
               </Th>
+              {cols.visibility && (<>
+              <Th onClick={() => toggleSort("gbpVerified")} active={sort} k="gbpVerified" center>
+                GBP
+              </Th>
+              <Th onClick={() => toggleSort("websiteLive")} active={sort} k="websiteLive" center>
+                Website
+              </Th>
+              <Th onClick={() => toggleSort("timezone")} active={sort} k="timezone" center>
+                Local time
+              </Th>
+              <Th onClick={() => toggleSort("lastConnected")} active={sort} k="lastConnected" center>
+                Last touch
+              </Th>
+              </>)}
               {cols.engagement && (<>
               <Th onClick={() => toggleSort("leadsReceived")} active={sort} k="leadsReceived" num onDistro={(e) => openPop(e, distro("leadsReceived", "Leads"))}>
                 Leads
@@ -867,6 +889,12 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
                         </div>
                       </div>
                     </td>
+                    {cols.visibility && (<>
+                    <td className="px-2 py-2 text-center"><VerifiedBadge v={a.gbpVerified} /></td>
+                    <td className="px-2 py-2 text-center"><WebsiteBadge live={a.websiteLive} url={a.websiteUrl} /></td>
+                    <td className="px-2 py-2 text-center"><LocalTime tz={a.timezone} /></td>
+                    <td className="px-2 py-2 text-center"><LastTouch date={a.lastConnected} /></td>
+                    </>)}
                     {cols.engagement && (<>
                     <MetricCell value={a.leadsReceived} delta={a.leadsDelta} spark={a.sparkLeads} color={VIZ.series[0]} onClick={(e) => openPop(e, metricPop(a, "leads"))} />
                     <MetricCell value={a.reviewsReceived} delta={a.reviewsDelta} color={VIZ.series[1]} onClick={(e) => openPop(e, metricPop(a, "reviews"))} />
@@ -1144,6 +1172,19 @@ function cmp(a: AccountRow, b: AccountRow, key: SortKey): number {
       return a.name.localeCompare(b.name);
     case "otherProducts":
       return otherProducts(a).length - otherProducts(b).length;
+    case "gbpVerified": {
+      const r = (v: boolean | null) => (v === true ? 2 : v == null ? 1 : 0);
+      return r(a.gbpVerified) - r(b.gbpVerified);
+    }
+    case "websiteLive": {
+      const r = (v: boolean | null) => (v === true ? 2 : v == null ? 1 : 0);
+      return r(a.websiteLive) - r(b.websiteLive);
+    }
+    case "timezone":
+      return (a.timezone ?? "").localeCompare(b.timezone ?? "");
+    case "lastConnected":
+      // empty (never touched) sorts first in asc → surfaces stale accounts
+      return (a.lastConnected ?? "").localeCompare(b.lastConnected ?? "");
     default: {
       const av = (a[key] as number | null) ?? -Infinity;
       const bv = (b[key] as number | null) ?? -Infinity;
@@ -1155,6 +1196,8 @@ function cmp(a: AccountRow, b: AccountRow, key: SortKey): number {
 function defaultDir(key: SortKey): "asc" | "desc" {
   // health & response-time are "lower/worse first"; volume metrics "higher first"
   if (key === "health" || key === "name" || key === "avgCurrentRank") return "asc";
+  // problems-first for the visibility columns: unverified / site-down / longest-since-touch
+  if (key === "gbpVerified" || key === "websiteLive" || key === "lastConnected" || key === "timezone") return "asc";
   if (key.startsWith("avg")) return "desc";
   return "desc";
 }
@@ -1211,6 +1254,71 @@ function Kpi({ label, value, custom, alert, onClick, active }: { label: string; 
       <div className="text-[11px] uppercase tracking-wide text-slate-400">{label}</div>
       {custom ?? <div className={`text-lg font-semibold tabular-nums ${alert ? "text-red-600" : "text-slate-800"}`}>{value}</div>}
     </div>
+  );
+}
+
+function VerifiedBadge({ v }: { v: boolean | null }) {
+  if (v == null) return <span className="text-[11px] text-slate-300" title="GBP verification unknown">—</span>;
+  return v ? (
+    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold" title="Google Business Profile verified (Voice of Merchant)" style={{ background: "rgba(22,163,74,.14)", color: "#16a34a" }}>✓ Verified</span>
+  ) : (
+    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold" title="Google Business Profile NOT verified" style={{ background: "rgba(220,38,38,.14)", color: "#dc2626" }}>✗ Unverified</span>
+  );
+}
+
+function WebsiteBadge({ live, url }: { live: boolean | null; url: string | null }) {
+  const inner =
+    live == null ? (
+      <span className="text-[11px] text-slate-300" title="Website status unknown">—</span>
+    ) : live ? (
+      <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold" title="Website live on the GBP" style={{ background: "rgba(22,163,74,.14)", color: "#16a34a" }}>● Live</span>
+    ) : (
+      <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold" title="Website not live on the GBP" style={{ background: "rgba(220,38,38,.14)", color: "#dc2626" }}>○ Down</span>
+    );
+  if (url) return <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={url} className="no-underline">{inner}</a>;
+  return inner;
+}
+
+function LocalTime({ tz }: { tz: string | null }) {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    if (!tz) return;
+    setNow(new Date());
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, [tz]);
+  if (!tz) return <span className="text-[11px] text-slate-300">—</span>;
+  if (!now) return <span className="text-[11px] tabular-nums text-slate-300">··:··</span>;
+  let time = "", abbr = "";
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "short" }).formatToParts(now);
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+    time = `${get("hour")}:${get("minute")} ${get("dayPeriod")}`;
+    abbr = get("timeZoneName");
+  } catch {
+    return <span className="text-[11px] text-slate-300">—</span>;
+  }
+  return (
+    <span className="inline-flex flex-col items-center leading-tight" title={tz}>
+      <span className="text-[12px] font-medium tabular-nums text-slate-700">{time}</span>
+      <span className="text-[9px] uppercase tracking-wide text-slate-400">{abbr}</span>
+    </span>
+  );
+}
+
+function LastTouch({ date }: { date: string | null }) {
+  if (!date) return <span className="text-[11px] text-slate-300" title="No logged touch">—</span>;
+  const d = new Date(date + "T00:00:00");
+  if (isNaN(d.getTime())) return <span className="text-[11px] text-slate-400">{date}</span>;
+  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
+  const ddmmyy = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(-2)}`;
+  const color = days > 60 ? "#dc2626" : days > 30 ? "#d97706" : "#64748b";
+  const ago = days <= 0 ? "today" : days === 1 ? "1d ago" : `${days}d ago`;
+  return (
+    <span className="inline-flex flex-col items-center leading-tight" title={`Last connected ${ddmmyy}`}>
+      <span className="text-[12px] font-medium tabular-nums text-slate-700">{ddmmyy}</span>
+      <span className="text-[9px] font-semibold" style={{ color }}>{ago}</span>
+    </span>
   );
 }
 

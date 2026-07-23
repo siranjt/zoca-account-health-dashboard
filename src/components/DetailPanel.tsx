@@ -15,8 +15,10 @@ import {
   KeywordRankingsChart,
   ReviewsDistChart,
   LeadForecastChart,
+  LeadSourcesBars,
   commsSeries,
 } from "./Charts";
+import PageSpeedCard from "./PageSpeedCard";
 
 export default function DetailPanel({ account, windowDays }: { account: AccountRow; windowDays: number }) {
   const [detail, setDetail] = useState<AccountDetail | null>(null);
@@ -155,6 +157,16 @@ export default function DetailPanel({ account, windowDays }: { account: AccountR
           {detail ? (detail.comms?.length ? (
             <MultiLineChart xLabels={detail.comms.map((c) => c.wk)} series={commsSeries(detail.comms)} />
           ) : <NoData />) : <Skeleton error={error} />}
+        </ChartCard>
+
+        <ChartCard title="Lead sources" subtitle="where this window's leads came from">
+          {detail ? (detail.leadSources?.length ? (
+            <LeadSourcesBars data={detail.leadSources} />
+          ) : <NoData />) : <Skeleton error={error} />}
+        </ChartCard>
+
+        <ChartCard title="Landing page speed" subtitle="Google PageSpeed · desktop">
+          <PageSpeedCard url={account.websiteUrl} strategy="desktop" />
         </ChartCard>
 
         <ChartCard title="GBP content" subtitle="live photos on the profile over time">

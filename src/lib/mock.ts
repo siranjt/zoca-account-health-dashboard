@@ -29,6 +29,21 @@ const MOCK_COORDS: Record<string, [number, number]> = {
   Nashville: [36.16, -86.78],
 };
 
+// state → IANA timezone (mock only; live data derives tz from lat/lng)
+const STATE_TZ: Record<string, string> = {
+  CA: "America/Los_Angeles", WA: "America/Los_Angeles", OR: "America/Los_Angeles",
+  AZ: "America/Phoenix", CO: "America/Denver",
+  TX: "America/Chicago", IL: "America/Chicago", TN: "America/Chicago",
+  NY: "America/New_York", FL: "America/New_York", MA: "America/New_York", SC: "America/New_York",
+};
+
+// deterministic YYYY-MM-DD, n days before a fixed base (mock last-touch dates)
+function daysAgoISO(n: number): string {
+  const d = new Date(2026, 6, 24);
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
 interface Seed {
   entityId: string; name: string; city: string; state: string; am: string;
   eng: number | null; val: number | null; prod: number | null;
@@ -113,6 +128,11 @@ function toRow(s: Seed): AccountRow {
     keywordImpressions: s.impressions,
     avgReceivedToOpenedMs: s.toOpened, avgReceivedToContactedMs: s.toContacted,
     avgOpenedToContactedMs: s.openedToContacted, activeProducts: s.products,
+    gbpVerified: s.leads % 5 !== 0,
+    websiteLive: s.bookActive ? true : s.leads % 3 === 0 ? false : null,
+    websiteUrl: `https://${s.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.zoca.com/`,
+    lastConnected: daysAgoISO(s.leads % 40),
+    timezone: STATE_TZ[s.state] ?? "America/New_York",
     leadsDelta: { cur: s.leads, prev: Math.round(s.leads * 0.8) },
     reviewsDelta: { cur: s.reviews, prev: Math.max(0, s.reviews - 1) },
     clicksDelta: { cur: s.profileClicks, prev: Math.round(s.profileClicks * 0.9) },
@@ -218,6 +238,14 @@ export function getMockAccountDetail(id: string): AccountDetail {
     impressions: mkSpark(Math.max(50, s.profileClicks), id + "im").map((v, i) => ({ ym: `2026-${String(i + 1).padStart(2, "0")}`, impressions: v * 20 })),
     reviewsDist: s.reviews ? { total: s.reviews + 40, avg: 4.7, last30: Math.round(s.reviews / 3), last90: s.reviews, dist: { "5": s.reviews + 30, "4": 6, "3": 2, "2": 1, "1": 1 } } : null,
     comms: mkSpark(Math.max(3, Math.round(s.leads / 6)), id + "cm").map((v, i) => ({ wk: new Date(2026, 4, 1 + i * 7).toISOString().slice(0, 10), chat: Math.round(v * 1.2), call: Math.round(v * 0.4), sms: v, email: Math.round(v * 0.6), meeting: i % 4 === 0 ? 1 : 0 })),
+    leadSources: [
+      { bucket: "Google Maps", n: Math.round(s.leads * 0.55) },
+      { bucket: "Search (organic)", n: Math.round(s.leads * 0.15) },
+      { bucket: "Website / Direct", n: Math.round(s.leads * 0.12) },
+      { bucket: "Instagram", n: Math.round(s.leads * 0.08) },
+      { bucket: "AI Search", n: Math.max(1, Math.round(s.leads * 0.04)) },
+      { bucket: "Paid Ads", n: Math.round(s.leads * 0.03) },
+    ].filter((b) => b.n > 0),
     mediaCadence: (() => { let live = 3; return mkSpark(2, id + "md").map((v, i) => { live += v; return { wk: new Date(2026, 4, 1 + i * 7).toISOString().slice(0, 10), live }; }); })(),
     forecast: { predicted: Math.max(20, s.leads * 2), actual: s.leads * 6 },
     reviewsList: (() => {

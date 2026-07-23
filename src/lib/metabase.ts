@@ -24,6 +24,7 @@ import {
   detailKeywordRankSql,
   detailImpressionsSql,
   detailReviewsDistSql,
+  detailLeadSourcesSql,
   detailMediaSql,
   detailForecastSql,
   detailReviewsListSql,
@@ -48,6 +49,18 @@ import { mapTier } from "./health";
 import { getTicketCountsByEntity } from "./tickets";
 import { getCommsWeekly, type CommsWeekPoint } from "./comms";
 import type { AccountDetail, AccountRow, HealthScore } from "./types";
+import tzLookup from "tz-lookup";
+
+// IANA timezone from lat/lng (pure-data lookup, no network). Used to show the
+// account's current local time. Guards against out-of-range coords.
+function tzFromLatLng(lat: number | null, lng: number | null): string | null {
+  if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  try {
+    return tzLookup(lat, lng);
+  } catch {
+    return null;
+  }
+}
 
 export interface MetabaseConfig {
   url: string;
@@ -219,6 +232,11 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
       avgReceivedToContactedMs: t ? secToMs(t.recv_to_contact_s) : null,
       avgOpenedToContactedMs: t ? secToMs(t.open_to_contact_s) : null,
       activeProducts: parseProducts(r.agents_paid_for),
+      gbpVerified: r.gbp_verified == null ? null : r.gbp_verified === true,
+      websiteLive: r.website_live_raw == null ? null : String(r.website_live_raw).toUpperCase() === "TRUE",
+      websiteUrl: (r.website_url as string) || null,
+      lastConnected: (r.last_connected as string) || null,
+      timezone: tzFromLatLng(num(r.lat), num(r.lng)),
       leadsDelta: tr ? { cur: int0(tr.cur_leads), prev: int0(tr.prev_leads) } : undefined,
       reviewsDelta: tr ? { cur: int0(tr.cur_reviews), prev: int0(tr.prev_reviews) } : undefined,
       clicksDelta: tr ? { cur: int0(tr.cur_clicks), prev: int0(tr.prev_clicks) } : undefined,
@@ -264,7 +282,7 @@ export async function getAccountDetailFromMetabase(
   const cfg = readMetabaseConfig();
   if (!cfg) throw new Error("Metabase not configured");
   const safe = (sql: string) => runDataset(cfg, sql).catch(() => [] as Row[]);
-  const [pw, lr, rt, fn, au, bk, kr, im, rd, cm, md, fc, rl, ll, ps, pw2, sv, rq, cs, ob, wo, sst, tb, bs, bc, wt, ca, pl] = await Promise.all([
+  const [pw, lr, rt, fn, au, bk, kr, im, rd, ls, cm, md, fc, rl, ll, ps, pw2, sv, rq, cs, ob, wo, sst, tb, bs, bc, wt, ca, pl] = await Promise.all([
     runDataset(cfg, detailProfileWeeklySql(id)),
     runDataset(cfg, detailLeadsReviewsMonthlySql(id)),
     runDataset(cfg, detailRankTrendSql(id)),
@@ -274,6 +292,7 @@ export async function getAccountDetailFromMetabase(
     safe(detailKeywordRankSql(id)),
     safe(detailImpressionsSql(id)),
     safe(detailReviewsDistSql(id)),
+    safe(detailLeadSourcesSql(id, Math.max(windowDays, 90))),
     getCommsWeekly(id, 90).catch(() => [] as CommsWeekPoint[]),
     safe(detailMediaSql(id)),
     safe(detailForecastSql(id)),
@@ -336,6 +355,7 @@ export async function getAccountDetailFromMetabase(
     impressions: im.map((r) => ({ ym: String(r.ym), impressions: int0(r.impressions) })),
     reviewsDist: rTot ? { total: rTot, avg: rRated ? Math.round((rSum / rRated) * 100) / 100 : null, last30: r30, last90: r90, dist: rDist } : null,
     comms: cm,
+    leadSources: ls.map((r) => ({ bucket: String(r.bucket), n: int0(r.n) })),
     mediaCadence,
     forecast: fcRow.predicted != null || fcRow.actual != null ? { predicted: num(fcRow.predicted), actual: int0(fcRow.actual) } : null,
     reviewsList: rl.map((r) => ({

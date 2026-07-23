@@ -47,7 +47,19 @@ imp AS (
 ec AS (SELECT DISTINCT (custom_fields::jsonb->>'cf_entity_id')::uuid AS entity_id, customer_id FROM chargebee.subscriptions WHERE (custom_fields::jsonb->>'cf_entity_id') ~ '${UUIDRE}'),
 nb AS (SELECT ec.entity_id, MIN(cs.next_billing_at) AS nbill FROM chargebee.subscriptions cs JOIN ec ON ec.customer_id=cs.customer_id WHERE cs.status IN ('active','non_renewing','future') AND cs.next_billing_at IS NOT NULL GROUP BY 1),
 od AS (SELECT ec.entity_id, MIN(i.due_date) AS oldest_due FROM chargebee.invoices i JOIN ec ON ec.customer_id=i.customer_id WHERE i.deleted=false AND i.status='payment_due' AND i.amount_due>0 GROUP BY 1),
-ms AS (SELECT ec.entity_id, COUNT(*) AS c FROM chargebee.transactions t JOIN ec ON ec.customer_id=t.customer_id WHERE t.status='failure' GROUP BY 1)
+ms AS (SELECT ec.entity_id, COUNT(*) AS c FROM chargebee.transactions t JOIN ec ON ec.customer_id=t.customer_id WHERE t.status='failure' GROUP BY 1),
+-- GBP verification (Voice of Merchant) + website URL on the profile
+gbpx AS (SELECT entity_id, bool_or((metadata->>'has_voice_of_merchant')='true') AS gbp_verified,
+                (array_remove(array_agg(NULLIF(website_uri,'')), NULL))[1] AS website_uri
+         FROM gbp.locations GROUP BY 1),
+-- HubSpot (stitched) location object, joined by entity_id: last-connected touch,
+-- website-live flag and the website URL. One row per entity (most-recently-modified).
+hub AS (SELECT DISTINCT ON (property_location_entity_id) property_location_entity_id::uuid AS entity_id,
+               NULLIF(property_last_connected_date,'') AS last_connected,
+               NULLIF(property_is_website_live_on_gbp,'') AS website_live_raw,
+               NULLIF(property_website_url,'') AS website_url
+        FROM hubspot_stitch.locations WHERE property_location_entity_id ~ '${UUIDRE}'
+        ORDER BY property_location_entity_id, property_hs_lastmodifieddate DESC NULLS LAST)
 SELECT hs.entity_id, hs.gbp_title, loc.city, loc.state, geo.lat, geo.lng, hs.am_name,
        hs.health_tier, hs.composite_health_score, hs.score_engagement, hs.score_value_realization, hs.score_product_stability,
        hs.health_tier_reason_names, hs.recommended_action, hs.agents_paid_for, hs.total_mrr, hs.active_subs,
@@ -63,12 +75,17 @@ SELECT hs.entity_id, hs.gbp_title, loc.city, loc.state, geo.lat, geo.lng, hs.am_
        (nb.nbill::date - CURRENT_DATE) AS days_to_invoice,
        (CURRENT_DATE - od.oldest_due::date) AS days_overdue,
        COALESCE(ms.c,0) AS failed_payments,
-       (CURRENT_DATE - hs.onboarding_date::date) AS tenure_days
+       (CURRENT_DATE - hs.onboarding_date::date) AS tenure_days,
+       gbpx.gbp_verified,
+       hub.last_connected,
+       hub.website_live_raw,
+       COALESCE(hub.website_url, gbpx.website_uri) AS website_url
 FROM hs
 LEFT JOIN loc USING(entity_id) LEFT JOIN geo USING(entity_id) LEFT JOIN leads USING(entity_id) LEFT JOIN rev USING(entity_id)
 LEFT JOIN pho USING(entity_id) LEFT JOIN met USING(entity_id) LEFT JOIN web USING(entity_id)
 LEFT JOIN rnk USING(entity_id) LEFT JOIN imp USING(entity_id)
 LEFT JOIN nb USING(entity_id) LEFT JOIN od USING(entity_id) LEFT JOIN ms USING(entity_id)
+LEFT JOIN gbpx USING(entity_id) LEFT JOIN hub USING(entity_id)
 ORDER BY hs.gbp_title`;
 }
 
@@ -250,6 +267,31 @@ export function detailReviewsDistSql(id: string): string {
       count(*) filter (where created_at > now() - interval '30 days')::int n30,
       count(*) filter (where created_at > now() - interval '90 days')::int n90
     FROM reviews.reviews WHERE entity_id='${id}' GROUP BY 1`;
+}
+
+/** Granular lead-source breakdown for the window, classified from the
+ *  enquiry's utm_source / utm_medium / referrer. First matching bucket wins. */
+export function detailLeadSourcesSql(id: string, days = 90): string {
+  const w = Number.isFinite(days) && days > 0 ? Math.round(days) : 90;
+  return `SELECT
+    CASE
+      WHEN utm_source ILIKE 'applemaps' THEN 'Apple Maps'
+      WHEN utm_source ILIKE 'googlemaps' OR utm_medium ILIKE '%maps%' OR referrer ILIKE '%/maps%' THEN 'Google Maps'
+      WHEN utm_source ~* 'chatgpt|openai|perplexity|gemini|copilot|claude' OR referrer ~* 'chatgpt|perplexity|gemini|copilot' THEN 'AI Search'
+      WHEN utm_source ~* 'instagram|^ig$' OR referrer ILIKE '%instagram%' THEN 'Instagram'
+      WHEN utm_source ILIKE 'facebook' OR referrer ILIKE '%facebook%' THEN 'Facebook'
+      WHEN utm_medium ILIKE 'social' OR referrer ~* 'linktr\\.ee|tiktok|linkedin|yelp|pinterest' THEN 'Other Social'
+      WHEN utm_source ~* 'ads' OR utm_medium IN ('cpc','paid') THEN 'Paid Ads'
+      WHEN utm_medium ILIKE 'sms' OR utm_source ~* 'sms' OR COALESCE(utm_campaign::text,'') <> '' THEN 'SMS / Campaign'
+      WHEN referrer ~* 'bing|yahoo|duckduckgo' OR referrer ILIKE '%google.%' THEN 'Search (organic)'
+      WHEN source='INCOMING_VOICE_CALL' OR referrer ILIKE '%voice_call%' THEN 'Voice Call'
+      WHEN source ILIKE 'WEBSITE' OR referrer='$direct' THEN 'Website / Direct'
+      ELSE 'Other'
+    END AS bucket,
+    COUNT(*) AS n
+  FROM website.booking_enquiries
+  WHERE entity_id='${id}'::uuid AND is_test_lead=false AND created_at >= now()-interval '${w} days'
+  GROUP BY 1 ORDER BY 2 DESC`;
 }
 
 /** Weekly net media (photos) delta on the GBP — cumulate in JS for "live" count. */
