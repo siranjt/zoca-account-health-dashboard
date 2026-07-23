@@ -40,6 +40,8 @@ export default function DetailPanel({ account, windowDays }: { account: AccountR
   }, [account.entityId, windowDays]);
 
   const h = account.health;
+  const gran = windowDays <= 31 ? "daily" : windowDays <= 180 ? "weekly" : "monthly";
+  const winN = `last ${windowDays}d`;
 
   return (
     <div className="bg-slate-50 p-4">
@@ -56,7 +58,7 @@ export default function DetailPanel({ account, windowDays }: { account: AccountR
           )}
         </ChartCard>
 
-        <ChartCard title="Lead → booking funnel" subtitle="last 90 days">
+        <ChartCard title="Lead → booking funnel" subtitle={winN}>
           {detail ? <FunnelChart f={detail.funnel} /> : <Skeleton error={error} />}
         </ChartCard>
 
@@ -78,7 +80,7 @@ export default function DetailPanel({ account, windowDays }: { account: AccountR
           </div>
         </ChartCard>
 
-        <ChartCard title="Profile clicks (weekly)" subtitle="last 26 weeks">
+        <ChartCard title="Profile clicks" subtitle={`${gran} · ${winN}`}>
           {detail ? (
             <MultiLineChart
               xLabels={detail.profileWeekly.map((w) => w.wk)}
@@ -87,7 +89,7 @@ export default function DetailPanel({ account, windowDays }: { account: AccountR
           ) : <Skeleton error={error} />}
         </ChartCard>
 
-        <ChartCard title="Profile metrics (weekly)" subtitle="website · calls · directions · leads">
+        <ChartCard title="Profile metrics" subtitle={`${gran} · website · calls · directions · leads`}>
           {detail ? (
             <MultiLineChart
               xLabels={detail.profileWeekly.map((w) => w.wk)}
@@ -101,7 +103,7 @@ export default function DetailPanel({ account, windowDays }: { account: AccountR
           ) : <Skeleton error={error} />}
         </ChartCard>
 
-        <ChartCard title="Leads vs Reviews" subtitle="monthly, last 12 months">
+        <ChartCard title="Leads vs Reviews" subtitle={`${gran} · ${winN}`}>
           {detail ? <LeadsReviewsChart data={detail.leadsReviews} /> : <Skeleton error={error} />}
         </ChartCard>
 
@@ -117,7 +119,7 @@ export default function DetailPanel({ account, windowDays }: { account: AccountR
           {detail ? <PaymentDetailsChart payments={detail.payments} /> : <Skeleton error={error} />}
         </ChartCard>
 
-        <ChartCard title="App engagement" subtitle="weekly in-app screen opens (Mixpanel)">
+        <ChartCard title="App engagement" subtitle={`${gran} in-app screen opens · ${winN}`}>
           {detail ? (detail.appUsage?.length ? (
             <MultiLineChart xLabels={detail.appUsage.map((w) => w.wk)} series={[
               { name: "App opens", color: VIZ.series[0], values: detail.appUsage.map((w) => w.appOpen) },
@@ -128,7 +130,7 @@ export default function DetailPanel({ account, windowDays }: { account: AccountR
           ) : <NoData />) : <Skeleton error={error} />}
         </ChartCard>
 
-        <ChartCard title="Leads vs bookings" subtitle="weekly unique, last 3 months (scheduling)">
+        <ChartCard title="Leads vs bookings" subtitle={`${gran} unique · ${winN} (scheduling)`}>
           {detail ? (detail.bookings?.length ? (
             <MultiLineChart xLabels={detail.bookings.map((b) => b.label)} series={[
               { name: "Leads", color: VIZ.series[0], values: detail.bookings.map((b) => b.leads) },
@@ -153,7 +155,7 @@ export default function DetailPanel({ account, windowDays }: { account: AccountR
           {detail ? <ReviewsDistChart data={detail.reviewsDist} /> : <Skeleton error={error} />}
         </ChartCard>
 
-        <ChartCard title="Comms activity" subtitle="weekly chat · calls · SMS · email · meetings, last 3 months">
+        <ChartCard title="Comms activity" subtitle={`${gran} chat · calls · SMS · email · meetings · ${winN}`}>
           {detail ? (detail.comms?.length ? (
             <MultiLineChart xLabels={detail.comms.map((c) => c.wk)} series={commsSeries(detail.comms)} />
           ) : <NoData />) : <Skeleton error={error} />}

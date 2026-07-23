@@ -282,35 +282,39 @@ export async function getAccountDetailFromMetabase(
   const cfg = readMetabaseConfig();
   if (!cfg) throw new Error("Metabase not configured");
   const safe = (sql: string) => runDataset(cfg, sql).catch(() => [] as Row[]);
+  // Everything that is a count/aggregate or a trend follows the selected window;
+  // point-in-time snapshots (rankings, impressions, services, onboarding,
+  // scheduling status, forecast, payment links, review distribution) do not.
+  const w = Number.isFinite(windowDays) && windowDays > 0 ? Math.round(windowDays) : 90;
   const [pw, lr, rt, fn, au, bk, kr, im, rd, ls, cm, md, fc, rl, ll, ps, pw2, sv, rq, cs, ob, wo, sst, tb, bs, bc, wt, ca, pl] = await Promise.all([
-    runDataset(cfg, detailProfileWeeklySql(id)),
-    runDataset(cfg, detailLeadsReviewsMonthlySql(id)),
-    runDataset(cfg, detailRankTrendSql(id)),
-    runDataset(cfg, detailFunnelSql(id, Math.max(windowDays, 90))),
-    safe(detailAppUsageSql(id)),
-    safe(detailBookingsSql(id)),
+    runDataset(cfg, detailProfileWeeklySql(id, w)),
+    runDataset(cfg, detailLeadsReviewsMonthlySql(id, w)),
+    runDataset(cfg, detailRankTrendSql(id, w)),
+    runDataset(cfg, detailFunnelSql(id, w)),
+    safe(detailAppUsageSql(id, w)),
+    safe(detailBookingsSql(id, w)),
     safe(detailKeywordRankSql(id)),
     safe(detailImpressionsSql(id)),
     safe(detailReviewsDistSql(id)),
-    safe(detailLeadSourcesSql(id, Math.max(windowDays, 90))),
-    getCommsWeekly(id, 90).catch(() => [] as CommsWeekPoint[]),
-    safe(detailMediaSql(id)),
+    safe(detailLeadSourcesSql(id, w)),
+    getCommsWeekly(id, w).catch(() => [] as CommsWeekPoint[]),
+    safe(detailMediaSql(id, w)),
     safe(detailForecastSql(id)),
-    safe(detailReviewsListSql(id)),
-    safe(detailLeadsListSql(id, Math.max(windowDays, 90))),
-    safe(detailPostsSql(id)),
-    safe(detailPostsWeeklySql(id)),
+    safe(detailReviewsListSql(id, w)),
+    safe(detailLeadsListSql(id, w)),
+    safe(detailPostsSql(id, w)),
+    safe(detailPostsWeeklySql(id, w)),
     safe(detailServicesSql(id)),
-    safe(detailRequestsSql(id)),
-    safe(detailCsatSql(id)),
+    safe(detailRequestsSql(id, w)),
+    safe(detailCsatSql(id, w)),
     safe(detailOnboardingSql(id)),
     safe(detailWinOnboardedSql(id)),
     safe(detailSchedulingStatusSql(id)),
-    safe(detailTotalBookingsSql(id)),
-    safe(detailBookingsByStatusSql(id)),
-    safe(detailBookingsByCreatorSql(id)),
-    safe(detailWowTasksSql(id)),
-    safe(detailCallbackActionsSql(id)),
+    safe(detailTotalBookingsSql(id, w)),
+    safe(detailBookingsByStatusSql(id, w)),
+    safe(detailBookingsByCreatorSql(id, w)),
+    safe(detailWowTasksSql(id, w)),
+    safe(detailCallbackActionsSql(id, w)),
     safe(detailPaymentLinksSql(id)),
   ]);
   const f = fn[0] ?? {};
@@ -340,9 +344,7 @@ export async function getAccountDetailFromMetabase(
       leads: int0(r.leads),
       reviews: int0(r.reviews),
     })),
-    rankTrend: rt
-      .map((r) => ({ d: String(r.d), top3: num(r.top3), avgRank: num(r.avg_rank) }))
-      .reverse(),
+    rankTrend: rt.map((r) => ({ d: String(r.d), top3: num(r.top3), avgRank: num(r.avg_rank) })),
     funnel: {
       enquiries: int0(f.enquiries),
       opened: int0(f.opened),

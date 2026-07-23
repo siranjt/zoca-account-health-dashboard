@@ -125,6 +125,8 @@ export default function AccountDossier({
 
   const h = account.health;
   const skel = <Skeleton error={error} />;
+  const gran = windowDays <= 31 ? "daily" : windowDays <= 180 ? "weekly" : "monthly";
+  const winN = `last ${windowDays}d`;
   const pay = detail?.payments;
 
   return (
@@ -343,7 +345,7 @@ export default function AccountDossier({
               )}
             </ChartCard>
 
-            <ChartCard title="Profile Clicks (Weekly)" subtitle="last 26 weeks (GBP)">
+            <ChartCard title="Profile Clicks" subtitle={`${gran} · ${winN} (GBP)`}>
               {detail ? (
                 <MultiLineChart
                   xLabels={detail.profileWeekly.map((w) => w.wk)}
@@ -426,7 +428,7 @@ export default function AccountDossier({
               {detail ? <ReviewsDistChart data={detail.reviewsDist} /> : skel}
             </ChartCard>
 
-            <ChartCard title="Leads Vs Reviews" subtitle="monthly, last 12 months">
+            <ChartCard title="Leads Vs Reviews" subtitle={`${gran} · ${winN}`}>
               {detail ? <LeadsReviewsChart data={detail.leadsReviews} /> : skel}
             </ChartCard>
 
@@ -474,7 +476,7 @@ export default function AccountDossier({
               </div>
             </ChartCard>
 
-            <ChartCard title="Leads vs Bookings" subtitle="weekly unique, last 3 months (scheduling)">
+            <ChartCard title="Leads vs Bookings" subtitle={`${gran} unique · ${winN} (scheduling)`}>
               {detail ? (detail.bookings?.length ? (
                 <MultiLineChart xLabels={detail.bookings.map((b) => b.label)} series={[
                   { name: "Leads", color: VIZ.series[0], values: detail.bookings.map((b) => b.leads) },
@@ -634,7 +636,7 @@ export default function AccountDossier({
               ) : <NoData />) : skel}
             </ChartCard>
 
-            <ChartCard title="Total Calls / Comms" subtitle="weekly chat · calls · SMS · email · meetings, last 3 months">
+            <ChartCard title="Total Calls / Comms" subtitle={`${gran} chat · calls · SMS · email · meetings · ${winN}`}>
               {detail ? (detail.comms?.length ? (
                 <MultiLineChart xLabels={detail.comms.map((c) => c.wk)} series={commsSeries(detail.comms)} />
               ) : <NoData />) : skel}
@@ -650,7 +652,7 @@ export default function AccountDossier({
               <WebsiteLiveCard url={account.websiteUrl} />
             </ChartCard>
 
-            <ChartCard title="App Metrics" subtitle="weekly in-app screen opens (Mixpanel)">
+            <ChartCard title="App Metrics" subtitle={`${gran} in-app screen opens · ${winN}`}>
               {detail ? (detail.appUsage?.length ? (
                 <MultiLineChart xLabels={detail.appUsage.map((w) => w.wk)} series={[
                   { name: "App opens", color: VIZ.series[0], values: detail.appUsage.map((w) => w.appOpen) },

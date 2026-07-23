@@ -194,26 +194,46 @@ LEFT JOIN lc USING(entity_id) LEFT JOIN lp USING(entity_id) LEFT JOIN rc USING(e
 LEFT JOIN pc USING(entity_id) LEFT JOIN pp USING(entity_id) LEFT JOIN lspark USING(entity_id) LEFT JOIN pspark USING(entity_id)`;
 }
 
-// ---- per-account detail (unchanged) ---------------------------------------
-export function detailProfileWeeklySql(id: string): string {
-  return `
-WITH g AS (SELECT date_trunc('week',m.metrics_timestamp)::date wk, SUM(m.website_clicks) wc, SUM(m.call_clicks) cc, SUM(m.business_direction_requests) dc, SUM(${PC}) pc FROM gbp.metrics m JOIN gbp.locations gl ON gl.name=m.location_name WHERE gl.entity_id='${id}'::uuid AND m.metrics_timestamp>=now()-interval '26 weeks' GROUP BY 1),
-l AS (SELECT date_trunc('week',created_at)::date wk, COUNT(*) leads FROM website.booking_enquiries WHERE entity_id='${id}'::uuid AND source='WEBSITE' AND is_test_lead=false AND created_at>=now()-interval '26 weeks' GROUP BY 1)
-SELECT to_char(COALESCE(g.wk,l.wk),'YYYY-MM-DD') wk, COALESCE(g.pc,0) profile_clicks, COALESCE(g.wc,0) website_clicks, COALESCE(g.cc,0) call_clicks, COALESCE(g.dc,0) directions, COALESCE(l.leads,0) leads, COALESCE(g.wc,0)+COALESCE(g.cc,0)+COALESCE(g.dc,0) total_interactions
-FROM g FULL JOIN l ON g.wk=l.wk ORDER BY 1`;
+// ---- per-account detail — all windowed to the selected range --------------
+// Trend charts auto-pick their bucket by window length: daily ≤31d, weekly
+// ≤180d, monthly beyond — so a 7d window shows 7 daily points and a 180d window
+// ~26 weekly. Point-in-time snapshots (current rank, services, onboarding, …)
+// stay un-windowed by design.
+export function trendUnit(windowDays: number): "day" | "week" | "month" {
+  const w = Number.isFinite(windowDays) && windowDays > 0 ? windowDays : 90;
+  return w <= 31 ? "day" : w <= 180 ? "week" : "month";
 }
-export function detailLeadsReviewsMonthlySql(id: string): string {
+const wDays = (windowDays: number) => (Number.isFinite(windowDays) && windowDays > 0 ? Math.round(windowDays) : 90);
+const labelFmt = (u: "day" | "week" | "month") => (u === "month" ? "YYYY-MM" : "YYYY-MM-DD");
+// gap-filled bucket series across the window, so empty buckets still render
+const bucketSeries = (u: "day" | "week" | "month", w: number) =>
+  `SELECT generate_series(date_trunc('${u}', now()-interval '${w} days'), date_trunc('${u}', now()), '1 ${u}'::interval)::date b`;
+
+export function detailProfileWeeklySql(id: string, windowDays: number): string {
+  const w = wDays(windowDays), u = trendUnit(w), f = labelFmt(u);
   return `
-WITH l AS (SELECT date_trunc('month',created_at)::date m, COUNT(*) leads FROM website.booking_enquiries WHERE entity_id='${id}'::uuid AND source='WEBSITE' AND is_test_lead=false AND created_at>=now()-interval '12 months' GROUP BY 1),
-r AS (SELECT date_trunc('month',review_time)::date m, COUNT(*) reviews FROM reviews.reviews WHERE entity_id='${id}'::uuid AND is_deleted=false AND review_time>=now()-interval '12 months' GROUP BY 1)
-SELECT to_char(COALESCE(l.m,r.m),'YYYY-MM') mon, COALESCE(l.leads,0) leads, COALESCE(r.reviews,0) reviews FROM l FULL JOIN r ON l.m=r.m ORDER BY 1`;
+WITH series AS (${bucketSeries(u, w)}),
+g AS (SELECT date_trunc('${u}',m.metrics_timestamp)::date b, SUM(m.website_clicks) wc, SUM(m.call_clicks) cc, SUM(m.business_direction_requests) dc, SUM(${PC}) pc FROM gbp.metrics m JOIN gbp.locations gl ON gl.name=m.location_name WHERE gl.entity_id='${id}'::uuid AND m.metrics_timestamp>=now()-interval '${w} days' GROUP BY 1),
+l AS (SELECT date_trunc('${u}',created_at)::date b, COUNT(*) leads FROM website.booking_enquiries WHERE entity_id='${id}'::uuid AND source='WEBSITE' AND is_test_lead=false AND created_at>=now()-interval '${w} days' GROUP BY 1)
+SELECT to_char(s.b,'${f}') wk, COALESCE(g.pc,0) profile_clicks, COALESCE(g.wc,0) website_clicks, COALESCE(g.cc,0) call_clicks, COALESCE(g.dc,0) directions, COALESCE(l.leads,0) leads, COALESCE(g.wc,0)+COALESCE(g.cc,0)+COALESCE(g.dc,0) total_interactions
+FROM series s LEFT JOIN g ON g.b=s.b LEFT JOIN l ON l.b=s.b ORDER BY s.b`;
 }
-export function detailRankTrendSql(id: string): string {
-  return `SELECT to_char(dateval,'YYYY-MM-DD') d, ROUND((100.0*COUNT(*) FILTER (WHERE avg_rank<=3)/NULLIF(COUNT(*),0))::numeric,1) top3, ROUND(AVG(avg_rank)::numeric,1) avg_rank FROM local_seo.rank WHERE entity_id='${id}'::uuid AND is_active GROUP BY dateval ORDER BY dateval DESC LIMIT 16`;
+export function detailLeadsReviewsMonthlySql(id: string, windowDays: number): string {
+  const w = wDays(windowDays), u = trendUnit(w), f = labelFmt(u);
+  return `
+WITH series AS (${bucketSeries(u, w)}),
+l AS (SELECT date_trunc('${u}',created_at)::date b, COUNT(*) leads FROM website.booking_enquiries WHERE entity_id='${id}'::uuid AND source='WEBSITE' AND is_test_lead=false AND created_at>=now()-interval '${w} days' GROUP BY 1),
+r AS (SELECT date_trunc('${u}',review_time)::date b, COUNT(*) reviews FROM reviews.reviews WHERE entity_id='${id}'::uuid AND is_deleted=false AND review_time>=now()-interval '${w} days' GROUP BY 1)
+SELECT to_char(s.b,'${f}') mon, COALESCE(l.leads,0) leads, COALESCE(r.reviews,0) reviews FROM series s LEFT JOIN l ON l.b=s.b LEFT JOIN r ON r.b=s.b ORDER BY s.b`;
+}
+export function detailRankTrendSql(id: string, windowDays: number): string {
+  const w = wDays(windowDays), u = trendUnit(w), f = labelFmt(u);
+  return `SELECT to_char(date_trunc('${u}',dateval)::date,'${f}') d, ROUND((100.0*COUNT(*) FILTER (WHERE avg_rank<=3)/NULLIF(COUNT(*),0))::numeric,1) top3, ROUND(AVG(avg_rank)::numeric,1) avg_rank FROM local_seo.rank WHERE entity_id='${id}'::uuid AND is_active AND dateval>=now()-interval '${w} days' GROUP BY date_trunc('${u}',dateval) ORDER BY 1`;
 }
 export function detailFunnelSql(id: string, windowDays: number): string {
+  const w = wDays(windowDays);
   return `
-WITH be AS (SELECT id AS enquiry_id, status FROM website.booking_enquiries WHERE entity_id='${id}'::uuid AND source='WEBSITE' AND is_test_lead=false AND created_at>=now()-interval '${windowDays} days'),
+WITH be AS (SELECT id AS enquiry_id, status FROM website.booking_enquiries WHERE entity_id='${id}'::uuid AND source='WEBSITE' AND is_test_lead=false AND created_at>=now()-interval '${w} days'),
 opened AS (SELECT DISTINCT lead_id FROM mixpanelzocaappdata.export WHERE event='Leads-View-Chat' AND lead_id IS NOT NULL),
 contacted AS (SELECT DISTINCT enquiry_id FROM clients.communication_logs WHERE type IN ('SMS','CALL'))
 SELECT COUNT(*) enquiries,
@@ -228,25 +248,30 @@ FROM be`;
 // Each is parameterized on `id` (a UUID, validated by the /api/account route).
 // ============================================================================
 
-/** Weekly app engagement (Mixpanel) — home/leads/reviews/photos screen opens. */
-export function detailAppUsageSql(id: string): string {
-  return `SELECT date_trunc('week', time::date)::date AS wk,
+/** App engagement (Mixpanel) — home/leads/reviews/photos screen opens, windowed. */
+export function detailAppUsageSql(id: string, windowDays: number): string {
+  const w = wDays(windowDays), u = trendUnit(w), f = labelFmt(u);
+  return `WITH series AS (${bucketSeries(u, w)}),
+  d AS (SELECT date_trunc('${u}', time::date)::date AS b,
     SUM((event = 'Home-View-Home')::int) AS app_open,
     SUM((event LIKE 'Leads-%')::int)     AS leads_view,
     SUM((event LIKE 'Review-%')::int)    AS reviews_view,
     SUM((event LIKE 'Photos-%')::int)    AS photos_view
   FROM mixpanelzocaappdata.export
-  WHERE "locationEntityId" = '${id}' AND time >= (CURRENT_DATE - INTERVAL '140 days')
-  GROUP BY 1 ORDER BY 1`;
+  WHERE "locationEntityId" = '${id}' AND time >= (CURRENT_DATE - INTERVAL '${w} days')
+  GROUP BY 1)
+  SELECT to_char(s.b,'${f}') wk, COALESCE(d.app_open,0) app_open, COALESCE(d.leads_view,0) leads_view, COALESCE(d.reviews_view,0) reviews_view, COALESCE(d.photos_view,0) photos_view
+  FROM series s LEFT JOIN d ON d.b=s.b ORDER BY s.b`;
 }
 
-/** Weekly unique leads vs unique bookings (last 3 months). */
-export function detailBookingsSql(id: string): string {
-  return `WITH weeks AS (SELECT generate_series(date_trunc('week',current_date-interval '3 months'),date_trunc('week',current_date),'1 week'::interval)::date ws),
-    lw AS (SELECT date_trunc('week',created_at)::date ws, count(distinct client_id) leads FROM website.booking_enquiries WHERE entity_id='${id}'::uuid AND is_test_lead=false AND created_at>=current_date-interval '3 months' GROUP BY 1),
-    bw AS (SELECT date_trunc('week',created_at)::date ws, count(distinct client_id) bookings FROM scheduling.bookings WHERE entity_id='${id}'::uuid AND created_at>=current_date-interval '3 months' GROUP BY 1)
-    SELECT to_char(w.ws,'YYYY-MM-DD') label, coalesce(lw.leads,0) leads, coalesce(bw.bookings,0) bookings
-    FROM weeks w LEFT JOIN lw ON lw.ws=w.ws LEFT JOIN bw ON bw.ws=w.ws ORDER BY w.ws`;
+/** Unique leads vs unique bookings over the window (auto granularity). */
+export function detailBookingsSql(id: string, windowDays: number): string {
+  const w = wDays(windowDays), u = trendUnit(w), f = labelFmt(u);
+  return `WITH series AS (${bucketSeries(u, w)}),
+    lw AS (SELECT date_trunc('${u}',created_at)::date b, count(distinct client_id) leads FROM website.booking_enquiries WHERE entity_id='${id}'::uuid AND is_test_lead=false AND created_at>=now()-interval '${w} days' GROUP BY 1),
+    bw AS (SELECT date_trunc('${u}',created_at)::date b, count(distinct client_id) bookings FROM scheduling.bookings WHERE entity_id='${id}'::uuid AND created_at>=now()-interval '${w} days' GROUP BY 1)
+    SELECT to_char(s.b,'${f}') label, coalesce(lw.leads,0) leads, coalesce(bw.bookings,0) bookings
+    FROM series s LEFT JOIN lw ON lw.b=s.b LEFT JOIN bw ON bw.b=s.b ORDER BY s.b`;
 }
 
 /** Latest rank per keyword (top by best avg rank). */
@@ -275,7 +300,7 @@ export function detailReviewsDistSql(id: string): string {
 /** Granular lead-source breakdown for the window, classified from the
  *  enquiry's utm_source / utm_medium / referrer. First matching bucket wins. */
 export function detailLeadSourcesSql(id: string, days = 90): string {
-  const w = Number.isFinite(days) && days > 0 ? Math.round(days) : 90;
+  const w = wDays(days);
   return `SELECT
     CASE
       WHEN utm_source ILIKE 'applemaps' THEN 'Apple Maps'
@@ -297,12 +322,13 @@ export function detailLeadSourcesSql(id: string, days = 90): string {
   GROUP BY 1 ORDER BY 2 DESC`;
 }
 
-/** Weekly net media (photos) delta on the GBP — cumulate in JS for "live" count. */
-export function detailMediaSql(id: string): string {
+/** Net media (photos) delta on the GBP over the window — cumulated in JS. */
+export function detailMediaSql(id: string, windowDays: number): string {
+  const w = wDays(windowDays), u = trendUnit(w), f = labelFmt(u);
   return `WITH base AS (SELECT create_time::timestamptz cat, deleted_at, is_deleted FROM gbp.media_items WHERE entity_id='${id}'),
-    s AS (SELECT date_trunc('week', cat)::date wk, 1 p FROM base WHERE cat IS NOT NULL
-          UNION ALL SELECT date_trunc('week', deleted_at::timestamptz)::date wk, -1 p FROM base WHERE is_deleted=true AND deleted_at IS NOT NULL)
-    SELECT wk, sum(p)::int delta FROM s WHERE wk IS NOT NULL GROUP BY 1 ORDER BY 1`;
+    s AS (SELECT date_trunc('${u}', cat)::date b, 1 p FROM base WHERE cat IS NOT NULL
+          UNION ALL SELECT date_trunc('${u}', deleted_at::timestamptz)::date b, -1 p FROM base WHERE is_deleted=true AND deleted_at IS NOT NULL)
+    SELECT to_char(b,'${f}') wk, sum(p)::int delta FROM s WHERE b IS NOT NULL AND b >= date_trunc('${u}', now()-interval '${w} days') GROUP BY 1 ORDER BY 1`;
 }
 
 /** ICP-predicted 6-month leads vs actual leads delivered. */
@@ -317,12 +343,14 @@ export function detailForecastSql(id: string): string {
 // actual records, not just aggregates.
 // ============================================================================
 
-/** Every non-deleted review with its text, author, rating, platform, date. */
-export function detailReviewsListSql(id: string): string {
+/** Non-deleted reviews within the window, with text, author, rating, platform. */
+export function detailReviewsListSql(id: string, windowDays: number): string {
+  const w = wDays(windowDays);
   return `SELECT reviewer_name, rating::text rating, platform, review_text,
       to_char(COALESCE(review_time, created_at),'YYYY-MM-DD') d
     FROM reviews.reviews
     WHERE entity_id='${id}'::uuid AND is_deleted=false
+      AND COALESCE(review_time, created_at) >= now()-interval '${w} days'
     ORDER BY COALESCE(review_time, created_at) DESC NULLS LAST
     LIMIT 300`;
 }
@@ -338,21 +366,25 @@ export function detailLeadsListSql(id: string, windowDays: number): string {
     LIMIT 500`;
 }
 
-/** GBP posts — recent posts on the profile (Retool "posts_raw"). */
-export function detailPostsSql(id: string): string {
+/** GBP posts on the profile within the window (Retool "posts_raw"). */
+export function detailPostsSql(id: string, windowDays: number): string {
+  const w = wDays(windowDays);
   return `SELECT to_char(gp.create_time::date,'YYYY-MM-DD') d, gp.summary, gp.event, gp.offer,
       gp.call_to_action cta, gp.topic_type, gp.state
     FROM gbp.posts gp JOIN gbp.locations gl ON gl.name = gp.location_name
-    WHERE gl.entity_id='${id}'::uuid AND gp.is_deleted=false
+    WHERE gl.entity_id='${id}'::uuid AND gp.is_deleted=false AND gp.create_time::date >= now()-interval '${w} days'
     ORDER BY gp.create_time::date DESC LIMIT 100`;
 }
 
-/** GBP posts cadence — weekly live posts + cumulative (Retool "posts_count"). */
-export function detailPostsWeeklySql(id: string): string {
-  return `WITH p AS (SELECT date_trunc('week', gp.create_time::date) wk, count(*) posts
+/** GBP posts cadence over the window — live posts per bucket + cumulative. */
+export function detailPostsWeeklySql(id: string, windowDays: number): string {
+  const w = wDays(windowDays), u = trendUnit(w), f = labelFmt(u);
+  return `WITH series AS (${bucketSeries(u, w)}),
+    p AS (SELECT date_trunc('${u}', gp.create_time::date)::date b, count(*) posts
       FROM gbp.posts gp JOIN gbp.locations gl ON gl.name = gp.location_name
-      WHERE gl.entity_id='${id}'::uuid AND gp.is_deleted=false AND gp.state='LIVE' GROUP BY 1)
-    SELECT to_char(wk,'YYYY-MM-DD') wk, posts, sum(posts) OVER (ORDER BY wk) cumsum FROM p ORDER BY wk`;
+      WHERE gl.entity_id='${id}'::uuid AND gp.is_deleted=false AND gp.state='LIVE' AND gp.create_time::date >= now()-interval '${w} days' GROUP BY 1)
+    SELECT to_char(s.b,'${f}') wk, COALESCE(p.posts,0) posts, sum(COALESCE(p.posts,0)) OVER (ORDER BY s.b) cumsum
+    FROM series s LEFT JOIN p ON p.b=s.b ORDER BY s.b`;
 }
 
 /** Services offered by the account (Retool "query19"). Entity-first CTE +
@@ -369,10 +401,11 @@ export function detailServicesSql(id: string): string {
     ORDER BY sc.name, ss.name LIMIT 300`;
 }
 
-/** Support/ops requests raised for the account (Retool "requests"). */
-export function detailRequestsSql(id: string): string {
+/** Support/ops requests raised for the account within the window (Retool "requests"). */
+export function detailRequestsSql(id: string, windowDays: number): string {
+  const w = wDays(windowDays);
   return `SELECT to_char(created_at::date,'YYYY-MM-DD') d, status, priority, request_type, details
-    FROM requests.requests WHERE entity_id='${id}'::uuid AND is_active=true
+    FROM requests.requests WHERE entity_id='${id}'::uuid AND is_active=true AND created_at >= now()-interval '${w} days'
     ORDER BY created_at DESC LIMIT 100`;
 }
 
@@ -396,48 +429,53 @@ export function detailSchedulingStatusSql(id: string): string {
     (CASE WHEN EXISTS(SELECT 1 FROM entities.preferences ep WHERE ep.entity_id='${id}' AND ep.attribute='website.callNow.buttonText' AND ep.value='Call Us (24x7)') THEN 'Yes' ELSE 'No' END) call_cta`;
 }
 
-/** Total bookings (Retool "total_booking_count", migration-source excluded). */
-export function detailTotalBookingsSql(id: string): string {
+/** Total bookings within the window (migration-source excluded). */
+export function detailTotalBookingsSql(id: string, windowDays: number): string {
+  const w = wDays(windowDays);
   return `SELECT COUNT(DISTINCT b.id) total_bookings FROM scheduling.bookings b
-    WHERE b.entity_id='${id}'::uuid
+    WHERE b.entity_id='${id}'::uuid AND b.created_at >= now()-interval '${w} days'
       AND ((b.attributes #>> array['migration_source']::text[])::text IS NULL OR (b.attributes #>> array['migration_source']::text[])::text='')`;
 }
 
-/** Bookings grouped by status (Retool "bookings_by_status"). */
-export function detailBookingsByStatusSql(id: string): string {
+/** Bookings grouped by status within the window. */
+export function detailBookingsByStatusSql(id: string, windowDays: number): string {
+  const w = wDays(windowDays);
   return `SELECT b.status, COUNT(DISTINCT b.id) booking_count FROM scheduling.bookings b
-    WHERE b.entity_id='${id}'::uuid
+    WHERE b.entity_id='${id}'::uuid AND b.created_at >= now()-interval '${w} days'
       AND ((b.attributes #>> array['migration_source']::text[])::text IS NULL OR (b.attributes #>> array['migration_source']::text[])::text='')
     GROUP BY b.status ORDER BY b.status`;
 }
 
-/** Bookings grouped by who created them (Retool "bookings_by_creator_type"). */
-export function detailBookingsByCreatorSql(id: string): string {
+/** Bookings grouped by who created them, within the window. */
+export function detailBookingsByCreatorSql(id: string, windowDays: number): string {
+  const w = wDays(windowDays);
   return `SELECT bi.created_by_type, COUNT(DISTINCT b.id) booking_count
     FROM scheduling.bookings b LEFT JOIN scheduling.booking_items bi ON b.id=bi.booking_id
-    WHERE b.entity_id='${id}'::uuid
+    WHERE b.entity_id='${id}'::uuid AND b.created_at >= now()-interval '${w} days'
       AND ((b.attributes #>> array['migration_source']::text[])::text IS NULL OR (b.attributes #>> array['migration_source']::text[])::text='')
     GROUP BY bi.created_by_type ORDER BY bi.created_by_type`;
 }
 
-/** Weekly WoW task completion (Retool "query39") — l2b.call_callbacks. */
-export function detailWowTasksSql(id: string): string {
-  return `SELECT to_char(date_trunc('week', cc.created_at)::date,'YYYY-MM-DD') wk,
+/** WoW task completion over the window (l2b.call_callbacks). */
+export function detailWowTasksSql(id: string, windowDays: number): string {
+  const w = wDays(windowDays), u = trendUnit(w), f = labelFmt(u);
+  return `SELECT to_char(date_trunc('${u}', cc.created_at)::date,'${f}') wk,
       COUNT(*) total_tasks,
       COUNT(*) FILTER (WHERE cc.status='completed') completed,
       COUNT(*) FILTER (WHERE cc.status='cancelled') cancelled,
       COUNT(*) FILTER (WHERE cc.status='pending') pending,
       ROUND(100.0*COUNT(*) FILTER (WHERE cc.status!='pending')/NULLIF(COUNT(*),0),1) resolution_rate_pct
     FROM l2b.call_callbacks cc LEFT JOIN chatbot.transcript_mapping ctm ON cc.call_id=ctm.call_id
-    WHERE cc.entity_id='${id}'::uuid AND ctm.is_test=false
+    WHERE cc.entity_id='${id}'::uuid AND ctm.is_test=false AND cc.created_at >= now()-interval '${w} days'
     GROUP BY 1 ORDER BY 1`;
 }
 
-/** Callback actions taken (Retool "query38"). */
-export function detailCallbackActionsSql(id: string): string {
+/** Callback actions taken within the window (Retool "query38"). */
+export function detailCallbackActionsSql(id: string, windowDays: number): string {
+  const w = wDays(windowDays);
   return `SELECT l2bcc.action, COUNT(*) count
     FROM l2b.call_callbacks l2bcc LEFT JOIN chatbot.transcript_mapping ctm ON l2bcc.call_id=ctm.call_id
-    WHERE l2bcc.entity_id='${id}'::uuid AND ctm.is_test=false
+    WHERE l2bcc.entity_id='${id}'::uuid AND ctm.is_test=false AND l2bcc.created_at >= now()-interval '${w} days'
     GROUP BY l2bcc.action ORDER BY count DESC`;
 }
 
@@ -449,10 +487,11 @@ export function detailPaymentLinksSql(id: string): string {
     FROM entities.entities WHERE entity_id='${id}'::uuid`;
 }
 
-/** CSAT survey submissions (Retool "csat_submitted"). */
-export function detailCsatSql(id: string): string {
+/** CSAT survey submissions within the window (Retool "csat_submitted"). */
+export function detailCsatSql(id: string, windowDays: number): string {
+  const w = wDays(windowDays);
   return `WITH base_sub AS (SELECT landing_id, platform, _sdc_form_id form_id, landed_at
-      FROM csat_typeform_stitch.submitted_landings WHERE hidden::json->>'entity_id'='${id}'),
+      FROM csat_typeform_stitch.submitted_landings WHERE hidden::json->>'entity_id'='${id}' AND landed_at >= now()-interval '${w} days'),
     forms AS (SELECT id, title, type FROM csat_typeform_stitch.forms),
     questions AS (SELECT question_id, form_id, type, title FROM csat_typeform_stitch.questions)
     SELECT to_char(bs.landed_at,'YYYY-MM-DD') d, bs.platform, f.title form_type, q.title question, a.answer
