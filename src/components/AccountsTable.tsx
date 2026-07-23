@@ -83,6 +83,8 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [ticketsOnly, setTicketsOnly] = useState(false);
   const [webOnly, setWebOnly] = useState(false);
   const [pinnedOnly, setPinnedOnly] = useState(false);
+  const [unverifiedOnly, setUnverifiedOnly] = useState(false);
+  const [noSiteOnly, setNoSiteOnly] = useState(false);
   const [mrrMin, setMrrMin] = useState<string>("");
   const [mrrMax, setMrrMax] = useState<string>("");
   const [cols, setCols] = useState({ engagement: true, seo: true, timing: true, payments: true, webapp: true, visibility: true });
@@ -162,7 +164,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   function saveView() {
     const name = window.prompt("Name this view:");
     if (!name) return;
-    const s = { query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, overdueOnly, ticketsOnly, webOnly, ccFilter, pinnedOnly, sort, groupBy };
+    const s = { query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, overdueOnly, ticketsOnly, webOnly, unverifiedOnly, noSiteOnly, ccFilter, pinnedOnly, sort, groupBy };
     persistViews([...savedViews.filter((x) => x.name !== name), { name, s }]);
     window.dispatchEvent(new CustomEvent("cave-toast", { detail: { message: `Saved view "${name}"` } }));
   }
@@ -176,6 +178,8 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     setOverdueOnly(!!s.overdueOnly);
     setTicketsOnly(!!s.ticketsOnly);
     setWebOnly(!!s.webOnly);
+    setUnverifiedOnly(!!s.unverifiedOnly);
+    setNoSiteOnly(!!s.noSiteOnly);
     setCcFilter(s.ccFilter || "all");
     setPinnedOnly(!!s.pinnedOnly);
     if (s.sort) setSort(s.sort);
@@ -294,6 +298,8 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     if (overdueOnly) out = out.filter((a) => a.daysOverdue != null && a.daysOverdue > 0);
     if (ticketsOnly) out = out.filter((a) => a.openTickets > 0);
     if (webOnly) out = out.filter((a) => a.webAppActive);
+    if (unverifiedOnly) out = out.filter((a) => !a.gbpVerified);
+    if (noSiteOnly) out = out.filter((a) => !a.websiteLive);
     if (ccFilter === "enabled") out = out.filter((a) => a.ccEnabled);
     else if (ccFilter === "inactive") out = out.filter((a) => a.ccEnabled && !a.ccSegment);
     else if (ccFilter !== "all") out = out.filter((a) => a.ccSegment === ccFilter);
@@ -315,7 +321,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
       return dir * cmp(a, b, sort.key);
     });
     return out;
-  }, [accounts, query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, overdueOnly, ticketsOnly, webOnly, ccFilter, pinnedOnly, mrrMin, mrrMax, metricRange, sort, pinned]);
+  }, [accounts, query, colorFilter, amFilter, onlyMultiProduct, onlyDeclining, overdueOnly, ticketsOnly, webOnly, unverifiedOnly, noSiteOnly, ccFilter, pinnedOnly, mrrMin, mrrMax, metricRange, sort, pinned]);
 
   const kpi = useMemo(() => {
     const leads = rows.reduce((s, a) => s + a.leadsReceived, 0);
@@ -536,6 +542,8 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
         <Preset label="⏰ Overdue" active={overdueOnly} onClick={() => setOverdueOnly((v) => !v)} />
         <Preset label="🎫 Has tickets" active={ticketsOnly} onClick={() => setTicketsOnly((v) => !v)} />
         <Preset label="🌐 Web app" active={webOnly} onClick={() => setWebOnly((v) => !v)} />
+        <Preset label="✗ Unverified GBP" active={unverifiedOnly} onClick={() => setUnverifiedOnly((v) => !v)} />
+        <Preset label="○ No site" active={noSiteOnly} onClick={() => setNoSiteOnly((v) => !v)} />
         <Preset label="➕ Multi-product" active={onlyMultiProduct} onClick={() => setOnlyMultiProduct((v) => !v)} />
         <Preset label={`★ Pinned${pinned.size ? ` (${pinned.size})` : ""}`} active={pinnedOnly} onClick={() => setPinnedOnly((v) => !v)} />
       </div>
@@ -551,6 +559,8 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
         if (overdueOnly) chips.push({ label: "overdue", clear: () => setOverdueOnly(false) });
         if (ticketsOnly) chips.push({ label: "has tickets", clear: () => setTicketsOnly(false) });
         if (webOnly) chips.push({ label: "web app active", clear: () => setWebOnly(false) });
+        if (unverifiedOnly) chips.push({ label: "unverified GBP", clear: () => setUnverifiedOnly(false) });
+        if (noSiteOnly) chips.push({ label: "no site", clear: () => setNoSiteOnly(false) });
         if (ccFilter !== "all") chips.push({ label: `CC: ${ccFilter}`, clear: () => setCcFilter("all") });
         if (pinnedOnly) chips.push({ label: "pinned only", clear: () => setPinnedOnly(false) });
         if (mrrMin || mrrMax) chips.push({ label: `MRR ${mrrMin || "0"}–${mrrMax || "∞"}`, clear: () => { setMrrMin(""); setMrrMax(""); } });
@@ -570,7 +580,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               </button>
             ))}
             <button
-              onClick={() => { setQuery(""); setColorFilter("all"); setAmFilter("all"); setOnlyMultiProduct(false); setOnlyDeclining(false); setOverdueOnly(false); setTicketsOnly(false); setPinnedOnly(false); }}
+              onClick={() => { setQuery(""); setColorFilter("all"); setAmFilter("all"); setOnlyMultiProduct(false); setOnlyDeclining(false); setOverdueOnly(false); setTicketsOnly(false); setPinnedOnly(false); setWebOnly(false); setUnverifiedOnly(false); setNoSiteOnly(false); }}
               className="text-[11px] text-slate-400 hover:text-slate-200"
             >
               clear all
