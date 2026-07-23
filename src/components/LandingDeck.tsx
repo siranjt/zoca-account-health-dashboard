@@ -125,6 +125,16 @@ export default function LandingDeck({
           <Link href="/overview" className="cave-cta rounded-lg px-5 py-2.5 text-sm font-semibold no-underline">
             {L.cta}
           </Link>
+          <a
+            href="/training.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="cave-cta2 rounded-lg px-5 py-2.5 text-sm font-semibold no-underline"
+            style={{ color: "var(--cave-cy)", border: "1px solid var(--cave-line2)" }}
+            title="CAVE//OS Training module"
+          >
+            🎓 {light ? "Begin orientation" : "Start training"}
+          </a>
           <span
             className="rounded-md px-2 py-1 text-[11px] font-medium"
             style={{

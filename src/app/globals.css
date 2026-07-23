@@ -621,3 +621,9 @@ html.detective .cave-brk { box-shadow: inset 0 0 30px rgba(60,130,220,.16) !impo
 
 /* Discovery-Web marker: cyan in Batman, brass in Wayne (border/text ride the token) */
 html.light .cave-web { background: rgba(176,132,43,.10) !important; }
+
+/* secondary CTA (e.g. Start training) — cyan in Batman, brass in Wayne */
+.cave-cta2 { transition: transform .15s, box-shadow .15s, border-color .15s, background .15s; background: rgba(53,224,255,.06); }
+.cave-cta2:hover { transform: translateY(-2px); border-color: var(--cave-cy) !important; background: rgba(53,224,255,.12); box-shadow: 0 0 16px rgba(53,224,255,.2); }
+html.light .cave-cta2 { background: rgba(176,132,43,.08); color: #8a6416 !important; }
+html.light .cave-cta2:hover { border-color: #b0842b !important; background: rgba(176,132,43,.14); box-shadow: 0 0 14px rgba(176,132,43,.22); }
