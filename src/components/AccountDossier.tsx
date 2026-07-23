@@ -22,7 +22,6 @@ import {
   LeadSourcesBars,
   commsSeries,
 } from "./Charts";
-import PageSpeedCard from "./PageSpeedCard";
 import { formatNumber, formatDuration, formatTenure } from "@/lib/format";
 import RetoolAllData from "./RetoolAllData";
 import CommunicationTab from "./CommunicationTab";
@@ -642,10 +641,6 @@ export default function AccountDossier({
               {detail ? (detail.leadSources?.length ? (
                 <LeadSourcesBars data={detail.leadSources} />
               ) : <NoData />) : skel}
-            </ChartCard>
-
-            <ChartCard title="Landing page speed" subtitle="Google PageSpeed · desktop">
-              <PageSpeedCard url={account.websiteUrl} strategy="desktop" />
             </ChartCard>
 
             <ChartCard title="App Metrics" subtitle="weekly in-app screen opens (Mixpanel)">
