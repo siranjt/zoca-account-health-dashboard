@@ -25,6 +25,7 @@ import {
 import { formatNumber, formatDuration, formatTenure } from "@/lib/format";
 import RetoolAllData from "./RetoolAllData";
 import CommunicationTab from "./CommunicationTab";
+import ChangesTab from "./ChangesTab";
 
 const WINDOWS = [7, 30, 90, 180];
 
@@ -35,6 +36,7 @@ const TABS = [
   "Profile & GBP",
   "Funnel & Leads",
   "Communication",
+  "Changes Log",
   "Rankings",
   "Reviews",
   "Payments",
@@ -695,6 +697,12 @@ export default function AccountDossier({
         {tab === "Communication" && (
           <div className="md:col-span-2 xl:col-span-3">
             <CommunicationTab entityId={account.entityId} windowDays={windowDays} />
+          </div>
+        )}
+
+        {tab === "Changes Log" && (
+          <div className="md:col-span-2 xl:col-span-3">
+            <ChangesTab entityId={account.entityId} windowDays={windowDays} />
           </div>
         )}
 
