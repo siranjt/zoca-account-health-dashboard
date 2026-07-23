@@ -1,4 +1,5 @@
 import { getAccountsPayload, getCcDaily } from "@/lib/data";
+import { getViewer, scopeAccounts } from "@/lib/scope";
 import CaveNav from "@/components/CaveNav";
 import LandingDeck from "@/components/LandingDeck";
 
@@ -41,8 +42,9 @@ export default async function Landing() {
   let source: "mock" | "metabase" = "mock";
 
   try {
-    const [p, ccDaily] = await Promise.all([getAccountsPayload(), getCcDaily()]);
-    const A = p.accounts;
+    const [p, ccDaily, viewer] = await Promise.all([getAccountsPayload(), getCcDaily(), getViewer()]);
+    // AMs see only their own book on the landing too.
+    const A = scopeAccounts(p.accounts, viewer);
     source = p.source;
     const reds = A.filter((a) => a.health.color === "red");
     const greens = A.filter((a) => a.health.color === "green").length;

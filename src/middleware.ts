@@ -1,34 +1,43 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { ssoConfigured } from "@/lib/access";
 
-// ===========================================================================
-// Optional simple password gate.
-// If DASHBOARD_PASSWORD is set, every request must pass HTTP Basic auth with
-// that password (any username). If it's blank/unset, the app is open — in that
-// case rely on Vercel's built-in Deployment Protection for customer data.
-// ===========================================================================
+// Gate for the whole app.
+// - When Google SSO is configured (ACCESS_CONTROL + Google creds + AUTH_SECRET),
+//   require a signed-in roster member; unauthenticated requests go to /signin.
+// - Otherwise fall back to the previous optional Basic-auth password gate, so
+//   this code can ship before SSO is turned on without locking anyone out.
+export default auth((req) => {
+  const p = req.nextUrl.pathname;
 
-export function middleware(req: NextRequest) {
-  const password = process.env.DASHBOARD_PASSWORD;
-  if (!password) return NextResponse.next();
-
-  const auth = req.headers.get("authorization");
-  if (auth?.startsWith("Basic ")) {
-    try {
-      const decoded = atob(auth.slice(6));
-      const pass = decoded.split(":").slice(1).join(":");
-      if (pass === password) return NextResponse.next();
-    } catch {
-      /* fall through to challenge */
+  if (ssoConfigured()) {
+    if (p.startsWith("/api/auth") || p === "/signin") return NextResponse.next();
+    if (!req.auth?.user) {
+      const url = new URL("/signin", req.nextUrl.origin);
+      url.searchParams.set("callbackUrl", p + (req.nextUrl.search || ""));
+      return NextResponse.redirect(url);
     }
+    return NextResponse.next();
   }
 
+  // legacy password gate
+  const password = process.env.DASHBOARD_PASSWORD;
+  if (!password) return NextResponse.next();
+  const authz = req.headers.get("authorization");
+  if (authz?.startsWith("Basic ")) {
+    try {
+      const pass = atob(authz.slice(6)).split(":").slice(1).join(":");
+      if (pass === password) return NextResponse.next();
+    } catch {
+      /* fall through */
+    }
+  }
   return new NextResponse("Authentication required", {
     status: 401,
     headers: { "WWW-Authenticate": 'Basic realm="Zoca Account Health"' },
   });
-}
+});
 
 export const config = {
-  // protect everything except Next internals & static assets
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

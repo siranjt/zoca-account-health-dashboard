@@ -1,4 +1,5 @@
 import { getAccountsPayload } from "@/lib/data";
+import { getViewer, scopeAccounts } from "@/lib/scope";
 import AccountsTable from "@/components/AccountsTable";
 import CaveNav from "@/components/CaveNav";
 
@@ -8,7 +9,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export default async function OverviewPage() {
-  const payload = await getAccountsPayload();
+  const [full, viewer] = await Promise.all([getAccountsPayload(), getViewer()]);
+  // AMs only see their own book; managers/admins see everything.
+  const payload = { ...full, accounts: scopeAccounts(full.accounts, viewer) };
 
   const greens = payload.accounts.filter((a) => a.health.color === "green").length;
   const yellows = payload.accounts.filter((a) => a.health.color === "yellow").length;

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAccountsPayload, getAccountDetail } from "@/lib/data";
+import { getViewer, scopeAccounts } from "@/lib/scope";
 import { getBillingByEntityId } from "@/lib/chargebee";
 import { getFactsByEntityId } from "@/lib/keeper";
 import { getReviewsDetail } from "@/lib/insights";
@@ -460,8 +461,10 @@ export async function POST(req: Request) {
   // Fetch the book ONCE per request; every tool call reuses this snapshot.
   let ctx: Ctx;
   try {
-    const payload = await getAccountsPayload();
-    ctx = { list: payload.accounts, payload, asOf: ddmmyy(payload.generatedAt) };
+    const [payload, viewer] = await Promise.all([getAccountsPayload(), getViewer()]);
+    // AMs: Alfred only reasons over their own book. Managers/admins: everything.
+    const scoped = scopeAccounts(payload.accounts, viewer);
+    ctx = { list: scoped, payload: { ...payload, accounts: scoped }, asOf: ddmmyy(payload.generatedAt) };
   } catch (e) {
     return NextResponse.json({ reply: "I couldn't reach the account data just now, sir — please try again in a moment." });
   }
