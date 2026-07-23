@@ -11,7 +11,7 @@ export default auth((req) => {
   const p = req.nextUrl.pathname;
 
   if (ssoConfigured()) {
-    if (p.startsWith("/api/auth") || p === "/signin" || p === "/api/authcheck") return NextResponse.next();
+    if (p.startsWith("/api/auth") || p === "/signin") return NextResponse.next();
     if (!req.auth?.user) {
       const url = new URL("/signin", req.nextUrl.origin);
       url.searchParams.set("callbackUrl", p + (req.nextUrl.search || ""));
