@@ -109,6 +109,100 @@ function ticketsSql(id: string): string {
 
 const str = (v: unknown): string | null => (v == null || v === "" ? null : String(v));
 
+// ---------------------------------------------------------------------------
+// Weekly comms activity for the "Comms activity" scorecard on the detail views.
+// Re-sourced from the SAME omni-channel feed as the Message History tab (chat,
+// CallHippo calls + SMS, Gmail, meetings) — so the card reflects real
+// communication and never reads empty when comms exist. Lightweight: each
+// channel is a windowed COUNT-by-week (no bodies, no cap), run in parallel.
+// ---------------------------------------------------------------------------
+
+export interface CommsWeekPoint {
+  wk: string; // YYYY-MM-DD (week start)
+  chat: number;
+  call: number;
+  sms: number;
+  email: number;
+  meeting: number;
+}
+
+type ChannelKey = "chat" | "call" | "sms" | "email" | "meeting";
+
+function weeklyChannelSqls(id: string, w: number): { key: ChannelKey; sql: string }[] {
+  return [
+    {
+      key: "chat",
+      sql: `WITH ${csCte(id)}, conv AS (SELECT c.id FROM chat.conversations c JOIN chat.conversation_members cm ON c.id=cm.conversation_id WHERE cm.member_id IN (SELECT uid FROM cs))
+        SELECT date_trunc('week', cms.created_at)::date wk, count(*) n
+        FROM chat.messages cms
+        WHERE cms.is_deleted=false AND cms.conversation_id IN (SELECT id FROM conv) AND cms.created_at >= now()-interval '${w} days'
+        GROUP BY 1`,
+    },
+    {
+      key: "call",
+      sql: `WITH ${csCte(id)}, ${phCte(id)}
+        SELECT date_trunc('week', c.start_time)::date wk, count(*) n
+        FROM call_hippo.calls c
+        WHERE c.start_time >= now()-interval '${w} days' AND (right(c.from_::text,10) IN (SELECT n FROM ph) OR right(c.to_::text,10) IN (SELECT n FROM ph))
+        GROUP BY 1`,
+    },
+    {
+      key: "sms",
+      sql: `WITH ${csCte(id)}, ${phCte(id)}
+        SELECT date_trunc('week', m.time)::date wk, count(*) n
+        FROM call_hippo.messages m
+        WHERE m.time >= now()-interval '${w} days' AND (right(m.from_::text,10) IN (SELECT n FROM ph) OR right(m.to_::text,10) IN (SELECT n FROM ph))
+        GROUP BY 1`,
+    },
+    {
+      key: "email",
+      sql: `WITH ${csCte(id)}, ${emCte(id)}
+        SELECT date_trunc('week', ge.received_at)::date wk, count(*) n
+        FROM gmail.emails ge
+        WHERE ge.received_at >= now()-interval '${w} days'
+          AND (ge.from_email IN (SELECT e FROM em) OR EXISTS(SELECT 1 FROM unnest(string_to_array(ge.to_email,',')) x(o) WHERE trim(x.o) IN (SELECT e FROM em)))
+        GROUP BY 1`,
+    },
+    {
+      key: "meeting",
+      sql: `WITH dc AS (SELECT substring(meeting_recording FROM 'conversations/([a-f0-9-]+)') mid, substring(meeting_recording FROM 'shared/([a-f0-9-]+)') mid2 FROM sales.demo_call_tracker WHERE entity_id::text='${id}'),
+             cm AS (SELECT substring(meeting_recording FROM 'conversations/([a-f0-9-]+)') mid, substring(meeting_recording FROM 'shared/([a-f0-9-]+)') mid2 FROM sales.customer_meetings WHERE entity_id::text='${id}')
+        SELECT wk, sum(n)::int n FROM (
+          SELECT date_trunc('week', meeting_time)::date wk, count(*) n FROM sales.fireflies_meeting WHERE entity_id::text='${id}' AND meeting_time >= now()-interval '${w} days' GROUP BY 1
+          UNION ALL
+          SELECT date_trunc('week', smd.timestamp)::date wk, count(*) n FROM sales.meeting_data smd JOIN dc ON dc.mid=substring(smd.metadata #>> array['url'] FROM 'id=([a-f0-9-]+)') OR dc.mid2=substring(smd.metadata #>> array['url'] FROM 'id=([a-f0-9-]+)') WHERE smd.timestamp >= now()-interval '${w} days' GROUP BY 1
+          UNION ALL
+          SELECT date_trunc('week', smd.timestamp)::date wk, count(*) n FROM sales.meeting_data smd JOIN cm ON cm.mid=substring(smd.metadata #>> array['url'] FROM 'id=([a-f0-9-]+)') OR cm.mid2=substring(smd.metadata #>> array['url'] FROM 'id=([a-f0-9-]+)') WHERE smd.timestamp >= now()-interval '${w} days' GROUP BY 1
+        ) t GROUP BY wk`,
+    },
+  ];
+}
+
+export async function getCommsWeekly(entityId: string, windowDays = 90): Promise<CommsWeekPoint[]> {
+  const id = UUID.test(entityId) ? entityId : String(entityId).replace(/[^a-z0-9-]/gi, "");
+  const w = Number.isFinite(windowDays) && windowDays > 0 ? Math.round(windowDays) : 90;
+
+  const chans = weeklyChannelSqls(id, w);
+  const rows = await Promise.all(chans.map((c) => queryAurora(c.sql).catch(() => [] as Record<string, unknown>[])));
+
+  const buckets = new Map<string, CommsWeekPoint>();
+  rows.forEach((chanRows, i) => {
+    const key = chans[i].key;
+    for (const r of chanRows) {
+      const raw = str(r.wk);
+      if (!raw) continue;
+      const wk = raw.slice(0, 10); // normalise timestamp/date → YYYY-MM-DD
+      let b = buckets.get(wk);
+      if (!b) {
+        b = { wk, chat: 0, call: 0, sms: 0, email: 0, meeting: 0 };
+        buckets.set(wk, b);
+      }
+      b[key] += Number(r.n) || 0;
+    }
+  });
+  return Array.from(buckets.values()).sort((a, b) => a.wk.localeCompare(b.wk));
+}
+
 export async function getComms(entityId: string, windowDays: number): Promise<CommsPayload> {
   const id = UUID.test(entityId) ? entityId : String(entityId).replace(/[^a-z0-9-]/gi, "");
   const w = Number.isFinite(windowDays) && windowDays > 0 ? Math.round(windowDays) : 90;

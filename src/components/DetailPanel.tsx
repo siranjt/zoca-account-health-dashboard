@@ -15,6 +15,7 @@ import {
   KeywordRankingsChart,
   ReviewsDistChart,
   LeadForecastChart,
+  commsSeries,
 } from "./Charts";
 
 export default function DetailPanel({ account, windowDays }: { account: AccountRow; windowDays: number }) {
@@ -150,12 +151,9 @@ export default function DetailPanel({ account, windowDays }: { account: AccountR
           {detail ? <ReviewsDistChart data={detail.reviewsDist} /> : <Skeleton error={error} />}
         </ChartCard>
 
-        <ChartCard title="Comms activity" subtitle="weekly SMS · calls, last 3 months">
+        <ChartCard title="Comms activity" subtitle="weekly chat · calls · SMS · email · meetings, last 3 months">
           {detail ? (detail.comms?.length ? (
-            <MultiLineChart xLabels={detail.comms.map((c) => c.wk)} series={[
-              { name: "SMS", color: VIZ.series[0], values: detail.comms.map((c) => c.sms) },
-              { name: "Calls", color: VIZ.series[1], values: detail.comms.map((c) => c.call) },
-            ]} />
+            <MultiLineChart xLabels={detail.comms.map((c) => c.wk)} series={commsSeries(detail.comms)} />
           ) : <NoData />) : <Skeleton error={error} />}
         </ChartCard>
 

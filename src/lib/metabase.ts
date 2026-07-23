@@ -24,7 +24,6 @@ import {
   detailKeywordRankSql,
   detailImpressionsSql,
   detailReviewsDistSql,
-  detailCommsSql,
   detailMediaSql,
   detailForecastSql,
   detailReviewsListSql,
@@ -47,6 +46,7 @@ import {
 import { labelAgent } from "./types";
 import { mapTier } from "./health";
 import { getTicketCountsByEntity } from "./tickets";
+import { getCommsWeekly, type CommsWeekPoint } from "./comms";
 import type { AccountDetail, AccountRow, HealthScore } from "./types";
 
 export interface MetabaseConfig {
@@ -274,7 +274,7 @@ export async function getAccountDetailFromMetabase(
     safe(detailKeywordRankSql(id)),
     safe(detailImpressionsSql(id)),
     safe(detailReviewsDistSql(id)),
-    safe(detailCommsSql(id)),
+    getCommsWeekly(id, 90).catch(() => [] as CommsWeekPoint[]),
     safe(detailMediaSql(id)),
     safe(detailForecastSql(id)),
     safe(detailReviewsListSql(id)),
@@ -335,7 +335,7 @@ export async function getAccountDetailFromMetabase(
     keywordRankings: kr.map((r) => ({ keyword: String(r.keyword), avgRank: int0(r.avg_rank), minRank: int0(r.min_rank), searchVolume: num(r.search_volume) })),
     impressions: im.map((r) => ({ ym: String(r.ym), impressions: int0(r.impressions) })),
     reviewsDist: rTot ? { total: rTot, avg: rRated ? Math.round((rSum / rRated) * 100) / 100 : null, last30: r30, last90: r90, dist: rDist } : null,
-    comms: cm.map((r) => ({ wk: String(r.wk), sms: int0(r.sms), call: int0(r.call) })),
+    comms: cm,
     mediaCadence,
     forecast: fcRow.predicted != null || fcRow.actual != null ? { predicted: num(fcRow.predicted), actual: int0(fcRow.actual) } : null,
     reviewsList: rl.map((r) => ({

@@ -19,6 +19,7 @@ import {
   KeywordRankingsChart,
   ReviewsDistChart,
   LeadForecastChart,
+  commsSeries,
 } from "./Charts";
 import { formatNumber, formatDuration, formatTenure } from "@/lib/format";
 import RetoolAllData from "./RetoolAllData";
@@ -629,12 +630,9 @@ export default function AccountDossier({
               ) : <NoData />) : skel}
             </ChartCard>
 
-            <ChartCard title="Total Calls / Comms" subtitle="weekly SMS · calls, last 3 months">
+            <ChartCard title="Total Calls / Comms" subtitle="weekly chat · calls · SMS · email · meetings, last 3 months">
               {detail ? (detail.comms?.length ? (
-                <MultiLineChart xLabels={detail.comms.map((c) => c.wk)} series={[
-                  { name: "SMS", color: VIZ.series[0], values: detail.comms.map((c) => c.sms) },
-                  { name: "Calls", color: VIZ.series[1], values: detail.comms.map((c) => c.call) },
-                ]} />
+                <MultiLineChart xLabels={detail.comms.map((c) => c.wk)} series={commsSeries(detail.comms)} />
               ) : <NoData />) : skel}
             </ChartCard>
 

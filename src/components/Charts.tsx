@@ -8,6 +8,24 @@ import type { PaymentDetail } from "@/lib/types";
 // semantic payment colors (readable on the dark Command-Deck theme)
 const PAY_GREEN = "#16a34a", PAY_AMBER = "#d97706", PAY_RED = "#dc2626", PAY_PAID = "#4A7C59", PAY_PART = "#c2410c";
 
+// Comms-activity series: one line per omni-channel (chat/call/SMS/email/meeting).
+// Only channels with any activity in the window are drawn, so quiet accounts
+// stay legible. Kept here so DetailPanel and AccountDossier share one mapping.
+const COMMS_CHANNELS: { key: "chat" | "call" | "sms" | "email" | "meeting"; name: string; color: string }[] = [
+  { key: "chat", name: "Chat", color: VIZ.series[0] },
+  { key: "call", name: "Calls", color: VIZ.series[1] },
+  { key: "sms", name: "SMS", color: VIZ.series[3] },
+  { key: "email", name: "Email", color: VIZ.series[6] },
+  { key: "meeting", name: "Meetings", color: VIZ.series[4] },
+];
+export function commsSeries(
+  comms: { wk: string; chat: number; call: number; sms: number; email: number; meeting: number }[]
+): { name: string; color: string; values: number[] }[] {
+  return COMMS_CHANNELS
+    .map((c) => ({ name: c.name, color: c.color, values: comms.map((w) => w[c.key]) }))
+    .filter((s) => s.values.some((v) => v > 0));
+}
+
 // ---- shared helpers --------------------------------------------------------
 function niceMax(v: number): number {
   if (v <= 5) return 5;

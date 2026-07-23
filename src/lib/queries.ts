@@ -252,16 +252,6 @@ export function detailReviewsDistSql(id: string): string {
     FROM reviews.reviews WHERE entity_id='${id}' GROUP BY 1`;
 }
 
-/** Weekly comms activity (SMS / calls) joined via enquiry → entity. */
-export function detailCommsSql(id: string): string {
-  return `SELECT date_trunc('week', cl.created_at)::date wk,
-      sum((cl.type='SMS')::int) sms, sum((cl.type='CALL')::int) call
-    FROM clients.communication_logs cl
-    JOIN website.booking_enquiries be ON be.id::text = cl.enquiry_id::text
-    WHERE be.entity_id='${id}'::uuid AND cl.created_at >= current_date - interval '3 months'
-    GROUP BY 1 ORDER BY 1`;
-}
-
 /** Weekly net media (photos) delta on the GBP — cumulate in JS for "live" count. */
 export function detailMediaSql(id: string): string {
   return `WITH base AS (SELECT create_time::timestamptz cat, deleted_at, is_deleted FROM gbp.media_items WHERE entity_id='${id}'),

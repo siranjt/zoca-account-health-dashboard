@@ -217,7 +217,7 @@ export function getMockAccountDetail(id: string): AccountDetail {
     ],
     impressions: mkSpark(Math.max(50, s.profileClicks), id + "im").map((v, i) => ({ ym: `2026-${String(i + 1).padStart(2, "0")}`, impressions: v * 20 })),
     reviewsDist: s.reviews ? { total: s.reviews + 40, avg: 4.7, last30: Math.round(s.reviews / 3), last90: s.reviews, dist: { "5": s.reviews + 30, "4": 6, "3": 2, "2": 1, "1": 1 } } : null,
-    comms: mkSpark(Math.max(3, Math.round(s.leads / 6)), id + "cm").map((v, i) => ({ wk: new Date(2026, 4, 1 + i * 7).toISOString().slice(0, 10), sms: v, call: Math.round(v * 0.4) })),
+    comms: mkSpark(Math.max(3, Math.round(s.leads / 6)), id + "cm").map((v, i) => ({ wk: new Date(2026, 4, 1 + i * 7).toISOString().slice(0, 10), chat: Math.round(v * 1.2), call: Math.round(v * 0.4), sms: v, email: Math.round(v * 0.6), meeting: i % 4 === 0 ? 1 : 0 })),
     mediaCadence: (() => { let live = 3; return mkSpark(2, id + "md").map((v, i) => { live += v; return { wk: new Date(2026, 4, 1 + i * 7).toISOString().slice(0, 10), live }; }); })(),
     forecast: { predicted: Math.max(20, s.leads * 2), actual: s.leads * 6 },
     reviewsList: (() => {
