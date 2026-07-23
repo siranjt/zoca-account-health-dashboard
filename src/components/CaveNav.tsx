@@ -100,6 +100,16 @@ export default function CaveNav() {
             </Link>
           );
         })}
+        <a
+          href="/training.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="cave-navlink rounded-md px-3 py-1.5 font-medium no-underline transition-colors"
+          style={{ color: "#a7c3c8", border: "1px solid transparent" }}
+          title="CAVE//OS Training module"
+        >
+          🎓 Training
+        </a>
       </div>
 
       {onDetail && (

@@ -1,0 +1,871 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>CAVE//OS — AM Training Academy</title>
+</head>
+<body>
+<title>CAVE//OS — AM Training Academy</title>
+<style>
+  :root{
+    --bg:#04080a;--panel:#0a1418;--panel2:#0c1c22;--raise:#0e222b;--line:#12333c;--line2:#1c4d59;
+    --cy:#35e0ff;--cy2:#8ff0ff;--txt:#dbe9ec;--mid:#a7c3c8;--dim:#6f8b91;
+    --green:#25e39a;--amber:#ffb64d;--red:#ff6b6b;--gold:#e6c063;--purple:#b98cff;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono","IBM Plex Mono",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  a{color:var(--cy)} h1,h2,h3,.mono{font-family:var(--mono)}
+  #bg{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5}
+  body::after{content:"";position:fixed;inset:0;z-index:1;pointer-events:none;height:150px;
+    background:linear-gradient(rgba(53,224,255,0),rgba(53,224,255,.04) 50%,rgba(53,224,255,0));animation:scan 9s linear infinite}
+  @keyframes scan{0%{transform:translateY(-160px)}100%{transform:translateY(105vh)}}
+
+  header{position:sticky;top:0;z-index:20;backdrop-filter:blur(8px);background:linear-gradient(180deg,rgba(4,8,10,.96),rgba(4,8,10,.8));border-bottom:1px solid var(--line)}
+  .hbar{max-width:1200px;margin:0 auto;padding:12px 22px;display:flex;align-items:center;gap:14px}
+  .brand{font-family:var(--mono);font-weight:700;letter-spacing:.26em;color:var(--cy);text-shadow:0 0 14px rgba(53,224,255,.4);font-size:15px}
+  .brand small{color:var(--dim);letter-spacing:.16em;font-weight:500}
+  .prog{margin-left:auto;display:flex;align-items:center;gap:10px;min-width:230px}
+  .pbar{flex:1;height:8px;border-radius:5px;background:var(--line);overflow:hidden;position:relative}
+  .pfill{height:100%;width:0;background:linear-gradient(90deg,var(--cy2),var(--cy));box-shadow:0 0 12px var(--cy);transition:width .6s cubic-bezier(.2,.7,.2,1)}
+  .ppct{font-family:var(--mono);font-size:12px;color:var(--cy2);min-width:38px;text-align:right}
+
+  .shell{position:relative;z-index:2;max-width:1200px;margin:0 auto;display:grid;grid-template-columns:252px 1fr;min-height:calc(100vh - 53px)}
+  nav#nav{border-right:1px solid var(--line);padding:20px 12px;position:sticky;top:53px;align-self:start;height:calc(100vh - 53px);overflow-y:auto}
+  .navlbl{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);padding:0 10px 10px}
+  .navmod{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;cursor:pointer;color:var(--mid);font-size:13.5px;transition:.15s;border:1px solid transparent;margin-bottom:2px}
+  .navmod:hover{background:var(--panel);color:var(--cy2)}
+  .navmod.on{background:rgba(53,224,255,.1);border-color:var(--line2);color:var(--cy2)}
+  .navmod .ic{width:26px;height:26px;border-radius:8px;border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;color:var(--dim);flex:none;transition:.2s}
+  .navmod.on .ic{border-color:var(--cy);color:var(--cy);box-shadow:0 0 10px rgba(53,224,255,.3)}
+  .navmod.done .ic{background:var(--green);border-color:var(--green);color:#04121a}
+  .navmini{height:5px;border-radius:3px;background:var(--line);margin:2px 12px 0;overflow:hidden}
+  .navmini i{display:block;height:100%;width:var(--w,0);background:var(--cy);transition:width .5s}
+
+  main#main{padding:34px 42px 90px;min-width:0}
+  .mod{display:none}.mod.on{display:block}
+  .mod.on .rise{animation:rise .6s cubic-bezier(.2,.7,.2,1) both}
+  .mod.on .rise:nth-child(2){animation-delay:.05s}.mod.on .rise:nth-child(3){animation-delay:.1s}.mod.on .rise:nth-child(4){animation-delay:.15s}
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .kick{font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--cy);display:flex;align-items:center;gap:10px}
+  .kick::before{content:"";width:26px;height:1px;background:linear-gradient(90deg,var(--cy),transparent)}
+  h1.mt{font-size:34px;margin:10px 0 4px;text-wrap:balance}
+  .sub{color:var(--dim);font-size:15px;margin-bottom:20px}
+  h3.sec{font-size:12px;letter-spacing:.16em;color:var(--cy2);margin:26px 0 12px;text-transform:uppercase;position:relative;padding-bottom:6px}
+  h3.sec::after{content:"";position:absolute;left:0;bottom:0;width:44px;height:2px;background:linear-gradient(90deg,var(--cy),transparent)}
+  p{margin:10px 0;color:#c6d8dc}p b,li b{color:var(--txt)}
+  ul{margin:10px 0 10px 2px;list-style:none}
+  ul li{position:relative;padding:5px 0 5px 22px;color:#c6d8dc}
+  ul li::before{content:"▸";position:absolute;left:0;color:var(--cy);font-family:var(--mono)}
+
+  .card{border:1px solid var(--line);background:linear-gradient(180deg,var(--panel),rgba(10,20,24,.5));border-radius:14px;padding:18px 20px}
+  .card.brk{position:relative}
+  .card.brk::before,.card.brk::after{content:"";position:absolute;width:11px;height:11px;border:1px solid var(--cy);opacity:.55}
+  .card.brk::before{top:-1px;left:-1px;border-right:0;border-bottom:0}.card.brk::after{bottom:-1px;right:-1px;border-left:0;border-top:0}
+  .callout{border-left:3px solid var(--cy);background:rgba(53,224,255,.05);border-radius:0 10px 10px 0;padding:12px 16px;margin:16px 0;font-size:14px}
+  .callout.gold{border-left-color:var(--gold);background:rgba(230,192,99,.06)}
+  .callout .t{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--cy);margin-bottom:4px}
+  .callout.gold .t{color:var(--gold)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:16px 0}
+  @media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr}.shell{grid-template-columns:1fr}nav#nav{display:none}}
+
+  /* stat tiles */
+  .kv{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}
+  .kvc{border:1px solid var(--line);background:var(--panel);border-radius:11px;padding:13px;position:relative;overflow:hidden}
+  .kvc .v{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--cy2)}.kvc .l{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-top:2px}
+  .kvc .spark{position:absolute;right:8px;bottom:8px;opacity:.5}
+
+  /* chart chrome */
+  .chartcard{border:1px solid var(--line2);background:var(--panel2);border-radius:14px;padding:16px}
+  .chartcard .cap{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:10px;display:flex;gap:8px;align-items:center;justify-content:space-between}
+  .chartcard .cap b{color:var(--cy)}
+  /* draw-in animations (fire when module becomes visible) */
+  .bar{transform:scaleY(0);transform-origin:bottom;animation:grow .85s cubic-bezier(.2,.7,.2,1) forwards}
+  @keyframes grow{to{transform:scaleY(1)}}
+  .hbarfill{transform:scaleX(0);transform-origin:left;animation:widen .9s cubic-bezier(.2,.7,.2,1) forwards}
+  @keyframes widen{to{transform:scaleX(1)}}
+  .drawline{stroke-dasharray:1000;stroke-dashoffset:1000;animation:draw 1.4s ease forwards}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  .popin{animation:popin .7s cubic-bezier(.2,.9,.3,1.2) both}
+  @keyframes popin{from{opacity:0;transform:scale(.55)}to{opacity:1;transform:none}}
+  .donutseg{stroke-dasharray:0 100;animation:donutfill 1.1s cubic-bezier(.3,.8,.3,1) forwards}
+  @keyframes donutfill{}
+  .gaugefill{stroke-dasharray:0 100;animation:none}
+  .flow{stroke-dasharray:6 8;animation:flow 1.2s linear infinite}
+  @keyframes flow{to{stroke-dashoffset:-28}}
+  .pulse{animation:pulse 2.2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.55;r:5}50%{opacity:1;r:7}}
+  .breathe{animation:breathe 3.2s ease-in-out infinite}
+  @keyframes breathe{0%,100%{filter:drop-shadow(0 0 12px rgba(53,224,255,.4))}50%{filter:drop-shadow(0 0 30px rgba(53,224,255,.85))}}
+
+  /* rows / demo */
+  .mock{border:1px solid var(--line2);background:var(--panel2);border-radius:12px;padding:16px;margin:16px 0}
+  .mock .cap{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:12px}
+  .row{display:flex;align-items:center;gap:14px;border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:10px 14px;margin-bottom:8px;transition:.35s}
+  .row:hover{border-color:var(--line2);transform:translateX(3px)}
+  .dot{width:11px;height:11px;border-radius:50%;flex:none}
+  .dot.r{background:var(--red);box-shadow:0 0 8px var(--red)}.dot.y{background:var(--amber);box-shadow:0 0 8px var(--amber)}.dot.g{background:var(--green);box-shadow:0 0 8px var(--green)}
+  .nm2{font-weight:650;color:var(--txt);font-size:14px}.meta2{color:var(--dim);font-size:12px}
+  .score2{margin-left:auto;font-family:var(--mono);font-weight:700}
+  .badge{font-family:var(--mono);font-size:10px;letter-spacing:.06em;border:1px solid var(--cy);color:var(--cy);border-radius:5px;padding:2px 7px;background:rgba(53,224,255,.08)}
+  .seg{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:5px}
+  .seg.core{color:#04121a;background:var(--green)}.seg.reg{color:#180f02;background:var(--amber)}.seg.cas{color:var(--cy2);border:1px solid var(--line2)}
+  .row.hide{opacity:0;max-height:0;padding:0;margin:0;border-width:0;overflow:hidden}
+
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+  .chip{font-family:var(--mono);font-size:12px;color:var(--mid);border:1px solid var(--line2);border-radius:16px;padding:7px 13px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{border-color:var(--cy);color:var(--cy2)}
+  .chip.on{background:var(--cy);color:#04121a;border-color:var(--cy);font-weight:700}
+
+  /* Alfred */
+  .alf{border:1px solid var(--cy);border-radius:14px;background:linear-gradient(180deg,rgba(9,20,24,.9),rgba(5,11,14,.95));overflow:hidden;margin:16px 0}
+  .alf .head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .alf .head .t{font-family:var(--mono);font-weight:700;letter-spacing:.1em;color:var(--cy);text-shadow:0 0 12px rgba(53,224,255,.4)}
+  .alf .head .s{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  .alf .log{padding:16px;display:flex;flex-direction:column;gap:12px;min-height:130px;max-height:360px;overflow-y:auto}
+  .bub{max-width:88%;font-size:13.5px;line-height:1.55;padding:10px 13px;border-radius:12px}
+  .bub.u{align-self:flex-end;background:linear-gradient(180deg,rgba(53,224,255,.18),rgba(53,224,255,.07));border:1px solid rgba(53,224,255,.35);color:var(--cy2);border-bottom-right-radius:3px}
+  .bub.a{align-self:flex-start;background:rgba(20,52,61,.5);border:1px solid var(--line);color:var(--txt);border-bottom-left-radius:3px}
+  .bub .who{font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+  .cur::after{content:"▋";color:var(--cy);animation:bl 1s steps(1) infinite}@keyframes bl{50%{opacity:0}}
+  .alf .ask{display:flex;flex-wrap:wrap;gap:7px;padding:0 16px 14px}
+  .askq{font-family:var(--sans);font-size:12px;color:var(--dim);border:1px solid var(--line2);border-radius:14px;padding:6px 11px;cursor:pointer;text-align:left;transition:.15s}
+  .askq:hover{border-color:var(--cy);color:var(--cy2);background:rgba(53,224,255,.06)}
+
+  .quiz{border:1px solid var(--line2);border-radius:12px;background:var(--panel2);padding:18px;margin:18px 0}
+  .quiz .q{font-weight:650;color:var(--txt);margin-bottom:10px}
+  .opt{display:block;width:100%;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:11px 14px;margin-bottom:8px;cursor:pointer;color:var(--mid);font-size:13.5px;transition:.15s;font-family:var(--sans)}
+  .opt:hover{border-color:var(--line2);color:var(--txt)}
+  .opt.correct{border-color:var(--green);background:rgba(37,227,154,.12);color:#c7f4e3}
+  .opt.wrong{border-color:var(--red);background:rgba(255,107,107,.1);color:#ffd0d0}
+  .fb{font-size:13px;margin-top:6px;display:none}.fb.show{display:block}.fb.ok{color:var(--green)}.fb.no{color:var(--amber)}
+
+  .footer{display:flex;align-items:center;gap:12px;margin-top:36px;padding-top:20px;border-top:1px solid var(--line)}
+  .btn{font-family:var(--mono);font-size:13px;border:1px solid var(--line2);background:transparent;color:var(--cy2);border-radius:9px;padding:10px 18px;cursor:pointer;transition:.15s}
+  .btn:hover{border-color:var(--cy);background:rgba(53,224,255,.08)}
+  .btn.prim{background:linear-gradient(180deg,var(--cy2),#1899b4);color:#04121a;border:0;font-weight:700}
+  .btn:disabled{opacity:.35;cursor:not-allowed}.btn.ghost{color:var(--dim)}
+  .keycap{font-family:var(--mono);font-size:11px;border:1px solid var(--line2);border-radius:5px;padding:1px 7px;color:var(--cy2);background:var(--panel)}
+
+  .cert-wrap{text-align:center;padding:20px 0}
+  .cert{border:1px solid var(--cy);border-radius:16px;background:radial-gradient(500px 260px at 50% 0%,rgba(53,224,255,.1),transparent),var(--panel);padding:40px;max-width:640px;margin:20px auto;box-shadow:0 0 50px rgba(53,224,255,.12);position:relative;overflow:hidden}
+  .cert .emb{width:70px;margin:0 auto 10px;display:block}
+  .cert h2{font-size:14px;letter-spacing:.28em;color:var(--cy);text-transform:uppercase}
+  .cert .big{font-size:30px;margin:12px 0;color:var(--txt);font-family:var(--mono)}
+  .cert .nmeln{border-bottom:1px solid var(--line2);max-width:320px;margin:18px auto 6px;padding-bottom:6px;font-size:20px;color:var(--cy2);min-height:28px;font-family:var(--mono)}
+  input.nmin{background:var(--panel2);border:1px solid var(--line2);border-radius:8px;color:var(--txt);font-family:var(--mono);font-size:15px;padding:9px 12px;text-align:center;width:280px;outline:none}
+  input.nmin:focus{border-color:var(--cy)}
+
+  .tip{position:fixed;z-index:50;pointer-events:none;background:var(--raise);border:1px solid var(--cy);border-radius:7px;padding:5px 9px;font-family:var(--mono);font-size:11px;color:var(--cy2);opacity:0;transition:opacity .12s;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+
+  /* feature cards */
+  .feat{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:14px;transition:.2s;cursor:default}
+  .feat:hover{border-color:var(--cy);transform:translateY(-3px);box-shadow:0 10px 26px rgba(0,0,0,.3),0 0 0 1px rgba(53,224,255,.2)}
+  .feat .fi{font-size:20px;color:var(--cy)}.feat b{display:block;margin-top:6px;color:var(--txt);font-size:14px}.feat span{font-size:12px;color:var(--dim)}
+
+  /* daily loop timeline */
+  .loop{display:flex;flex-direction:column;gap:0;margin:10px 0}
+  .lstep{display:flex;gap:14px;align-items:flex-start;padding:10px 0;position:relative}
+  .lstep .n{width:30px;height:30px;border-radius:50%;border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;font-family:var(--mono);color:var(--dim);flex:none;z-index:2;background:var(--bg);transition:.3s}
+  .mod.on .lstep .n{animation:litstep .5s both}
+  .mod.on .lstep:nth-child(1) .n{animation-delay:.2s}.mod.on .lstep:nth-child(2) .n{animation-delay:.6s}.mod.on .lstep:nth-child(3) .n{animation-delay:1s}.mod.on .lstep:nth-child(4) .n{animation-delay:1.4s}.mod.on .lstep:nth-child(5) .n{animation-delay:1.8s}
+  @keyframes litstep{to{border-color:var(--cy);color:var(--cy);box-shadow:0 0 12px rgba(53,224,255,.4)}}
+  .lstep::before{content:"";position:absolute;left:14px;top:30px;bottom:-10px;width:1px;background:var(--line);z-index:1}
+  .lstep:last-child::before{display:none}
+  .lstep .lc{flex:1}.lstep .lc b{color:var(--txt)}.lstep .lc div{font-size:13px;color:var(--dim)}
+
+  /* ══ BATTECH LAYER (matches the live app) ══ */
+  @keyframes livep{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
+  #boot{position:fixed;inset:0;z-index:2147483000;background:#04080a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;pointer-events:none;animation:bootfade 2.3s ease-in forwards}
+  #boot .ln{width:min(60vw,520px);height:2px;background:linear-gradient(90deg,transparent,var(--cy),transparent);box-shadow:0 0 16px var(--cy);transform:scaleX(0);animation:bootline 1s .1s ease-out forwards}
+  #boot .tx{font-family:var(--mono);letter-spacing:.42em;color:var(--cy);font-size:13px;text-shadow:0 0 12px var(--cy);opacity:0;animation:boottx 1.6s .3s ease forwards}
+  #boot .lines{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--dim);text-align:left;line-height:2;opacity:0;animation:bootlines 1.9s .5s ease forwards}
+  #boot .lines b{color:var(--green)}
+  @keyframes bootfade{0%,58%{opacity:1}100%{opacity:0;visibility:hidden}}
+  @keyframes bootline{to{transform:scaleX(1)}}
+  @keyframes boottx{0%{opacity:0}40%{opacity:1}55%{opacity:.4}70%{opacity:1}100%{opacity:1}}
+  @keyframes bootlines{0%,30%{opacity:0}100%{opacity:1}}
+  body::before{content:"";position:fixed;inset:0 0 auto 0;pointer-events:none;z-index:3;height:2px;background:rgba(53,224,255,.12);animation:scan2 3.4s linear infinite}
+  @keyframes scan2{0%{transform:translateY(-6px)}100%{transform:translateY(102vh)}}
+  #crt{position:fixed;inset:0;pointer-events:none;z-index:2;background:radial-gradient(130% 130% at 50% 50%,transparent 62%,rgba(0,0,0,.22));opacity:.5;animation:flick 4s steps(40) infinite}
+  @keyframes flick{0%,96%{opacity:.5}97%{opacity:.36}98%{opacity:.54}99%{opacity:.42}100%{opacity:.5}}
+  .xh,.xv{position:fixed;pointer-events:none;z-index:2147483338;background:rgba(53,224,255,.14);opacity:0;transition:opacity .25s}
+  .xh{left:0;right:0;height:1px}.xv{top:0;bottom:0;width:1px}
+  .scope.on .xh,.scope.on .xv{opacity:1}
+  .reticle{position:fixed;width:26px;height:26px;pointer-events:none;z-index:2147483339;transform:translate(-50%,-50%);opacity:0;transition:opacity .25s}
+  .scope.on .reticle{opacity:.85}
+  .reticle span{position:absolute;width:7px;height:7px;border:1px solid var(--cy)}
+  .reticle .a{top:0;left:0;border-right:0;border-bottom:0}.reticle .b{top:0;right:0;border-left:0;border-bottom:0}.reticle .c{bottom:0;left:0;border-right:0;border-top:0}.reticle .d{bottom:0;right:0;border-left:0;border-top:0}
+  .reticle i{position:absolute;left:50%;top:50%;width:3px;height:3px;background:var(--cy);border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 6px var(--cy)}
+  .coord{position:fixed;pointer-events:none;z-index:2147483339;font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--cy);text-shadow:0 0 6px rgba(53,224,255,.6);opacity:0;transition:opacity .25s}
+  .scope.on .coord{opacity:.8}
+  .ripple{position:fixed;border:1px solid var(--cy);border-radius:50%;pointer-events:none;z-index:2147483350;transform:translate(-50%,-50%);box-shadow:0 0 10px rgba(53,224,255,.5);animation:ripple .6s ease-out forwards}
+  @keyframes ripple{0%{width:6px;height:6px;opacity:.75}100%{width:64px;height:64px;opacity:0}}
+  .signal{position:fixed;inset:0;z-index:2147483360;pointer-events:none;display:flex;align-items:center;justify-content:center;animation:sigfade 1.7s ease-out forwards}
+  .signal::before{content:"";position:absolute;width:60vmax;height:60vmax;border-radius:50%;background:radial-gradient(circle,rgba(53,224,255,.26),transparent 62%);animation:sigpulse 1.7s ease-out forwards}
+  .signal svg{width:190px;filter:drop-shadow(0 0 44px var(--cy));animation:sigemb 1.7s ease-out forwards}
+  .signal svg path{fill:var(--cy)}
+  @keyframes sigfade{0%{opacity:0}12%{opacity:1}72%{opacity:1}100%{opacity:0}}
+  @keyframes sigpulse{0%{transform:scale(.2);opacity:.6}100%{transform:scale(1.5);opacity:0}}
+  @keyframes sigemb{0%{transform:scale(.5);opacity:0}22%{opacity:1}100%{transform:scale(1.12);opacity:0}}
+  .dot.r{animation:threat 1.7s ease-in-out infinite}
+  @keyframes threat{0%,100%{box-shadow:0 0 6px var(--red)}50%{box-shadow:0 0 15px var(--red),0 0 5px var(--red)}}
+  .brand:hover{animation:glitch .34s steps(2) 2}
+  @keyframes glitch{0%{text-shadow:0 0 14px rgba(53,224,255,.4)}25%{text-shadow:-2px 0 var(--red),2px 0 var(--cy)}50%{text-shadow:2px 0 var(--red),-2px 0 var(--cy)}100%{text-shadow:0 0 14px rgba(53,224,255,.4)}}
+  .card.brk:hover::before,.card.brk:hover::after{width:16px;height:16px;box-shadow:0 0 8px var(--cy);opacity:1;transition:.18s}
+  .row::after{content:"";position:absolute;left:0;top:6px;bottom:6px;width:0;background:var(--cy);border-radius:2px;transition:width .18s}
+  .row:hover::after{width:3px;box-shadow:0 0 10px var(--cy)}
+  .mod-radar{position:fixed;right:16px;bottom:16px;width:74px;height:74px;z-index:2;pointer-events:none;opacity:.32}
+  .mod-radar b{position:absolute;inset:4px;border:1px solid var(--line2);border-radius:50%}
+  .mod-radar b::after{content:"";position:absolute;inset:14px;border:1px solid var(--line);border-radius:50%}
+  .mod-radar i{position:absolute;left:50%;top:50%;width:30px;height:1px;background:linear-gradient(90deg,var(--cy),transparent);transform-origin:0 0;animation:spin 4s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ══ case-file challenge ══ */
+  .act{border:1px solid var(--line2);background:var(--panel);border-radius:9px;padding:11px 13px;margin-bottom:8px;cursor:pointer;font-size:13.5px;color:var(--mid);transition:.18s;user-select:none;display:flex;align-items:center;gap:8px}
+  .act:hover{border-color:var(--cy);color:var(--cy2);transform:translateX(3px)}
+  .act.good{border-color:var(--green)!important;color:#c7f4e3!important;background:rgba(37,227,154,.1)}
+  .act.bad{border-color:var(--red)!important;color:#ffd0d0!important;background:rgba(255,107,107,.1)}
+  .dropzone{min-height:130px;border:1.5px dashed var(--line2);border-radius:12px;padding:12px;margin-top:12px;transition:.2s}
+  .dropzone.over{border-color:var(--cy);background:rgba(53,224,255,.05)}
+  .dropzone.solved{border-color:var(--green);border-style:solid;box-shadow:0 0 22px rgba(37,227,154,.2)}
+  .dzlabel{font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;text-align:center;padding:22px 0}
+</style>
+
+<canvas id="bg"></canvas>
+<div id="crt"></div>
+<div class="scope" id="scope"><div class="xh" id="xh"></div><div class="xv" id="xv"></div><div class="reticle" id="reticle"><span class="a"></span><span class="b"></span><span class="c"></span><span class="d"></span><i></i></div><div class="coord" id="coord"></div></div>
+<div class="mod-radar"><b></b><i></i></div>
+<div id="boot"><div class="ln"></div><div class="tx">◤◢ CAVE//OS · TRAINING ONLINE</div><div class="lines">&gt; LOADING CURRICULUM … <b>OK</b><br>&gt; SYNCING MODULES … <b>OK</b><br>&gt; ALFRED UPLINK … <b>OK</b><br>&gt; SYSTEMS READY</div></div>
+<div class="tip" id="tip"></div>
+
+<header><div class="hbar">
+  <span class="brand" style="cursor:pointer" title="Shift+B for the bat-signal">◤◢ CAVE//OS <small>· AM TRAINING ACADEMY</small></span>
+  <span class="cave-live" style="margin-left:6px;display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--green)"><b style="width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);display:inline-block;animation:livep 1.6s ease-in-out infinite"></b> Live <span style="color:var(--dim)">·</span> <span id="clock" style="color:var(--cy)">--:--:--</span></span>
+  <button id="muteBtn" title="Sound on/off" style="margin-left:8px;font-family:var(--mono);font-size:12px;color:var(--cy2);border:1px solid var(--line2);background:transparent;border-radius:7px;padding:5px 9px;cursor:pointer">🔊</button>
+  <div class="prog"><div class="pbar"><div class="pfill" id="pfill"></div></div><span class="ppct" id="ppct">0%</span></div>
+</div></header>
+
+<div class="shell">
+  <nav id="nav"><div class="navlbl">Modules</div><div id="navlist"></div>
+    <div style="margin-top:16px;padding:0 10px"><button class="btn ghost" id="resetBtn" style="font-size:11px;padding:6px 10px">↺ Reset progress</button></div>
+  </nav>
+  <main id="main">
+
+  <!-- M0 -->
+  <section class="mod on" data-m="0">
+    <div class="kick rise">Module 1 · Orientation</div>
+    <h1 class="mt rise">Welcome to CAVE//OS</h1>
+    <div class="sub rise">Your account-health command deck. In ~20 minutes you'll run your whole day inside it.</div>
+    <div class="grid2">
+      <div class="rise">
+        <p>CAVE//OS pulls <b>everything about your accounts</b> — health, leads, reviews, rankings, billing, tickets and web-app usage — into one live place, with an AI assistant, <b>Alfred</b>, on top.</p>
+        <p>Before, understanding one customer meant five tools. Here it's one screen — and when you'd rather not dig, you just ask Alfred.</p>
+        <div class="callout"><div class="t">Good to know</div>Password-gated, desktop-first. The Batman theme is cosmetic (there's a light mode + calm mode) — it never changes the data.</div>
+      </div>
+      <div class="chartcard rise">
+        <div class="cap"><span>How it's wired</span><b>live data flow</b></div>
+        <svg viewBox="0 0 300 220" width="100%" role="img" aria-label="data flow">
+          <!-- flowing links -->
+          <g fill="none" stroke="var(--cy)" stroke-width="1.4" opacity=".6">
+            <path class="flow" d="M55,40 C130,40 150,110 235,110"/>
+            <path class="flow" d="M55,90 C130,90 150,110 235,110"/>
+            <path class="flow" d="M55,140 C130,140 150,110 235,110"/>
+            <path class="flow" d="M55,190 C130,190 150,110 235,110"/>
+          </g>
+          <!-- source nodes -->
+          <g font-family="var(--mono)" font-size="8" fill="var(--mid)">
+            <circle class="pulse" cx="48" cy="40" r="5" fill="var(--cy)"/><text x="10" y="30">Metabase</text>
+            <circle class="pulse" cx="48" cy="90" r="5" fill="var(--cy)" style="animation-delay:.4s"/><text x="10" y="80">Chargebee</text>
+            <circle class="pulse" cx="48" cy="140" r="5" fill="var(--cy)" style="animation-delay:.8s"/><text x="14" y="130">Tickets</text>
+            <circle class="pulse" cx="48" cy="190" r="5" fill="var(--cy)" style="animation-delay:1.2s"/><text x="8" y="180">Chat / usage</text>
+          </g>
+          <!-- alfred node -->
+          <circle cx="245" cy="110" r="24" fill="rgba(230,192,99,.12)" stroke="var(--gold)" stroke-width="1.5" class="popin"/>
+          <text x="245" y="108" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--gold)" font-weight="700">◤◢</text>
+          <text x="245" y="122" text-anchor="middle" font-family="var(--mono)" font-size="8" fill="var(--gold)">ALFRED</text>
+        </svg>
+      </div>
+    </div>
+    <h3 class="sec">The surfaces you'll live in</h3>
+    <div class="grid3">
+      <div class="card feat"><div class="fi">▦</div><b>① Landing — the board</b><span>Your morning glance: the book's pulse + who's critical.</span></div>
+      <div class="card feat"><div class="fi">≣</div><b>② Overview — the ledger</b><span>Every account in one filterable table.</span></div>
+      <div class="card feat"><div class="fi">◉</div><b>③ Dossier — the detail</b><span>One page per account, its whole story.</span></div>
+    </div>
+    <p>Use the module list on the left, or the buttons below. Progress saves automatically. Let's go ↓</p>
+  </section>
+
+  <!-- M1 BOARD -->
+  <section class="mod" data-m="1">
+    <div class="kick rise">Module 2 · The morning board</div>
+    <h1 class="mt rise">Start every day on the Landing</h1>
+    <div class="sub rise">A 30-second glance that tells you where to spend your day.</div>
+    <div class="grid2">
+      <div class="kv rise" style="grid-template-columns:1fr;gap:10px;margin:0">
+        <div class="kvc"><div class="v" data-count="823">0</div><div class="l">Accounts in book</div></div>
+        <div class="kvc"><div class="v" style="color:var(--green)" data-count="612">0</div><div class="l">Healthy</div></div>
+        <div class="kvc"><div class="v" style="color:var(--red)" data-count="74">0</div><div class="l">At risk</div></div>
+      </div>
+      <div class="chartcard rise">
+        <div class="cap"><span>Health mix</span><b id="mixNote">823 accounts</b></div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <svg viewBox="0 0 120 120" width="130" height="130">
+            <circle cx="60" cy="60" r="46" fill="none" stroke="var(--line)" stroke-width="14"/>
+            <circle data-tip="Healthy · 612 (74%)" cx="60" cy="60" r="46" fill="none" stroke="var(--green)" stroke-width="14" pathLength="100" stroke-dasharray="74 100" stroke-dashoffset="0" transform="rotate(-90 60 60)" class="donutseg" style="filter:drop-shadow(0 0 4px var(--green))"/>
+            <circle data-tip="Monitor · 137 (17%)" cx="60" cy="60" r="46" fill="none" stroke="var(--amber)" stroke-width="14" pathLength="100" stroke-dasharray="17 100" stroke-dashoffset="-74" transform="rotate(-90 60 60)" class="donutseg" style="filter:drop-shadow(0 0 4px var(--amber))"/>
+            <circle data-tip="At risk · 74 (9%)" cx="60" cy="60" r="46" fill="none" stroke="var(--red)" stroke-width="14" pathLength="100" stroke-dasharray="9 100" stroke-dashoffset="-91" transform="rotate(-90 60 60)" class="donutseg" style="filter:drop-shadow(0 0 4px var(--red))"/>
+            <text x="60" y="58" text-anchor="middle" font-family="var(--mono)" font-size="20" font-weight="700" fill="var(--cy2)">74%</text>
+            <text x="60" y="72" text-anchor="middle" font-size="8" fill="var(--dim)" letter-spacing="1">HEALTHY</text>
+          </svg>
+          <div style="font-size:12px;line-height:2">
+            <div><span class="dot g" style="display:inline-block"></span> <b>612</b> healthy</div>
+            <div><span class="dot y" style="display:inline-block"></span> <b>137</b> monitor</div>
+            <div><span class="dot r" style="display:inline-block"></span> <b>74</b> at risk</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <h3 class="sec">Requires your attention</h3>
+    <div class="mock rise">
+      <div class="cap">◤◢ Critical accounts — each links to its dossier</div>
+      <div class="row"><span class="dot r"></span><div><div class="nm2">Alpha Massage &amp; Spa</div><div class="meta2">Austin, TX · <b style="color:var(--amber)">engagement</b> dragging</div></div><span class="score2" style="color:var(--red)">18</span></div>
+      <div class="row"><span class="dot r"></span><div><div class="nm2">Bliss Nail Lounge</div><div class="meta2">Miami, FL · <b style="color:var(--amber)">value</b> dragging</div></div><span class="score2" style="color:var(--red)">23</span></div>
+    </div>
+    <div class="callout"><div class="t">How to read a row</div>The <b>dot</b> = health tier · the <b>reason</b> = which sub-score drags · the <b>number</b> = composite (0–100). Click the name for the full dossier.</div>
+    <div class="quiz" data-quiz>
+      <div class="q">Quick check — a red dot, "value dragging", score 23. What does it tell you?</div>
+      <button class="opt" data-correct>Critical — the fix is <b>value</b> (they're not getting results: leads/reviews).</button>
+      <button class="opt">Healthy; consider an upsell.</button>
+      <button class="opt">Their invoice is overdue.</button>
+      <div class="fb"></div>
+    </div>
+  </section>
+
+  <!-- M2 OVERVIEW -->
+  <section class="mod" data-m="2">
+    <div class="kick rise">Module 3 · Overview &amp; filters</div>
+    <h1 class="mt rise">Find your accounts in two clicks</h1>
+    <div class="sub rise">Filter the 823-row table down to exactly what you need — watch it live.</div>
+    <div class="mock rise"><div class="cap">◤◢ Interactive — click the filters, watch the chart update</div>
+      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start">
+        <div>
+          <div class="chips"><span class="chip" id="fRisk">🔴 At-risk</span><span class="chip" id="fMine">AM: You</span></div>
+          <div id="fTable">
+            <div class="row" data-red data-mine><span class="dot r"></span><div class="nm2">Alpha Massage</div><span class="meta2">· You</span><span class="score2" style="color:var(--red)">18</span></div>
+            <div class="row" data-green><span class="dot g"></span><div class="nm2">Glow Med Spa</div><span class="meta2">· Priya</span><span class="score2" style="color:var(--green)">78</span></div>
+            <div class="row" data-red data-mine><span class="dot r"></span><div class="nm2">Serenity Skin</div><span class="meta2">· You</span><span class="score2" style="color:var(--red)">29</span></div>
+            <div class="row" data-yellow><span class="dot y"></span><div class="nm2">Velvet Lash Bar</div><span class="meta2">· Aditya</span><span class="score2" style="color:var(--amber)">54</span></div>
+            <div class="row" data-green><span class="dot g"></span><div class="nm2">Opal Beauty Co</div><span class="meta2">· Meera</span><span class="score2" style="color:var(--green)">81</span></div>
+            <div class="row" data-red data-mine><span class="dot r"></span><div class="nm2">Bliss Nail Lounge</div><span class="meta2">· You</span><span class="score2" style="color:var(--red)">23</span></div>
+          </div>
+        </div>
+        <div class="chartcard" style="border:0;background:transparent;padding:0">
+          <div class="cap"><span>Shown</span><b id="shownN">6 / 6</b></div>
+          <svg viewBox="0 0 120 120" width="120" height="120" style="display:block;margin:0 auto">
+            <circle cx="60" cy="60" r="46" fill="none" stroke="var(--line)" stroke-width="12"/>
+            <circle id="shownRing" cx="60" cy="60" r="46" fill="none" stroke="var(--cy)" stroke-width="12" pathLength="100" stroke-dasharray="100 100" stroke-dashoffset="0" transform="rotate(-90 60 60)" style="filter:drop-shadow(0 0 5px var(--cy));transition:stroke-dasharray .5s"/>
+            <text id="shownPct" x="60" y="65" text-anchor="middle" font-family="var(--mono)" font-size="22" font-weight="700" fill="var(--cy2)">100%</text>
+          </svg>
+          <div style="text-align:center;font-size:11px;color:var(--dim)">of the book on screen</div>
+        </div>
+      </div>
+    </div>
+    <div class="callout"><div class="t">Worst-first</div>After filtering, the table sorts worst-first — the account bleeding most sits at the top. Your priority order, handed to you.</div>
+    <h3 class="sec">The filters you'll use</h3>
+    <ul>
+      <li><b>Quick filters:</b> At-risk · Declining · Overdue · Has tickets · Multi-product · Web app.</li>
+      <li><b>Save view</b> — build once, save (e.g. "My at-risk book"), one click tomorrow. <b>Deep-links</b> — <span class="mono" style="color:var(--cy2)">/overview?color=red</span>.</li>
+    </ul>
+    <div class="quiz" data-quiz>
+      <div class="q">One-click view of only your critical accounts every morning?</div>
+      <button class="opt">Scroll to find them each time.</button>
+      <button class="opt" data-correct>Filter At-risk + your AM name, then <b>Save view</b>.</button>
+      <div class="fb"></div>
+    </div>
+  </section>
+
+  <!-- M3 DOSSIER -->
+  <section class="mod" data-m="3">
+    <div class="kick rise">Module 4 · The account dossier</div>
+    <h1 class="mt rise">One page, the whole story</h1>
+    <div class="sub rise">Click any account for its full history. Try the <b>window toggle</b> — the charts redraw.</div>
+    <div class="grid2">
+      <div class="card brk rise">
+        <div style="display:flex;align-items:center;gap:10px"><span class="dot r"></span><span class="mono" style="font-size:17px;font-weight:700">Alpha Massage &amp; Spa</span></div>
+        <div class="meta2" style="margin:4px 0 10px">Austin, TX · AM You · 14 months</div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="badge">◉ Command Center</span><span class="seg reg">REGULAR</span><span class="meta2 mono">9/28 days · 21 convos</span></div>
+        <div class="kv" style="margin-top:12px">
+          <div class="kvc"><div class="v">18</div><div class="l">Composite</div></div>
+          <div class="kvc"><div class="v">$249</div><div class="l">MRR</div></div>
+          <div class="kvc"><div class="v" id="leadKpi">3</div><div class="l">Leads·<span id="winKpi">30</span>d</div></div>
+        </div>
+      </div>
+      <div class="chartcard rise">
+        <div class="cap"><span>Health composition</span><b>radar</b></div>
+        <svg viewBox="0 0 200 160" width="100%" height="150">
+          <g fill="none" stroke="var(--line)" stroke-width="1" opacity=".6">
+            <polygon points="100,26 165,120 35,120"/><polygon points="100,52 138,108 62,108"/>
+          </g>
+          <line x1="100" y1="88" x2="100" y2="26" stroke="var(--line)"/><line x1="100" y1="88" x2="165" y2="120" stroke="var(--line)"/><line x1="100" y1="88" x2="35" y2="120" stroke="var(--line)"/>
+          <polygon class="popin" points="100,58 128,110 74,104" fill="rgba(53,224,255,.16)" stroke="var(--cy)" stroke-width="1.5" style="transform-origin:100px 88px;filter:drop-shadow(0 0 5px var(--cy))"/>
+          <text x="100" y="18" text-anchor="middle" font-size="8" fill="var(--dim)">ENGAGEMENT</text>
+          <text x="176" y="130" text-anchor="middle" font-size="8" fill="var(--dim)">VALUE</text>
+          <text x="24" y="130" text-anchor="middle" font-size="8" fill="var(--dim)">PRODUCT</text>
+        </svg>
+      </div>
+    </div>
+    <div class="chartcard rise" style="margin-top:14px">
+      <div class="cap"><span>Leads · weekly</span><b>window: <span id="winLbl">30</span> days</b></div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <span class="chip" data-win="7">7d</span><span class="chip on" data-win="30">30d</span><span class="chip" data-win="90">90d</span><span class="chip" data-win="180">180d</span>
+      </div>
+      <svg viewBox="0 0 620 140" width="100%" preserveAspectRatio="none" style="max-height:150px">
+        <g id="leadBars"></g>
+      </svg>
+    </div>
+    <h3 class="sec">The tabs — one per data domain</h3>
+    <div class="grid3">
+      <div class="card feat"><div class="fi">❤</div><b>Health</b><span>Which sub-score drags.</span></div>
+      <div class="card feat"><div class="fi">↗</div><b>Leads &amp; Funnel</b><span>Volume + conversion + response time.</span></div>
+      <div class="card feat"><div class="fi">★</div><b>Reviews &amp; Rank</b><span>Velocity + keyword movement.</span></div>
+      <div class="card feat"><div class="fi">$</div><b>Payments</b><span>Live Chargebee — invoice, overdue.</span></div>
+      <div class="card feat"><div class="fi">✉</div><b>Tickets &amp; Comms</b><span>Support + full history.</span></div>
+      <div class="card feat"><div class="fi">◉</div><b>Command Center</b><span>Web-app usage.</span></div>
+    </div>
+    <div class="callout"><div class="t">Habit</div>Open the dossier before any call — two minutes and you walk in knowing everything.</div>
+  </section>
+
+  <!-- M4 WEBAPP -->
+  <section class="mod" data-m="4">
+    <div class="kick rise">Module 5 · Web-app signals</div>
+    <h1 class="mt rise">Discovery Web &amp; Command Center</h1>
+    <div class="sub rise">Two distinct signals — know the difference, and how to act on them.</div>
+    <div class="grid2 rise">
+      <div class="chartcard">
+        <div class="cap"><span>Reach</span><b>of 823 accounts</b></div>
+        <div style="font-size:11px;color:var(--dim);margin-bottom:5px">🌐 Discovery Web · 165</div>
+        <div style="height:16px;border-radius:8px;background:var(--line);overflow:hidden;margin-bottom:12px"><div class="hbarfill" style="height:100%;width:20%;background:linear-gradient(90deg,var(--cy2),var(--cy));box-shadow:0 0 8px var(--cy)"></div></div>
+        <div style="font-size:11px;color:var(--dim);margin-bottom:5px">◉ Command Center enabled · 88</div>
+        <div style="height:16px;border-radius:8px;background:var(--line);overflow:hidden;margin-bottom:12px"><div class="hbarfill" style="height:100%;width:11%;background:linear-gradient(90deg,var(--purple),#7a5bd0);box-shadow:0 0 8px var(--purple);animation-delay:.15s"></div></div>
+        <div style="font-size:11px;color:var(--dim);margin-bottom:5px">◉ CC active (last 28d) · 67</div>
+        <div style="height:16px;border-radius:8px;background:var(--line);overflow:hidden"><div class="hbarfill" style="height:100%;width:8%;background:linear-gradient(90deg,var(--green),#1aa374);box-shadow:0 0 8px var(--green);animation-delay:.3s"></div></div>
+      </div>
+      <div>
+        <div class="card"><b style="color:var(--cy2)">🌐 Discovery Web</b><p style="margin:6px 0 0;font-size:13px">The product flag — has the new web experience on. Shown as a <span class="badge">◉ Web</span> badge.</p></div>
+        <div class="card" style="margin-top:12px"><b style="color:var(--cy2)">◉ Command Center</b><p style="margin:6px 0 0;font-size:13px">The AI-agent app — we track <b>actual usage</b> (active days + conversations).</p></div>
+      </div>
+    </div>
+    <div class="callout"><div class="t">Why 165 ≠ 88</div>They're <b>different products</b>. An account can have one without the other — that's why they're two independent signals.</div>
+    <h3 class="sec">Engagement segments — click to explore</h3>
+    <div class="grid2">
+      <div class="mock" style="margin:0"><div class="cap">◤◢ Filter by segment</div>
+        <div class="chips"><span class="chip on" data-seg="all">All</span><span class="chip" data-seg="core">Core</span><span class="chip" data-seg="reg">Regular</span><span class="chip" data-seg="cas">Casual</span></div>
+        <div id="segTable">
+          <div class="row" data-s="core"><span class="dot g"></span><div class="nm2">Amenity Wax Spot</div><span class="seg core" style="margin-left:auto">CORE</span><span class="meta2 mono" style="margin-left:12px">16/28</span></div>
+          <div class="row" data-s="reg"><span class="dot y"></span><div class="nm2">Aura Hair Lounge</div><span class="seg reg" style="margin-left:auto">REGULAR</span><span class="meta2 mono" style="margin-left:12px">7/28</span></div>
+          <div class="row" data-s="cas"><span class="dot r"></span><div class="nm2">Noir Beauty Studio</div><span class="seg cas" style="margin-left:auto">CASUAL</span><span class="meta2 mono" style="margin-left:12px">2/28</span></div>
+          <div class="row" data-s="core"><span class="dot g"></span><div class="nm2">Lumen Skin Bar</div><span class="seg core" style="margin-left:auto">CORE</span><span class="meta2 mono" style="margin-left:12px">21/28</span></div>
+        </div>
+      </div>
+      <div class="chartcard">
+        <div class="cap"><span>Segment mix</span><b id="segNote">88 enabled</b></div>
+        <div style="display:flex;align-items:center;gap:14px">
+          <svg viewBox="0 0 120 120" width="120" height="120">
+            <circle cx="60" cy="60" r="44" fill="none" stroke="var(--line)" stroke-width="13"/>
+            <circle id="dCore" data-tip="Core · 14" cx="60" cy="60" r="44" fill="none" stroke="var(--green)" stroke-width="13" pathLength="100" stroke-dasharray="16 100" stroke-dashoffset="0" transform="rotate(-90 60 60)" class="donutseg"/>
+            <circle id="dReg" data-tip="Regular · 21" cx="60" cy="60" r="44" fill="none" stroke="var(--amber)" stroke-width="13" pathLength="100" stroke-dasharray="24 100" stroke-dashoffset="-16" transform="rotate(-90 60 60)" class="donutseg"/>
+            <circle id="dCas" data-tip="Casual · 32" cx="60" cy="60" r="44" fill="none" stroke="var(--cy)" stroke-width="13" pathLength="100" stroke-dasharray="36 100" stroke-dashoffset="-40" transform="rotate(-90 60 60)" class="donutseg"/>
+            <circle id="dInact" data-tip="Inactive · 21" cx="60" cy="60" r="44" fill="none" stroke="#4a5a5e" stroke-width="13" pathLength="100" stroke-dasharray="24 100" stroke-dashoffset="-76" transform="rotate(-90 60 60)" class="donutseg"/>
+            <text id="segCenter" x="60" y="58" text-anchor="middle" font-family="var(--mono)" font-size="20" font-weight="700" fill="var(--cy2)">88</text>
+            <text id="segCenterL" x="60" y="72" text-anchor="middle" font-size="7.5" fill="var(--dim)" letter-spacing="1">ENABLED</text>
+          </svg>
+          <div style="font-size:12px;line-height:1.9">
+            <div><span class="dot g" style="display:inline-block"></span> Core <b>14</b></div>
+            <div><span class="dot y" style="display:inline-block"></span> Regular <b>21</b></div>
+            <div><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--cy)"></span> Casual <b>32</b></div>
+            <div><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:#4a5a5e"></span> Inactive <b>21</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="callout gold"><div class="t">How to use it</div><b>Casual</b> = adoption &amp; nurture conversations. <b>Core</b> = proof it lands — reference stories &amp; expansion.</div>
+  </section>
+
+  <!-- M5 ALFRED -->
+  <section class="mod" data-m="5">
+    <div class="kick rise" style="color:var(--gold)"><span style="width:26px;height:1px;background:linear-gradient(90deg,var(--gold),transparent)"></span>Module 6 · Meet Alfred</div>
+    <h1 class="mt rise">Alfred — your analyst on call</h1>
+    <div class="sub rise">The biggest time-saver in the tool: a 20-minute cross-tool investigation becomes a 20-second question.</div>
+    <div class="grid2">
+      <div class="rise"><p>Alfred sits <b>bottom-left of every screen</b>. Ask in plain English and he <b>reasons across every database at once</b> — health, billing, tickets, usage, and his own memory.</p>
+        <div class="chartcard" style="margin-top:8px">
+          <div class="cap"><span>How Alfred answers one question</span><b>~2s</b></div>
+          <svg viewBox="0 0 300 150" width="100%" height="140">
+            <g fill="none" stroke="var(--gold)" stroke-width="1.3" opacity=".7">
+              <path class="flow" d="M150,75 C90,30 60,30 40,30"/><path class="flow" d="M150,75 C90,55 60,55 40,60"/>
+              <path class="flow" d="M150,75 C90,95 60,95 40,95"/><path class="flow" d="M150,75 C90,120 60,120 40,125"/>
+            </g>
+            <g font-family="var(--mono)" font-size="7.5" fill="var(--mid)">
+              <circle class="pulse" cx="36" cy="30" r="5" fill="var(--cy)"/><text x="46" y="27">health</text>
+              <circle class="pulse" cx="36" cy="60" r="5" fill="var(--cy)" style="animation-delay:.4s"/><text x="46" y="57">billing</text>
+              <circle class="pulse" cx="36" cy="95" r="5" fill="var(--cy)" style="animation-delay:.8s"/><text x="46" y="92">tickets</text>
+              <circle class="pulse" cx="36" cy="125" r="5" fill="var(--cy)" style="animation-delay:1.2s"/><text x="46" y="122">usage + memory</text>
+            </g>
+            <circle cx="155" cy="75" r="22" fill="rgba(230,192,99,.14)" stroke="var(--gold)" stroke-width="1.5" class="breathe"/>
+            <text x="155" y="79" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--gold)">ALFRED</text>
+            <path class="flow" d="M177,75 C220,75 240,75 268,75" fill="none" stroke="var(--green)" stroke-width="1.5"/>
+            <text x="272" y="72" font-family="var(--mono)" font-size="8" fill="var(--green)">answer</text>
+            <text x="248" y="88" font-family="var(--mono)" font-size="7" fill="var(--dim)">+ recommend</text>
+          </svg>
+        </div>
+      </div>
+      <div class="rise">
+        <div class="alf" style="margin-top:0">
+          <div class="head"><span class="dot g"></span><div><div class="t">◤◢ ALFRED</div><div class="s">online · account health analyst</div></div></div>
+          <div class="log" id="alfLog"><div class="bub a"><div class="who">Alfred</div>Good evening. Ask me anything about your book — pick a question, or type your own.</div></div>
+          <div class="ask" id="alfAsk"></div>
+        </div>
+      </div>
+    </div>
+    <h3 class="sec">What Alfred can do</h3>
+    <div class="grid3">
+      <div class="card feat"><div class="fi" style="color:var(--gold)">◎</div><b>Diagnose</b><span>"Why is X at risk?" — root cause + fix.</span></div>
+      <div class="card feat"><div class="fi" style="color:var(--gold)">▤</div><b>Brief you</b><span>"Brief me on X" before a call.</span></div>
+      <div class="card feat"><div class="fi" style="color:var(--gold)">⛓</div><b>Connect the dots</b><span>"At-risk AND overdue?" — cross-database.</span></div>
+      <div class="card feat"><div class="fi" style="color:var(--gold)">⇄</div><b>Compare</b><span>"Compare my two worst accounts."</span></div>
+      <div class="card feat"><div class="fi" style="color:var(--gold)">↗</div><b>Navigate</b><span>"Open Alpha Massage" → takes you there.</span></div>
+      <div class="card feat"><div class="fi" style="color:var(--gold)">✎</div><b>Draft</b><span>A save-play tuned to the root cause.</span></div>
+    </div>
+    <div class="callout gold"><div class="t">The golden rule — Alfred drafts, he never sends</div>He's <b>read-only</b> on your customers: reasons, explains, drafts — never sends, never changes data. You stay in command. Verify high-stakes figures at the source.</div>
+    <div class="quiz" data-quiz>
+      <div class="q">Call in 5 minutes, you know nothing about the account. Fastest move?</div>
+      <button class="opt">Open six Metabase tabs.</button>
+      <button class="opt" data-correct>Ask Alfred: <b>"Give me a briefing on [account]."</b></button>
+      <button class="opt">Ask Alfred to email the customer.</button>
+      <div class="fb"></div>
+    </div>
+  </section>
+
+  <!-- M6 POWER -->
+  <section class="mod" data-m="6">
+    <div class="kick rise">Module 7 · Power moves</div>
+    <h1 class="mt rise">Work faster</h1>
+    <div class="sub rise">Small habits that add up across a day.</div>
+    <div class="grid3">
+      <div class="card feat"><div class="fi">⌘</div><b>⌘K palette</b><span>Jump to any account or action, no mouse.</span></div>
+      <div class="card feat"><div class="fi">💾</div><b>Saved views</b><span>Your filters as a one-click preset.</span></div>
+      <div class="card feat"><div class="fi">▤</div><b>Columns</b><span>Show only the metrics you care about.</span></div>
+      <div class="card feat"><div class="fi">⇄</div><b>Compare</b><span>Pin 2+ accounts, view side by side.</span></div>
+      <div class="card feat"><div class="fi">◎</div><b>Board / Map</b><span>Swap the table for cards or geography.</span></div>
+      <div class="card feat"><div class="fi">≣</div><b>Density</b><span>Tighten rows to see more at once.</span></div>
+      <div class="card feat"><div class="fi">⭳</div><b>CSV export</b><span>The current filtered table.</span></div>
+      <div class="card feat"><div class="fi">📈</div><b>Trends</b><span>Time-series over weeks.</span></div>
+      <div class="card feat"><div class="fi">🔔</div><b>Alerts</b><span>Flag accounts crossing into at-risk.</span></div>
+    </div>
+    <div class="callout"><div class="t">Pro tip</div>Combine filters: <b>Web app · Casual + At-risk</b> instantly isolates low-engagement web-app accounts that are also in danger — a perfect nurture list.</div>
+    <div class="callout gold"><div class="t">Make it yours</div><span class="keycap">☀️/🌙</span> Batman / Bruce Wayne, plus 🌧 rain and ◉ Detective effects and a ◐ calm mode — all cosmetic, data never changes.</div>
+  </section>
+
+  <!-- M7 ROUTINE -->
+  <section class="mod" data-m="7">
+    <div class="kick rise">Module 8 · Your daily routine</div>
+    <h1 class="mt rise">Putting it all together</h1>
+    <div class="sub rise">A typical morning, start to finish — in about two minutes.</div>
+    <div class="card rise">
+      <div class="loop">
+        <div class="lstep"><div class="n">1</div><div class="lc"><b>Glance at the board</b><div>Three accounts are critical today.</div></div></div>
+        <div class="lstep"><div class="n">2</div><div class="lc"><b>Overview → your at-risk book</b><div>The worst sits at the top.</div></div></div>
+        <div class="lstep"><div class="n">3</div><div class="lc"><b>Open its dossier</b><div>Engagement is the drag; profile unverified.</div></div></div>
+        <div class="lstep"><div class="n">4</div><div class="lc"><b>Ask Alfred to confirm</b><div>Root cause + the remedy.</div></div></div>
+        <div class="lstep"><div class="n">5</div><div class="lc"><b>Act</b><div>Make the call, or send the (Alfred-drafted) note.</div></div></div>
+      </div>
+    </div>
+    <h3 class="sec">Final check — 3 questions to certify</h3>
+    <div class="quiz" data-quiz><div class="q">1. Fastest path to your critical accounts?</div>
+      <button class="opt" data-correct>Overview → At-risk → your AM name (saved as a view).</button>
+      <button class="opt">Read the whole table top to bottom.</button><div class="fb"></div></div>
+    <div class="quiz" data-quiz><div class="q">2. Can Alfred send an email to a customer for you?</div>
+      <button class="opt">Yes, automatically.</button>
+      <button class="opt" data-correct>No — he drafts only; you review &amp; send. He never changes data.</button><div class="fb"></div></div>
+    <div class="quiz" data-quiz><div class="q">3. A red account says "product dragging". Where first?</div>
+      <button class="opt" data-correct>The dossier — health breakdown + Command Center usage — then ask Alfred.</button>
+      <button class="opt">Their MRR.</button><div class="fb"></div></div>
+    <div class="callout gold"><div class="t">Finish</div>Complete all modules and the checks, then open your <b>Certificate</b>. 🦇</div>
+  </section>
+
+  <!-- M8 CASE FILE -->
+  <section class="mod" data-m="8">
+    <div class="kick rise">Module 9 · Case file</div>
+    <h1 class="mt rise">Solve a real at-risk case</h1>
+    <div class="sub rise">Read the file, then <b>click the right actions</b> to move them into the Save Plan. Close the case to certify.</div>
+    <div class="grid2">
+      <div class="card brk rise">
+        <div style="display:flex;align-items:center;gap:10px"><span class="dot r"></span><span class="mono" style="font-size:17px;font-weight:700">Bliss Nail Lounge</span></div>
+        <div class="meta2" style="margin:4px 0 12px">Miami, FL · AM You · 9 months with Zoca</div>
+        <ul style="font-size:13.5px">
+          <li>Composite <b style="color:var(--red)">23</b> — <b>value</b> is dragging (leads down 38% over 30 days).</li>
+          <li>Billing: $249 MRR, <b style="color:var(--red)">12 days overdue</b>.</li>
+          <li>Web app: Discovery Web on, <b>Casual</b> on Command Center (2 / 28 days).</li>
+          <li>1 open support ticket — <i>"booking link not working"</i>.</li>
+        </ul>
+        <div class="callout" style="margin:12px 0 0"><div class="t">Your job</div>Build the save-play. Move the <b>three right actions</b> into the plan — leave the traps out.</div>
+      </div>
+      <div class="rise">
+        <div class="chartcard"><div class="cap"><span>Available actions — click to add</span><b id="caseNote">0 / 3 correct</b></div>
+          <div id="actions">
+            <div class="act" data-ok="1">🔧 Resolve the overdue invoice</div>
+            <div class="act" data-ok="1">📍 Verify GBP &amp; run a re-engagement push</div>
+            <div class="act" data-ok="0">🛒 Upsell a brand-new product</div>
+            <div class="act" data-ok="1">🎫 Fix the booking-link ticket</div>
+            <div class="act" data-ok="0">😴 Do nothing — just monitor</div>
+          </div>
+        </div>
+        <div class="dropzone" id="dropzone"><div class="dzlabel" id="dzlabel">▼ Save Plan — click actions to add them here</div></div>
+      </div>
+    </div>
+    <div class="callout" id="caseFb" style="display:none"></div>
+    <div class="callout gold" id="caseLogic" style="display:none"><div class="t">The logic</div>Value is dragging <b>and</b> they're overdue — a high churn risk. The play: fix the money (overdue), fix the results (GBP + re-engagement), clear the blocker (ticket). Upselling a struggling account, or "just monitoring" a churn risk, are the traps. This is exactly the kind of case Alfred can draft for you.</div>
+  </section>
+
+  <!-- M9 CERT -->
+  <section class="mod" data-m="9">
+    <div class="cert-wrap">
+      <div class="kick" style="justify-content:center">Certification</div>
+      <div class="cert" id="certCard">
+        <canvas id="confetti" style="position:absolute;inset:0;pointer-events:none"></canvas>
+        <svg class="emb breathe" viewBox="0 0 100 44"><path fill="var(--cy)" d="M50 3 C48 11 45 14 41 12 C43 16 42 19 39 20 C33 15 25 16 20 23 C26 21 30 23 31 27 C25 28 20 32 18 39 C24 34 33 33 37 37 C40 30 45 28 50 33 C55 28 60 30 63 37 C67 33 76 34 82 39 C80 32 75 28 69 27 C70 23 74 21 80 23 C75 16 67 15 61 20 C58 19 57 16 59 12 C55 14 52 11 50 3 Z"/></svg>
+        <h2>CAVE//OS · Certified Operator</h2>
+        <div class="big">Account Manager Training</div>
+        <p style="font-size:13px;color:var(--dim)">This certifies that</p>
+        <div class="nmeln" id="certName">—</div>
+        <p style="font-size:13px;color:var(--dim)">has completed the CAVE//OS AM training and is ready to run their book.</p>
+        <div id="certGate"><p style="margin-top:18px;color:var(--amber);font-size:13px">Complete all modules to unlock your certificate.</p></div>
+        <div id="certForm" style="display:none;margin-top:18px">
+          <input class="nmin" id="nameInput" placeholder="Type your name" autocomplete="off">
+          <div style="margin-top:12px"><button class="btn prim" id="issueBtn">Issue my certificate 🦇</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer" id="footer">
+    <button class="btn" id="prevBtn">← Previous</button>
+    <button class="btn prim" id="nextBtn">Mark complete &amp; continue →</button>
+    <span style="margin-left:auto;font-size:12px;color:var(--dim)" id="modLabel"></span>
+  </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  var MODS=[{t:"Orientation",ic:"1"},{t:"The morning board",ic:"2"},{t:"Overview & filters",ic:"3"},{t:"The dossier",ic:"4"},{t:"Web-app signals",ic:"5"},{t:"Meet Alfred",ic:"6"},{t:"Power moves",ic:"7"},{t:"Daily routine",ic:"8"},{t:"Case file · solve it",ic:"9"},{t:"Certificate",ic:"★"}];
+  var LAST=MODS.length-1, cur=0, done={};
+  try{ done=JSON.parse(localStorage.getItem("cave_train2")||"{}"); }catch(e){}
+
+  // particle bg
+  (function(){var cv=document.getElementById("bg"),ctx=cv.getContext("2d");
+   function sz(){cv.width=innerWidth;cv.height=innerHeight;} sz(); addEventListener("resize",sz);
+   var N=54,p=[];for(var i=0;i<N;i++)p.push({x:Math.random(),y:Math.random(),vx:(Math.random()-.5)*.0004,vy:(Math.random()-.5)*.0004,r:Math.random()*1.5+.4});
+   function f(){var w=cv.width,h=cv.height;ctx.clearRect(0,0,w,h);
+    for(var i=0;i<N;i++){var a=p[i];a.x+=a.vx;a.y+=a.vy;if(a.x<0||a.x>1)a.vx*=-1;if(a.y<0||a.y>1)a.vy*=-1;
+     ctx.beginPath();ctx.arc(a.x*w,a.y*h,a.r,0,7);ctx.fillStyle="rgba(53,224,255,.4)";ctx.fill();}
+    ctx.strokeStyle="rgba(53,224,255,.05)";for(var i=0;i<N;i++)for(var j=i+1;j<N;j++){var dx=(p[i].x-p[j].x)*w,dy=(p[i].y-p[j].y)*h,d=Math.hypot(dx,dy);if(d<150){ctx.globalAlpha=1-d/150;ctx.beginPath();ctx.moveTo(p[i].x*w,p[i].y*h);ctx.lineTo(p[j].x*w,p[j].y*h);ctx.stroke();}}ctx.globalAlpha=1;requestAnimationFrame(f);}f();})();
+
+  // tooltips
+  var tip=document.getElementById("tip");
+  document.addEventListener("mouseover",function(e){var t=e.target.closest?e.target.closest("[data-tip]"):null;if(t){tip.textContent=t.getAttribute("data-tip");tip.style.opacity="1";}});
+  document.addEventListener("mousemove",function(e){if(tip.style.opacity==="1"){tip.style.left=(e.clientX+14)+"px";tip.style.top=(e.clientY-10)+"px";}});
+  document.addEventListener("mouseout",function(e){if(e.target.closest&&e.target.closest("[data-tip]"))tip.style.opacity="0";});
+
+  var navlist=document.getElementById("navlist");
+  MODS.forEach(function(m,i){var d=document.createElement("div");d.className="navmod";d.setAttribute("data-i",i);
+    var ic=document.createElement("div");ic.className="ic";ic.textContent=m.ic;
+    var nm=document.createElement("div");nm.className="nm";nm.textContent=m.t;
+    d.appendChild(ic);d.appendChild(nm);navlist.appendChild(d);d.addEventListener("click",function(){go(i);});});
+  var navEls=navlist.querySelectorAll(".navmod"), mods=document.querySelectorAll(".mod");
+
+  function save(){try{localStorage.setItem("cave_train2",JSON.stringify(done));}catch(e){}}
+  function pct(){var n=0;for(var i=0;i<LAST;i++)if(done[i])n++;return Math.round(n/LAST*100);}
+  function refresh(){
+    navEls.forEach(function(el,i){el.classList.toggle("on",i===cur);el.classList.toggle("done",!!done[i]);});
+    var p=pct();document.getElementById("pfill").style.width=p+"%";document.getElementById("ppct").textContent=p+"%";
+    document.getElementById("prevBtn").disabled=(cur===0);
+    var nb=document.getElementById("nextBtn");
+    if(cur>=LAST){document.getElementById("footer").style.display="none";}else{document.getElementById("footer").style.display="flex";nb.textContent=done[cur]?"Continue →":"Mark complete & continue →";}
+    document.getElementById("modLabel").textContent="Module "+(cur+1)+" of "+MODS.length;
+    if(cur===LAST){var all=true;for(var i=0;i<LAST;i++)if(!done[i])all=false;
+      document.getElementById("certGate").style.display=all?"none":"block";
+      document.getElementById("certForm").style.display=all?"block":"none";}
+  }
+  function go(i){cur=Math.max(0,Math.min(LAST,i));
+    mods.forEach(function(s){s.classList.toggle("on",+s.getAttribute("data-m")===cur);});
+    if(cur===1)countUp(); if(cur===3)drawLeadBars(30);
+    refresh();decodeTitle();sfx("blip");window.scrollTo({top:0,behavior:"smooth"});}
+  document.getElementById("prevBtn").addEventListener("click",function(){go(cur-1);});
+  document.getElementById("nextBtn").addEventListener("click",function(){done[cur]=true;save();go(cur+1);});
+  document.getElementById("resetBtn").addEventListener("click",function(){done={};save();go(0);});
+
+  function countUp(){document.querySelectorAll('#main .mod.on [data-count]').forEach(function(el){var t=+el.getAttribute("data-count"),s=performance.now();
+    (function step(now){var p=Math.min(1,(now-s)/900);el.textContent=Math.round(t*(1-Math.pow(1-p,3))).toLocaleString();if(p<1)requestAnimationFrame(step);})(performance.now());});}
+
+  // filter demo + ring
+  var fRisk=false,fMine=false;
+  function applyFilter(){var rows=document.querySelectorAll('#fTable .row'),shown=0,total=rows.length;
+    rows.forEach(function(r){var ok=true;if(fRisk&&r.getAttribute("data-red")===null)ok=false;if(fMine&&r.getAttribute("data-mine")===null)ok=false;r.classList.toggle("hide",!ok);if(ok)shown++;});
+    document.getElementById("shownN").textContent=shown+" / "+total;
+    var p=Math.round(shown/total*100);document.getElementById("shownPct").textContent=p+"%";
+    document.getElementById("shownRing").setAttribute("stroke-dasharray",p+" 100");}
+  var fr=document.getElementById("fRisk"),fm=document.getElementById("fMine");
+  if(fr)fr.addEventListener("click",function(){fRisk=!fRisk;this.classList.toggle("on",fRisk);applyFilter();});
+  if(fm)fm.addEventListener("click",function(){fMine=!fMine;this.classList.toggle("on",fMine);applyFilter();});
+
+  // segment donut interactivity
+  document.querySelectorAll('[data-seg]').forEach(function(ch){ch.addEventListener("click",function(){
+    document.querySelectorAll('[data-seg]').forEach(function(x){x.classList.remove("on");});this.classList.add("on");
+    var seg=this.getAttribute("data-seg");
+    document.querySelectorAll('#segTable .row').forEach(function(r){r.classList.toggle("hide",seg!=="all"&&r.getAttribute("data-s")!==seg);});
+    var map={all:["88","ENABLED",null],core:["14","CORE","dCore"],reg:["21","REGULAR","dReg"],cas:["32","CASUAL","dCas"]};
+    var m=map[seg]; if(m){document.getElementById("segCenter").textContent=m[0];document.getElementById("segCenterL").textContent=m[1];
+      ["dCore","dReg","dCas","dInact"].forEach(function(id){var el=document.getElementById(id);if(el)el.setAttribute("stroke-width",(m[2]===id)?"17":"13");});
+    }
+  });});
+
+  // dossier lead bars per window
+  var WINDATA={7:[3,5,4,7,5,4,2],30:[30,52,40,66,48,34,22],90:[120,150,140,190,170,140,110],180:[260,320,300,410,380,300,230]};
+  function drawLeadBars(win){var g=document.getElementById("leadBars");if(!g)return;while(g.firstChild)g.removeChild(g.firstChild);
+    var data=WINDATA[win],max=Math.max.apply(null,data),W=620,H=140,n=data.length,bw=(W-20)/n;
+    data.forEach(function(v,i){var h=(v/max)*(H-24),x=10+i*bw,y=H-h-4;
+      var col=(i===3)?"var(--cy2)":"var(--cy)";
+      var r=document.createElementNS("http://www.w3.org/2000/svg","rect");
+      r.setAttribute("x",x+4);r.setAttribute("y",y);r.setAttribute("width",bw-9);r.setAttribute("height",Math.max(h,2));r.setAttribute("rx","3");
+      r.setAttribute("fill",col);r.setAttribute("class","bar");r.style.animationDelay=(i*0.06)+"s";r.style.filter="drop-shadow(0 0 6px rgba(53,224,255,.4))";
+      r.setAttribute("data-tip",v+" leads");g.appendChild(r);});
+    document.getElementById("winLbl").textContent=win;document.getElementById("winKpi").textContent=win;
+    document.getElementById("leadKpi").textContent=data.reduce(function(a,b){return a+b;},0).toLocaleString();
+  }
+  document.querySelectorAll('[data-win]').forEach(function(ch){ch.addEventListener("click",function(){
+    document.querySelectorAll('[data-win]').forEach(function(x){x.classList.remove("on");});this.classList.add("on");
+    drawLeadBars(+this.getAttribute("data-win"));});});
+
+  // quizzes
+  document.querySelectorAll('[data-quiz]').forEach(function(q){var opts=q.querySelectorAll('.opt'),fb=q.querySelector('.fb'),answered=false;
+    opts.forEach(function(o){o.addEventListener("click",function(){if(answered)return;answered=true;var correct=o.hasAttribute("data-correct");o.classList.add(correct?"correct":"wrong");
+      if(!correct)opts.forEach(function(x){if(x.hasAttribute("data-correct"))x.classList.add("correct");});
+      fb.textContent=correct?"✓ Correct.":"Not quite — the highlighted answer is right.";fb.className="fb show "+(correct?"ok":"no");});});});
+
+  // Alfred sim
+  var QA=[
+   ["Why is Alpha Massage at risk?","Its composite is 18 — engagement is the drag. Leads are down 40% over 30 days and their Google Business Profile is unverified, so profile views aren't converting. Recommendation: verify GBP this week and run a re-engagement push. Shall I open the account?"],
+   ["Which of my at-risk accounts also have an overdue invoice?","Two of your reds carry an overdue balance: Bliss Nail Lounge ($249, 12 days overdue) and Noir Beauty Studio ($199, 4 days). I'd prioritise Bliss — health AND billing are both slipping, a strong churn signal."],
+   ["Give me a briefing on Serenity Skin Studio.","Serenity Skin Studio — composite 29 (critical), product is the drag. On Discovery Web, Casual on Command Center (2 of 28 days). Billing healthy: $299 MRR, next invoice in 9 days, nothing overdue. 1 open ticket on booking setup. Angle: drive CC adoption, close the ticket."],
+   ["Compare my two worst accounts.","Alpha Massage (18) vs Bliss Nail Lounge (23) — both engagement-led declines. Difference: Bliss is also overdue on billing, so it's the more urgent churn risk; Alpha's is pure product engagement, more fixable. Start with Bliss."],
+   ["Open Alpha Massage.","Opening Alpha Massage & Spa for you now… (in the live app this navigates straight to the dossier)."],
+   ["Who are my top 3 accounts to call today?","Priority order: 1) Bliss Nail Lounge — critical AND overdue, the highest churn risk. 2) Alpha Massage — composite 18, engagement collapse. 3) Serenity Skin — critical with an open ticket. Shall I open the first?"],
+   ["How is Priya's book doing?","Priya has 38 accounts: 4 critical, 6 monitor, 28 healthy — average composite 67, a touch above the team median. Her main exposure is two overdue accounts. Want the two at-risk names?"],
+   ["Draft a save-play for Alpha Massage.","Draft — Save-play for Alpha Massage & Spa: (1) Verify their Google Business Profile this week; it's the root blocker. (2) Re-engagement: two GBP posts + a review-request campaign. (3) Book a check-in to walk them through Command Center. I've drafted the AM note as well — shall I show it? (Draft only — you send.)"],
+   ["What changed since last week?","Since last week: 2 accounts slipped into critical (Noir Beauty, Velvet Lash), 1 recovered (Opal Beauty → healthy). Book-wide leads are flat; reviews up 6%. Both new reds are engagement-driven. Want details on either?"]
+  ];
+  var askEl=document.getElementById("alfAsk"),logEl=document.getElementById("alfLog"),busy=false;
+  QA.forEach(function(pair){var b=document.createElement("button");b.className="askq";b.textContent=pair[0];b.addEventListener("click",function(){ask(pair[0],pair[1]);});askEl.appendChild(b);});
+  function bubble(cls,who){var d=document.createElement("div");d.className="bub "+cls;var w=document.createElement("div");w.className="who";w.textContent=who;d.appendChild(w);var s=document.createElement("span");d.appendChild(s);logEl.appendChild(d);logEl.scrollTop=logEl.scrollHeight;return s;}
+  function ask(q,a){if(busy)return;busy=true;var us=bubble("u","You");us.textContent=q;logEl.scrollTop=logEl.scrollHeight;
+    setTimeout(function(){var as=bubble("a","Alfred");as.parentElement.classList.add("cur");var i=0;var it=setInterval(function(){as.textContent+=a[i++];logEl.scrollTop=logEl.scrollHeight;if(i>=a.length){clearInterval(it);as.parentElement.classList.remove("cur");busy=false;}},14);},420);}
+  function resetAlfred(){ /* keep log; nothing to reset */ }
+
+  // certificate confetti
+  document.getElementById("issueBtn").addEventListener("click",function(){
+    var v=document.getElementById("nameInput").value.trim()||"Account Manager";
+    document.getElementById("certName").textContent=v;done[LAST]=true;save();refresh();
+    this.textContent="✓ Certified — well done!";this.disabled=true;confetti();});
+  function confetti(){var cv=document.getElementById("confetti");if(!cv)return;var ctx=cv.getContext("2d");
+    var card=document.getElementById("certCard");cv.width=card.clientWidth;cv.height=card.clientHeight;
+    var cols=["#35e0ff","#8ff0ff","#25e39a","#e6c063","#b98cff"],ps=[];
+    for(var i=0;i<120;i++)ps.push({x:cv.width/2,y:60,vx:(Math.random()-.5)*8,vy:Math.random()*-7-2,g:.22,c:cols[i%cols.length],s:Math.random()*4+2,life:0});
+    var t0=performance.now();
+    function f(now){ctx.clearRect(0,0,cv.width,cv.height);var alive=false;
+      ps.forEach(function(p){p.vy+=p.g;p.x+=p.vx;p.y+=p.vy;p.life++;if(p.y<cv.height+20){alive=true;ctx.fillStyle=p.c;ctx.globalAlpha=Math.max(0,1-p.life/120);ctx.fillRect(p.x,p.y,p.s,p.s*1.6);}});
+      ctx.globalAlpha=1;if(alive&&now-t0<3500)requestAnimationFrame(f);else ctx.clearRect(0,0,cv.width,cv.height);}
+    requestAnimationFrame(f);}
+
+  // ══ SOUND CUES (Web Audio, self-contained) ══
+  var AC=null, muted=false;
+  function ac(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC&&AC.state==="suspended")AC.resume(); return AC; }
+  function tone(freq,dur,type,vol,at){ if(muted)return; var c=ac(); if(!c)return; var o=c.createOscillator(),g=c.createGain(); o.type=type||"sine"; o.frequency.value=freq;
+    var t=c.currentTime+(at||0); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol||0.05,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+dur+0.02); }
+  function sfx(name){ if(muted)return;
+    if(name==="click") tone(520,0.06,"triangle",0.04);
+    else if(name==="blip") tone(360,0.05,"sine",0.03);
+    else if(name==="ok"){ tone(660,0.08,"triangle",0.05); tone(990,0.12,"triangle",0.05,0.08); }
+    else if(name==="no") tone(150,0.2,"sawtooth",0.05);
+    else if(name==="open"){ tone(420,0.06,"sine",0.04); tone(760,0.12,"sine",0.04,0.05); }
+    else if(name==="sig") tone(110,0.55,"sine",0.06);
+    else if(name==="reward"){ [523,659,784,1046].forEach(function(f,i){ tone(f,0.14,"triangle",0.05,i*0.1); }); }
+  }
+  var mb=document.getElementById("muteBtn");
+  if(mb) mb.addEventListener("click",function(){ muted=!muted; this.textContent=muted?"🔇":"🔊"; if(!muted)sfx("click"); });
+
+  // ══ decode-in module titles ══
+  function decodeTitle(){ var el=document.querySelector('.mod.on h1.mt'); if(!el)return;
+    var final=el.getAttribute('data-final')||el.textContent; el.setAttribute('data-final',final);
+    var chars="ABCDEFGHJKLMNPQRSTUVWXYZ0123456789/·◤◢"; var f=0; clearInterval(el._dec);
+    el._dec=setInterval(function(){ f++; el.textContent=final.split("").map(function(c,i){ return (i<f/2||c===" ")?c:chars[Math.floor(Math.random()*chars.length)]; }).join(""); if(f/2>=final.length){ el.textContent=final; clearInterval(el._dec); } },38); }
+
+  // ══ cursor targeting scope + click ripple ══
+  var scope=document.getElementById("scope"),xh=document.getElementById("xh"),xv=document.getElementById("xv"),ret=document.getElementById("reticle"),coord=document.getElementById("coord"),hideT;
+  addEventListener("pointermove",function(e){ if(scope){scope.classList.add("on");
+    xh.style.top=e.clientY+"px"; xv.style.left=e.clientX+"px"; ret.style.left=e.clientX+"px"; ret.style.top=e.clientY+"px";
+    coord.style.left=(e.clientX+16)+"px"; coord.style.top=(e.clientY+14)+"px";
+    coord.textContent="X:"+String(e.clientX).padStart(4,"0")+" Y:"+String(e.clientY).padStart(4,"0");
+    clearTimeout(hideT); hideT=setTimeout(function(){ scope.classList.remove("on"); },2500); } });
+  addEventListener("pointerdown",function(e){ var t=e.target; if(t&&/^(INPUT|TEXTAREA)$/.test(t.tagName))return;
+    var r=document.createElement("div"); r.className="ripple"; r.style.left=e.clientX+"px"; r.style.top=e.clientY+"px"; document.body.appendChild(r); setTimeout(function(){ r.remove(); },620);
+    if(t&&t.closest&&t.closest("button,.chip,.act,.askq,.opt,.navmod")) sfx("click"); });
+
+  // ══ live clock ══
+  setInterval(function(){ var el=document.getElementById("clock"); if(el){ var d=new Date(); var p=function(n){return String(n).padStart(2,"0");}; el.textContent=p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds()); } },1000);
+
+  // ══ bat-signal (Shift+B or click brand) ══
+  var BAT="M50 3 C48 11 45 14 41 12 C43 16 42 19 39 20 C33 15 25 16 20 23 C26 21 30 23 31 27 C25 28 20 32 18 39 C24 34 33 33 37 37 C40 30 45 28 50 33 C55 28 60 30 63 37 C67 33 76 34 82 39 C80 32 75 28 69 27 C70 23 74 21 80 23 C75 16 67 15 61 20 C58 19 57 16 59 12 C55 14 52 11 50 3 Z";
+  function batsignal(){ var s=document.createElement("div"); s.className="signal";
+    var svg=document.createElementNS("http://www.w3.org/2000/svg","svg"); svg.setAttribute("viewBox","0 0 100 44");
+    var p=document.createElementNS("http://www.w3.org/2000/svg","path"); p.setAttribute("d",BAT); svg.appendChild(p); s.appendChild(svg);
+    document.body.appendChild(s); sfx("sig"); setTimeout(function(){ s.remove(); },1700); }
+  addEventListener("keydown",function(e){ if(e.shiftKey&&(e.key==="B"||e.key==="b")){ var t=e.target; if(t&&/^(INPUT|TEXTAREA)$/.test(t.tagName))return; batsignal(); } });
+  var brandEl=document.querySelector(".brand"); if(brandEl) brandEl.addEventListener("click",batsignal);
+
+  // ══ Alfred sound on ask ══ (wrap ask)
+  var _ask=ask; ask=function(q,a){ sfx("open"); _ask(q,a); };
+  document.querySelectorAll("#alfAsk .askq").forEach(function(b){ /* already bound to old ask; rebind */ });
+  // rebind askq buttons to the sound-wrapped ask
+  (function(){ var box=document.getElementById("alfAsk"); if(!box)return; box.querySelectorAll(".askq").forEach(function(btn,idx){ var pair=QA[idx]; var clone=btn.cloneNode(true); btn.parentNode.replaceChild(clone,btn); clone.addEventListener("click",function(){ ask(pair[0],pair[1]); }); }); })();
+
+  // ══ quiz sound cues ══
+  document.querySelectorAll('[data-quiz] .opt').forEach(function(o){ o.addEventListener("click",function(){ setTimeout(function(){ sfx(o.hasAttribute("data-correct")?"ok":"no"); },10); }); });
+
+  // ══ CASE FILE — click-to-solve ══
+  var dz=document.getElementById("dropzone"), actionsBox=document.getElementById("actions"), caseSolved=false;
+  function checkCase(){ if(!dz)return; var inDz=dz.querySelectorAll(".act"); var ok=0,bad=0;
+    inDz.forEach(function(a){ if(a.getAttribute("data-ok")==="1"){ok++;a.classList.add("good");a.classList.remove("bad");} else {bad++;a.classList.add("bad");a.classList.remove("good");} });
+    var note=document.getElementById("caseNote"); if(note) note.textContent=ok+" / 3 correct"+(bad?" · "+bad+" wrong":"");
+    var lbl=document.getElementById("dzlabel"); if(lbl) lbl.style.display=inDz.length?"none":"block";
+    if(ok===3&&bad===0&&!caseSolved){ caseSolved=true; dz.classList.add("solved");
+      var fb=document.getElementById("caseFb"); fb.style.display="block"; fb.className="callout"; fb.textContent="✓ Case solved — that's exactly the play. Fix the money, fix the results, clear the blocker.";
+      document.getElementById("caseLogic").style.display="block"; sfx("reward");
+      for(var k=0;k<3;k++)(function(d){ setTimeout(function(){ batsignalMini(dz); },d); })(k*90);
+    } }
+  function batsignalMini(el){ /* small green flash pulse on solve */ el.animate?el.animate([{boxShadow:"0 0 0 rgba(37,227,154,0)"},{boxShadow:"0 0 30px rgba(37,227,154,.5)"},{boxShadow:"0 0 0 rgba(37,227,154,0)"}],{duration:600}):0; }
+  document.querySelectorAll(".act").forEach(function(a){ a.addEventListener("click",function(){
+    if(caseSolved)return; if(a.parentNode===actionsBox){ dz.appendChild(a); } else { a.classList.remove("good","bad"); actionsBox.appendChild(a); } checkCase(); }); });
+
+  go(0); countUp(); decodeTitle();
+})();
+</script>
+
+</body>
+</html>

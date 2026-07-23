@@ -80,10 +80,11 @@ export default function LandingDeck({
     { label: L.kLabels[4], value: stats.mrr ? "$" + stats.mrr.toLocaleString("en-US") : "—", tone: "var(--cave-txt)" },
   ];
 
-  const tiles: { t: string; d: string; glyph: string; href?: string; onClick?: () => void }[] = [
+  const tiles: { t: string; d: string; glyph: string; href?: string; ext?: string; onClick?: () => void }[] = [
     { t: "Overview", d: L.overviewDesc, glyph: "▦", href: "/overview" },
     { t: "Trends", d: "Health over time", glyph: "◠", href: "/trends" },
     { t: L.riskTileTitle, d: "Jump to the red accounts", glyph: "◉", href: "/overview?color=red" },
+    { t: "Training", d: "CAVE//OS Training module", glyph: "🎓", ext: "/training.html" },
     { t: "Command search", d: "Find anything · ⌘K", glyph: "⌕", onClick: openPalette },
     { t: light ? "Ring for Alfred" : "Ask Alfred", d: "Reason over the live data", glyph: "⌾", onClick: () => openAlfred() },
   ];
@@ -151,9 +152,13 @@ export default function LandingDeck({
       {/* ── LAUNCHPAD ────────────────────────────────────────────────────── */}
       <section className="mt-16">
         <SectionLabel>{L.launch}</SectionLabel>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {tiles.map((tile) =>
-            tile.href ? (
+            tile.ext ? (
+              <a key={tile.t} href={tile.ext} target="_blank" rel="noopener noreferrer" className="no-underline">
+                <TileBody glyph={tile.glyph} t={tile.t} d={tile.d} />
+              </a>
+            ) : tile.href ? (
               <Link key={tile.t} href={tile.href} className="no-underline">
                 <TileBody glyph={tile.glyph} t={tile.t} d={tile.d} />
               </Link>
