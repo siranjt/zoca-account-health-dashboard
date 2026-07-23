@@ -232,8 +232,8 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
       avgReceivedToContactedMs: t ? secToMs(t.recv_to_contact_s) : null,
       avgOpenedToContactedMs: t ? secToMs(t.open_to_contact_s) : null,
       activeProducts: parseProducts(r.agents_paid_for),
-      gbpVerified: r.gbp_verified == null ? null : r.gbp_verified === true,
-      websiteLive: r.website_live_raw == null ? null : String(r.website_live_raw).toUpperCase() === "TRUE",
+      gbpVerified: r.gbp_verified === true, // null (no GBP) or false → Unverified
+      websiteLive: r.website_live === true, // GBP lists a website URL (Google's own data)
       websiteUrl: (r.website_url as string) || null,
       lastConnected: (r.last_connected as string) || null,
       timezone: tzFromLatLng(num(r.lat), num(r.lng)),

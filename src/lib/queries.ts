@@ -49,14 +49,17 @@ nb AS (SELECT ec.entity_id, MIN(cs.next_billing_at) AS nbill FROM chargebee.subs
 od AS (SELECT ec.entity_id, MIN(i.due_date) AS oldest_due FROM chargebee.invoices i JOIN ec ON ec.customer_id=i.customer_id WHERE i.deleted=false AND i.status='payment_due' AND i.amount_due>0 GROUP BY 1),
 ms AS (SELECT ec.entity_id, COUNT(*) AS c FROM chargebee.transactions t JOIN ec ON ec.customer_id=t.customer_id WHERE t.status='failure' GROUP BY 1),
 -- GBP verification (Voice of Merchant) + website URL on the profile
-gbpx AS (SELECT entity_id, bool_or((metadata->>'has_voice_of_merchant')='true') AS gbp_verified,
+-- GBP verified = has Voice of Merchant. Google only sets the key to 'true' when
+-- verified; unverified profiles omit it entirely (no explicit 'false'). COALESCE
+-- the absent key to false so "has a GBP but not verified" reads as Unverified,
+-- not unknown. Only entities with NO gbp.locations row stay NULL.
+gbpx AS (SELECT entity_id, bool_or(COALESCE((metadata->>'has_voice_of_merchant')='true', false)) AS gbp_verified,
                 (array_remove(array_agg(NULLIF(website_uri,'')), NULL))[1] AS website_uri
          FROM gbp.locations GROUP BY 1),
 -- HubSpot (stitched) location object, joined by entity_id: last-connected touch,
 -- website-live flag and the website URL. One row per entity (most-recently-modified).
 hub AS (SELECT DISTINCT ON (property_location_entity_id) property_location_entity_id::uuid AS entity_id,
                NULLIF(property_last_connected_date,'') AS last_connected,
-               NULLIF(property_is_website_live_on_gbp,'') AS website_live_raw,
                NULLIF(property_website_url,'') AS website_url
         FROM hubspot_stitch.locations WHERE property_location_entity_id ~ '${UUIDRE}'
         ORDER BY property_location_entity_id, property_hs_lastmodifieddate DESC NULLS LAST)
@@ -78,8 +81,8 @@ SELECT hs.entity_id, hs.gbp_title, loc.city, loc.state, geo.lat, geo.lng, hs.am_
        (CURRENT_DATE - hs.onboarding_date::date) AS tenure_days,
        gbpx.gbp_verified,
        hub.last_connected,
-       hub.website_live_raw,
-       COALESCE(hub.website_url, gbpx.website_uri) AS website_url
+       (gbpx.website_uri IS NOT NULL) AS website_live,
+       COALESCE(gbpx.website_uri, hub.website_url) AS website_url
 FROM hs
 LEFT JOIN loc USING(entity_id) LEFT JOIN geo USING(entity_id) LEFT JOIN leads USING(entity_id) LEFT JOIN rev USING(entity_id)
 LEFT JOIN pho USING(entity_id) LEFT JOIN met USING(entity_id) LEFT JOIN web USING(entity_id)

@@ -18,6 +18,7 @@ import {
   LeadSourcesBars,
   commsSeries,
 } from "./Charts";
+import WebsiteLiveCard from "./WebsiteLiveCard";
 
 export default function DetailPanel({ account, windowDays }: { account: AccountRow; windowDays: number }) {
   const [detail, setDetail] = useState<AccountDetail | null>(null);
@@ -162,6 +163,10 @@ export default function DetailPanel({ account, windowDays }: { account: AccountR
           {detail ? (detail.leadSources?.length ? (
             <LeadSourcesBars data={detail.leadSources} />
           ) : <NoData />) : <Skeleton error={error} />}
+        </ChartCard>
+
+        <ChartCard title="Website status" subtitle="live check on the GBP website">
+          <WebsiteLiveCard url={account.websiteUrl} />
         </ChartCard>
 
         <ChartCard title="GBP content" subtitle="live photos on the profile over time">

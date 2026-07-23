@@ -22,6 +22,7 @@ import {
   LeadSourcesBars,
   commsSeries,
 } from "./Charts";
+import WebsiteLiveCard from "./WebsiteLiveCard";
 import { formatNumber, formatDuration, formatTenure } from "@/lib/format";
 import RetoolAllData from "./RetoolAllData";
 import CommunicationTab from "./CommunicationTab";
@@ -643,6 +644,10 @@ export default function AccountDossier({
               {detail ? (detail.leadSources?.length ? (
                 <LeadSourcesBars data={detail.leadSources} />
               ) : <NoData />) : skel}
+            </ChartCard>
+
+            <ChartCard title="Website status" subtitle="live check on the GBP website">
+              <WebsiteLiveCard url={account.websiteUrl} />
             </ChartCard>
 
             <ChartCard title="App Metrics" subtitle="weekly in-app screen opens (Mixpanel)">

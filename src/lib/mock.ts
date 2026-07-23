@@ -129,7 +129,7 @@ function toRow(s: Seed): AccountRow {
     avgReceivedToOpenedMs: s.toOpened, avgReceivedToContactedMs: s.toContacted,
     avgOpenedToContactedMs: s.openedToContacted, activeProducts: s.products,
     gbpVerified: s.leads % 5 !== 0,
-    websiteLive: s.bookActive ? true : s.leads % 3 === 0 ? false : null,
+    websiteLive: s.leads % 9 !== 0,
     websiteUrl: `https://${s.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.zoca.com/`,
     lastConnected: daysAgoISO(s.leads % 40),
     timezone: STATE_TZ[s.state] ?? "America/New_York",

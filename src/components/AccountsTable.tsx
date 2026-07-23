@@ -1172,14 +1172,10 @@ function cmp(a: AccountRow, b: AccountRow, key: SortKey): number {
       return a.name.localeCompare(b.name);
     case "otherProducts":
       return otherProducts(a).length - otherProducts(b).length;
-    case "gbpVerified": {
-      const r = (v: boolean | null) => (v === true ? 2 : v == null ? 1 : 0);
-      return r(a.gbpVerified) - r(b.gbpVerified);
-    }
-    case "websiteLive": {
-      const r = (v: boolean | null) => (v === true ? 2 : v == null ? 1 : 0);
-      return r(a.websiteLive) - r(b.websiteLive);
-    }
+    case "gbpVerified":
+      return (a.gbpVerified ? 1 : 0) - (b.gbpVerified ? 1 : 0);
+    case "websiteLive":
+      return (a.websiteLive ? 1 : 0) - (b.websiteLive ? 1 : 0);
     case "timezone":
       return (a.timezone ?? "").localeCompare(b.timezone ?? "");
     case "lastConnected":
@@ -1257,24 +1253,20 @@ function Kpi({ label, value, custom, alert, onClick, active }: { label: string; 
   );
 }
 
-function VerifiedBadge({ v }: { v: boolean | null }) {
-  if (v == null) return <span className="text-[11px] text-slate-300" title="GBP verification unknown">—</span>;
+function VerifiedBadge({ v }: { v: boolean }) {
   return v ? (
     <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold" title="Google Business Profile verified (Voice of Merchant)" style={{ background: "rgba(22,163,74,.14)", color: "#16a34a" }}>✓ Verified</span>
   ) : (
-    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold" title="Google Business Profile NOT verified" style={{ background: "rgba(220,38,38,.14)", color: "#dc2626" }}>✗ Unverified</span>
+    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold" title="Google Business Profile NOT verified (no Voice of Merchant)" style={{ background: "rgba(220,38,38,.14)", color: "#dc2626" }}>✗ Unverified</span>
   );
 }
 
-function WebsiteBadge({ live, url }: { live: boolean | null; url: string | null }) {
-  const inner =
-    live == null ? (
-      <span className="text-[11px] text-slate-300" title="Website status unknown">—</span>
-    ) : live ? (
-      <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold" title="Website live on the GBP" style={{ background: "rgba(22,163,74,.14)", color: "#16a34a" }}>● Live</span>
-    ) : (
-      <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold" title="Website not live on the GBP" style={{ background: "rgba(220,38,38,.14)", color: "#dc2626" }}>○ Down</span>
-    );
+function WebsiteBadge({ live, url }: { live: boolean; url: string | null }) {
+  const inner = live ? (
+    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold" title="GBP lists a website" style={{ background: "rgba(22,163,74,.14)", color: "#16a34a" }}>● Website</span>
+  ) : (
+    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold" title="No website on the GBP" style={{ background: "rgba(220,38,38,.14)", color: "#dc2626" }}>○ No site</span>
+  );
   if (url) return <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title={url} className="no-underline">{inner}</a>;
   return inner;
 }

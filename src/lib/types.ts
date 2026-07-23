@@ -91,8 +91,8 @@ export interface AccountRow {
   activeProducts: string[];
 
   // --- visibility signals (GBP + HubSpot + geo) ---
-  gbpVerified: boolean | null; // GBP has Voice of Merchant (verified & owned)
-  websiteLive: boolean | null; // HubSpot is_website_live_on_gbp (null = unknown)
+  gbpVerified: boolean; // GBP has Voice of Merchant (verified); false = Unverified / no GBP
+  websiteLive: boolean; // GBP lists a website URL (true) — Google's own data
   websiteUrl: string | null; // customer's website / landing page (GBP or HubSpot)
   lastConnected: string | null; // HubSpot last-connected date (YYYY-MM-DD) — last AM touch
   timezone: string | null; // IANA tz derived from lat/lng (for live local time)
