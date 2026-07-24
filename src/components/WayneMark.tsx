@@ -3,6 +3,19 @@
 // "Bruce Wayne" persona; the bat emblem carries the dark "Batman" persona.
 // Colour follows `currentColor` so it inherits the theme accent.
 
+// Sleek modern bat silhouette (original path) — the dark "Batman" persona mark:
+// swept wings tapering to points, scalloped lower edges, twin ears with a notch.
+export const BAT_PATH =
+  "M50 7 C51 4.5 52 3 53.5 3 C54.5 4 55 6.5 56 8.5 C58 11 61 12 64 11.2 C74 9 84 8.5 93 10.5 C90 15 87 18 84 21 C81 24 79 27 76.5 30.5 C74 28 72 26 70 27 C67 31 63 35 59 36.5 C56 37.5 53 38.5 50 41 C47 38.5 44 37.5 41 36.5 C37 35 33 31 30 27 C28 26 26 28 23.5 30.5 C21 27 19 24 16 21 C13 18 10 15 7 10.5 C16 8.5 26 9 36 11.2 C39 12 42 11 44 8.5 C45 6.5 45.5 4 46.5 3 C48 3 49 4.5 50 7 Z";
+
+export function BatShield({ size = 34, className = "", fill = "currentColor" }: { size?: number; className?: string; fill?: string }) {
+  return (
+    <svg viewBox="0 0 100 44" width={size} height={(size * 44) / 100} className={className} aria-hidden="true">
+      <path fill={fill} d={BAT_PATH} />
+    </svg>
+  );
+}
+
 export function WayneShield({ size = 30, className = "" }: { size?: number; className?: string }) {
   return (
     <svg viewBox="0 0 100 108" width={size} height={(size * 108) / 100} className={className} aria-hidden="true" fill="none">

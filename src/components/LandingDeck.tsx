@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { LandingStats, RiskItem, ChartData } from "@/app/page";
 import LandingCharts from "./LandingCharts";
-import WayneMark from "./WayneMark";
+import WayneMark, { BatShield } from "./WayneMark";
 
 // The landing deck: a cinematic hero over a live launchpad. Everything is
 // dual-persona — it reads the active theme (html.light = Bruce Wayne) and
@@ -101,19 +101,9 @@ export default function LandingDeck({
             <WayneMark size={44} />
           </div>
         ) : (
-          <svg
-            className="cave-emblem landing-rise mb-5"
-            style={rise(0)}
-            viewBox="0 0 100 44"
-            width="78"
-            height="34"
-            aria-hidden="true"
-          >
-            <path
-              fill="var(--cave-cy)"
-              d="M50 3 C48 11 45 14 41 12 C43 16 42 19 39 20 C33 15 25 16 20 23 C26 21 30 23 31 27 C25 28 20 32 18 39 C24 34 33 33 37 37 C40 30 45 28 50 33 C55 28 60 30 63 37 C67 33 76 34 82 39 C80 32 75 28 69 27 C70 23 74 21 80 23 C75 16 67 15 61 20 C58 19 57 16 59 12 C55 14 52 11 50 3 Z"
-            />
-          </svg>
+          <div className="cave-emblem landing-rise mb-5" style={{ ...rise(0), color: "var(--cave-cy)" }}>
+            <BatShield size={82} />
+          </div>
         )}
         <div className="cave-decode landing-rise mb-3 text-[10px] uppercase tracking-[0.32em]" style={{ ...rise(1), color: "var(--cave-dim)" }}>
           {L.eyebrow}

@@ -8,7 +8,7 @@ import CalmToggle from "./CalmToggle";
 import DetectiveToggle from "./DetectiveToggle";
 import RainToggle from "./RainToggle";
 import UserMenu from "./UserMenu";
-import { WayneShield } from "./WayneMark";
+import { WayneShield, BatShield } from "./WayneMark";
 
 /**
  * CAVE//OS top navigation bar — shared across Landing, Overview and Detail.
@@ -50,13 +50,7 @@ export default function CaveNav() {
           title={light ? "Wayne Enterprises" : "Bat-Signal"}
           style={{ cursor: "pointer", color: "var(--cave-cy)" }}
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.dispatchEvent(new CustomEvent("cave-batsignal")); }}>
-          {light ? (
-            <WayneShield size={22} />
-          ) : (
-            <svg viewBox="0 0 100 44" width="34" height="15" aria-hidden="true">
-              <path fill="var(--cave-cy)" d="M50 3 C48 11 45 14 41 12 C43 16 42 19 39 20 C33 15 25 16 20 23 C26 21 30 23 31 27 C25 28 20 32 18 39 C24 34 33 33 37 37 C40 30 45 28 50 33 C55 28 60 30 63 37 C67 33 76 34 82 39 C80 32 75 28 69 27 C70 23 74 21 80 23 C75 16 67 15 61 20 C58 19 57 16 59 12 C55 14 52 11 50 3 Z" />
-            </svg>
-          )}
+          {light ? <WayneShield size={22} /> : <BatShield size={34} />}
         </span>
         <span className="cave-brand text-sm font-bold tracking-[0.3em]" style={{ color: "var(--cave-cy)" }}>
           CAVE//OS

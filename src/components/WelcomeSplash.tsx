@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { track } from "@/lib/track";
+import { BAT_PATH } from "./WayneMark";
 
 // A one-time, cinematic "Welcome, <first name>" splash shown right after sign-in.
 // Reads the session, derives the person's first name (Google display name →
@@ -92,7 +93,7 @@ export default function WelcomeSplash() {
       <div style={{ position: "absolute", left: 0, right: 0, height: 160, pointerEvents: "none",
         background: "linear-gradient(rgba(53,224,255,0),rgba(53,224,255,.06) 50%,rgba(53,224,255,0))", animation: "ws-sweep 2.4s linear infinite" }} />
       <svg viewBox="0 0 100 44" width="120" height="53" style={{ animation: "ws-breathe 2.6s ease-in-out infinite" }} aria-hidden="true">
-        <path fill="#35e0ff" d="M50 3 C48 11 45 14 41 12 C43 16 42 19 39 20 C33 15 25 16 20 23 C26 21 30 23 31 27 C25 28 20 32 18 39 C24 34 33 33 37 37 C40 30 45 28 50 33 C55 28 60 30 63 37 C67 33 76 34 82 39 C80 32 75 28 69 27 C70 23 74 21 80 23 C75 16 67 15 61 20 C58 19 57 16 59 12 C55 14 52 11 50 3 Z" />
+        <path fill="#35e0ff" d={BAT_PATH} />
       </svg>
       <div style={{ fontFamily: "ui-monospace,\"SF Mono\",monospace", fontSize: 12, letterSpacing: "0.42em", textTransform: "uppercase", color: "#6f8b91", animation: "ws-rise .6s .1s both" }}>
         Welcome to CAVE//OS
