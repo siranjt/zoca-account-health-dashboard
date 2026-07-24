@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { LandingStats, RiskItem, ChartData } from "@/app/page";
 import LandingCharts from "./LandingCharts";
 import WayneMark, { BatShield } from "./WayneMark";
+import AlfredMark from "./AlfredMark";
 
 // The landing deck: a cinematic hero over a live launchpad. Everything is
 // dual-persona — it reads the active theme (html.light = Bruce Wayne) and
@@ -81,13 +82,13 @@ export default function LandingDeck({
     { label: L.kLabels[4], value: stats.mrr ? "$" + stats.mrr.toLocaleString("en-US") : "—", tone: "var(--cave-txt)" },
   ];
 
-  const tiles: { t: string; d: string; glyph: string; href?: string; ext?: string; onClick?: () => void }[] = [
+  const tiles: { t: string; d: string; glyph: React.ReactNode; href?: string; ext?: string; onClick?: () => void }[] = [
     { t: "Overview", d: L.overviewDesc, glyph: "▦", href: "/overview" },
     { t: "Trends", d: "Health over time", glyph: "◠", href: "/trends" },
     { t: L.riskTileTitle, d: "Jump to the red accounts", glyph: "◉", href: "/overview?color=red" },
     { t: "Training", d: "CAVE//OS Training module", glyph: "🎓", ext: "/training.html" },
     { t: "Command search", d: "Find anything · ⌘K", glyph: "⌕", onClick: openPalette },
-    { t: light ? "Ring for Alfred" : "Ask Alfred", d: "Reason over the live data", glyph: "⌾", onClick: () => openAlfred() },
+    { t: light ? "Ring for Alfred" : "Ask Alfred", d: "Reason over the live data", glyph: <AlfredMark size={24} />, onClick: () => openAlfred() },
   ];
 
   const rise = (i: number) => ({ animationDelay: `${0.04 * i}s` });
@@ -265,7 +266,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function TileBody({ glyph, t, d }: { glyph: string; t: string; d: string }) {
+function TileBody({ glyph, t, d }: { glyph: React.ReactNode; t: string; d: string }) {
   return (
     <div className="cave-brk cave-tile h-full rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm transition-transform">
       <div className="text-xl" style={{ color: "var(--cave-cy)" }}>{glyph}</div>

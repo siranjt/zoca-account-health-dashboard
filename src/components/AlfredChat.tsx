@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import AlfredMark from "./AlfredMark";
 
 type Msg = { role: "user" | "alfred"; text: string };
 type Idx = { id: string; name: string };
@@ -221,11 +222,15 @@ export default function AlfredChat() {
   return (
     <div className="cave">
       <style>{CSS}</style>
-      <button className="cave-launch" onClick={() => setOpen((o) => !o)}>{light ? "⌾ RING FOR ALFRED" : "◤◢ ASK ALFRED"}</button>
+      <button className="cave-launch" onClick={() => setOpen((o) => !o)} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+        <AlfredMark size={20} />
+        {light ? "RING FOR ALFRED" : "ASK ALFRED"}
+      </button>
       <div className={"cave-chat" + (open ? " open" : "")}>
         <div className="cave-head">
+          <AlfredMark size={26} className="mr-2" />
           <div className="t">
-            <div className="cave-title">{light ? "⌾ ALFRED" : "◤◢ ALFRED"}</div>
+            <div className="cave-title">ALFRED</div>
             <div className="cave-sub">{busy ? (light ? "attending…" : "reasoning…") : (light ? "at your service · Wayne Manor" : "online · account health analyst")}</div>
           </div>
           <button title="clear" onClick={() => setMsgs([])}>⟲</button>
