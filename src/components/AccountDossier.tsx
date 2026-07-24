@@ -126,7 +126,7 @@ export default function AccountDossier({
   const h = account.health;
   const skel = <Skeleton error={error} />;
   const gran = windowDays <= 31 ? "daily" : windowDays <= 180 ? "weekly" : "monthly";
-  const winN = `last ${windowDays}d`;
+  const winN = windowDays >= 365 ? "all-time" : `last ${windowDays}d`;
   const pay = detail?.payments;
 
   return (

@@ -41,7 +41,7 @@ export default function DetailPanel({ account, windowDays }: { account: AccountR
 
   const h = account.health;
   const gran = windowDays <= 31 ? "daily" : windowDays <= 180 ? "weekly" : "monthly";
-  const winN = `last ${windowDays}d`;
+  const winN = windowDays >= 365 ? "all-time" : `last ${windowDays}d`;
 
   return (
     <div className="bg-slate-50 p-4">

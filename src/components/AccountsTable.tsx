@@ -69,6 +69,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
   const [custom, setCustom] = useState(initial.custom);
+  const [allTime, setAllTime] = useState(initial.allTime);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [dateFrom, setDateFrom] = useState(() => initial.from.slice(0, 10));
   const [dateTo, setDateTo] = useState(() => initial.to.slice(0, 10));
@@ -200,11 +201,13 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     });
   }
 
-  async function loadRange(params: { window?: number; from?: string; to?: string }) {
+  async function loadRange(params: { window?: number; from?: string; to?: string; all?: boolean }) {
     setLoading(true);
     try {
       const qs = new URLSearchParams();
-      if (params.from && params.to) {
+      if (params.all) {
+        qs.set("all", "1");
+      } else if (params.from && params.to) {
         qs.set("from", params.from);
         qs.set("to", params.to);
       } else if (params.window) {
@@ -219,6 +222,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
       setFrom(p.from);
       setTo(p.to);
       setCustom(p.custom);
+      setAllTime(!!p.allTime);
     } catch {
       /* keep existing data on error */
     } finally {
@@ -229,6 +233,10 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     if (!WINDOWS.includes(days)) return;
     setPickerOpen(false);
     loadRange({ window: days });
+  }
+  function loadDefault() {
+    setPickerOpen(false);
+    loadRange({ all: true });
   }
   function applyCustom() {
     if (!dateFrom || !dateTo || dateFrom > dateTo) return;
@@ -459,7 +467,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500">
         <span>{accounts.length} active accounts</span>
-        <span>· metrics {custom ? "from" : "over last"}</span>
+        <span>· metrics {allTime ? "all-time" : custom ? "from" : "over last"}</span>
         <div className="relative inline-flex items-center">
           <div
             className="inline-flex overflow-hidden rounded-md border border-slate-300"
@@ -471,7 +479,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
                 onClick={() => loadWindow(d)}
                 disabled={loading}
                 className={`px-2 py-0.5 text-xs font-medium disabled:opacity-60 ${
-                  !custom && windowDays === d ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-100"
+                  !custom && !allTime && windowDays === d ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-100"
                 }`}
               >
                 {d}d
@@ -485,6 +493,16 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
               }`}
             >
               {custom ? `${formatShort(from)}–${formatShort(to)}` : "Custom"}
+            </button>
+            <button
+              onClick={loadDefault}
+              disabled={loading}
+              title="Default — all data, no timeframe"
+              className={`border-l border-slate-300 px-2 py-0.5 text-xs font-medium disabled:opacity-60 ${
+                allTime ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              Default
             </button>
           </div>
           {pickerOpen && (

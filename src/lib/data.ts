@@ -25,6 +25,7 @@ export interface RangeInput {
   window?: number;
   from?: string; // YYYY-MM-DD
   to?: string; // YYYY-MM-DD
+  all?: boolean; // "Default" — no timeframe (all data)
 }
 
 interface ResolvedRange {
@@ -32,26 +33,39 @@ interface ResolvedRange {
   to: string;
   days: number;
   custom: boolean;
+  allTime: boolean;
   windowDays: number;
 }
 
+// "All data" floor — before Zoca existed (earliest account data is 2022), so
+// this captures every account's full history without spawning hundreds of empty
+// monthly chart buckets that a true 1970 floor would.
+const ALL_TIME_FROM = "2020-01-01T00:00:00.000Z";
+
 function resolveRange(input?: RangeInput): ResolvedRange {
+  const now = new Date();
+  // "Default" — all data, no timeframe.
+  if (input?.all) {
+    const fromDate = new Date(ALL_TIME_FROM);
+    const days = Math.max(1, Math.round((now.getTime() - fromDate.getTime()) / DAY));
+    return { from: fromDate.toISOString(), to: now.toISOString(), days, custom: false, allTime: true, windowDays: days };
+  }
   // Custom from/to range wins when both are valid dates.
   if (input?.from && input?.to && DATE_RE.test(input.from) && DATE_RE.test(input.to) && input.from <= input.to) {
     const fromDate = new Date(`${input.from}T00:00:00.000Z`);
     const toExcl = new Date(`${input.to}T00:00:00.000Z`);
     toExcl.setUTCDate(toExcl.getUTCDate() + 1); // inclusive end date
     const days = Math.max(1, Math.round((toExcl.getTime() - fromDate.getTime()) / DAY));
-    return { from: fromDate.toISOString(), to: toExcl.toISOString(), days, custom: true, windowDays: days };
+    return { from: fromDate.toISOString(), to: toExcl.toISOString(), days, custom: true, allTime: false, windowDays: days };
   }
   // Preset "last N days".
   const w = input?.window && ALLOWED_WINDOWS.includes(input.window) ? input.window : getWindowDays();
-  const now = new Date();
   return {
     from: new Date(now.getTime() - w * DAY).toISOString(),
     to: now.toISOString(),
     days: w,
     custom: false,
+    allTime: false,
     windowDays: w,
   };
 }
@@ -97,7 +111,7 @@ export async function getAccountsPayload(input?: RangeInput): Promise<AccountsPa
     }
     const payload: AccountsPayload = {
       generatedAt: new Date().toISOString(),
-      source, windowDays: r.windowDays, from: r.from, to: r.to, custom: r.custom, accounts,
+      source, windowDays: r.windowDays, from: r.from, to: r.to, custom: r.custom, allTime: r.allTime, accounts,
     };
     if (cacheable) bookCache.set(key, { at: Date.now(), payload });
     return payload;

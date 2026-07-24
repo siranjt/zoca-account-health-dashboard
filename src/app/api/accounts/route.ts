@@ -11,8 +11,9 @@ export async function GET(req: Request) {
   const w = Number(searchParams.get("window"));
   const from = searchParams.get("from") ?? undefined;
   const to = searchParams.get("to") ?? undefined;
+  const all = searchParams.get("all") === "1";
   const [full, viewer] = await Promise.all([
-    getAccountsPayload({ window: Number.isFinite(w) ? w : undefined, from, to }),
+    getAccountsPayload({ window: Number.isFinite(w) ? w : undefined, from, to, all }),
     getViewer(),
   ]);
   // AMs only receive their own book; managers/admins get everything.

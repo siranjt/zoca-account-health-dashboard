@@ -188,6 +188,7 @@ export interface AccountsPayload {
   from: string; // ISO — start of the metrics window
   to: string; // ISO — end of the metrics window
   custom: boolean; // true when a custom date range is in effect
+  allTime: boolean; // true when the "Default" (no timeframe) view is in effect
   accounts: AccountRow[];
 }
 
