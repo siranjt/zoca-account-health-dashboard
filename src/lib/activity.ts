@@ -25,14 +25,6 @@ export interface ActivityInput {
   detail?: Record<string, unknown> | null;
 }
 
-// Events that fire a real-time Slack ping. The rest (page_view, filter ticks,
-// scrolls …) are still stored in the DB and rolled up in the hourly digest, so
-// the channel stays readable instead of flooding.
-const REALTIME = new Set([
-  "sign_in", "sign_out", "account_opened", "alfred_asked", "csv_exported",
-  "product_toggled", "website_checked", "view_saved",
-]);
-
 let ensured = false;
 async function ensureTable(): Promise<void> {
   if (ensured) return;
@@ -68,9 +60,8 @@ export async function logActivity(actor: Actor, input: ActivityInput): Promise<v
   } catch (e) {
     console.warn("[activity] db write failed:", e);
   }
-  if (REALTIME.has(input.event)) {
-    postActivitySlack(formatLine(actor, input)).catch(() => {});
-  }
+  // Every event is reflected in the Slack channel in real time.
+  postActivitySlack(formatLine(actor, input)).catch(() => {});
 }
 
 // ---- Slack ----------------------------------------------------------------
@@ -99,14 +90,31 @@ export function who(a: Actor): string {
   return role ? `*${name}* (${role})` : `*${name}*`;
 }
 
+// Human label for a page_view surface (the pathname).
+function pageLabel(surface: string | null | undefined): string {
+  const p = surface || "/";
+  if (p === "/") return "the launchpad";
+  if (p === "/overview") return "the overview";
+  if (p === "/trends") return "trends";
+  if (p.startsWith("/account/")) return "an account page";
+  if (p === "/admin/activity") return "the activity log";
+  if (p === "/signin") return "the sign-in page";
+  return p;
+}
+
 function formatLine(a: Actor, i: ActivityInput): string {
   const d = i.detail || {};
   const biz = (d.bizname as string) || (d.name as string) || i.entityId || "an account";
   switch (i.event) {
     case "sign_in": return `:wave: ${who(a)} signed in`;
     case "sign_out": return `:door: ${who(a)} signed out`;
+    case "page_view": return `:eyes: ${who(a)} viewed ${pageLabel(i.surface)}`;
     case "account_opened": return `:mag: ${who(a)} opened *${biz}*`;
+    case "tab_viewed": return `:bookmark_tabs: ${who(a)} opened the *${d.tab ?? "?"}* tab on *${biz}*`;
     case "alfred_asked": return `:robot_face: ${who(a)} asked Alfred: _${String(d.question ?? "").slice(0, 200)}_`;
+    case "window_changed": return `:calendar: ${who(a)} set the metrics window to *${d.window ?? "?"}*`;
+    case "filter_changed": return `:mag_right: ${who(a)} filtered the overview${d.label ? ` — ${d.label}` : ""}`;
+    case "search": return `:mag: ${who(a)} searched "${String(d.query ?? "").slice(0, 80)}"`;
     case "csv_exported": return `:page_facing_up: ${who(a)} exported *${d.count ?? "?"}* accounts to CSV`;
     case "product_toggled": return `:package: ${who(a)} checked *${d.product}* MRR on *${biz}*`;
     case "website_checked": return `:globe_with_meridians: ${who(a)} ran a website check on *${biz}*`;

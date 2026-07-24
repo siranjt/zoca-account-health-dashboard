@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { AccountRow, AccountsPayload, Delta, HealthColor } from "@/lib/types";
 import { otherProducts } from "@/lib/types";
 import dynamic from "next/dynamic";
@@ -352,6 +352,33 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
       declining: rows.filter((a) => a.leadsDelta && a.leadsDelta.cur < a.leadsDelta.prev).length,
     };
   }, [rows]);
+
+  // Log filter changes (skip the initial mount / restored view).
+  const filtersMounted = useRef(false);
+  useEffect(() => {
+    if (!filtersMounted.current) { filtersMounted.current = true; return; }
+    const label = [
+      colorFilter !== "all" ? `health:${colorFilter}` : "",
+      amFilter !== "all" ? `AM:${amFilter}` : "",
+      onlyDeclining ? "declining" : "",
+      overdueOnly ? "overdue" : "",
+      ticketsOnly ? "tickets" : "",
+      webOnly ? "web-app" : "",
+      unverifiedOnly ? "unverified-GBP" : "",
+      noSiteOnly ? "no-site" : "",
+      onlyMultiProduct ? "multi-product" : "",
+      pinnedOnly ? "pinned" : "",
+      ccFilter !== "all" ? `CC:${ccFilter}` : "",
+    ].filter(Boolean).join(" · ");
+    track("filter_changed", { surface: "overview", detail: { label: label || "cleared" } });
+  }, [colorFilter, amFilter, onlyDeclining, overdueOnly, ticketsOnly, webOnly, unverifiedOnly, noSiteOnly, onlyMultiProduct, pinnedOnly, ccFilter]);
+
+  // Log searches (debounced so a single search isn't logged per keystroke).
+  useEffect(() => {
+    if (!query.trim()) return;
+    const t = setTimeout(() => track("search", { surface: "overview", detail: { query: query.trim() } }), 900);
+    return () => clearTimeout(t);
+  }, [query]);
 
   function exportCsv() {
     const cols = ["Business", "City", "State", "AM", "GBPVerified", "WebsiteLive", "WebsiteURL", "Timezone", "LastTouch", "Health", "Composite", "Leads", "Reviews", "Photos", "ProfileClicks", "WebsiteClicks", "BookOnline", "KWTracked", "Top3%", "AvgRank", "Impressions", "DaysToInvoice", "DaysOverdue", "MissedPayments", "TenureDays", "CCEnabled", "CCActiveDaysL28", "CCConversationsL28", "CCSegment", "Products"];
