@@ -473,9 +473,12 @@ export async function POST(req: Request) {
   }
 
   const focus = await getFocus();
-  // Slack ping: who spoke to Alfred + which account (from the pinned focus or a
-  // name mentioned in the question). NEVER the question/answer content.
-  const askAccount = focus?.entityName || mentionedEntities(q, ctx.list)[0]?.name || null;
+  // Slack ping: who spoke to Alfred + which account — but ONLY when the question
+  // explicitly names an account. The pinned focus is deliberately NOT used here:
+  // it persists across the session and would mis-attribute unrelated questions
+  // (e.g. "compare the 2 worst accounts") to whatever was last pinned. NEVER the
+  // question/answer content.
+  const askAccount = mentionedEntities(q, ctx.list)[0]?.name || null;
   void logActivity(
     { email: asker.email, name: null, role: asker.role as "admin" | "manager" | "am" | null, amName: asker.amName },
     { event: "alfred_asked", surface: "alfred", detail: askAccount ? { account: askAccount } : null }
