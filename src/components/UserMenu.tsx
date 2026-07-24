@@ -23,7 +23,8 @@ export default function UserMenu() {
     u.role === "admin" ? "Admin" :
     u.role === "manager" ? "Manager" :
     u.role === "am" ? `AM · ${u.amName || "—"}` : "";
-  const first = (u.name || u.email || "").split(" ")[0];
+  const NAME_OVERRIDES: Record<string, string> = { "siranjith.t@zoca.com": "Siranj", "siranjith.t@gmail.com": "Siranj" };
+  const first = NAME_OVERRIDES[(u.email || "").toLowerCase()] || (u.name || u.email || "").split(" ")[0];
 
   return (
     <div className="flex items-center gap-2">
