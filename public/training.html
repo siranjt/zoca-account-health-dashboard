@@ -640,15 +640,16 @@
         <canvas id="confetti" style="position:absolute;inset:0;pointer-events:none"></canvas>
         <svg class="emb breathe" viewBox="0 0 100 44"><path fill="var(--cy)" d="M50 3 C48 11 45 14 41 12 C43 16 42 19 39 20 C33 15 25 16 20 23 C26 21 30 23 31 27 C25 28 20 32 18 39 C24 34 33 33 37 37 C40 30 45 28 50 33 C55 28 60 30 63 37 C67 33 76 34 82 39 C80 32 75 28 69 27 C70 23 74 21 80 23 C75 16 67 15 61 20 C58 19 57 16 59 12 C55 14 52 11 50 3 Z"/></svg>
         <h2>CAVE//OS · Certified Operator</h2>
-        <div class="big">Account Manager Training</div>
+        <div class="big">Cave OS Navigator Training</div>
         <p style="font-size:13px;color:var(--dim)">This certifies that</p>
         <div class="nmeln" id="certName">—</div>
-        <p style="font-size:13px;color:var(--dim)">has completed the CAVE//OS AM training and is ready to run their book.</p>
+        <p style="font-size:13px;color:var(--dim)">has completed the CAVE//OS Navigator training and is ready to run their book.</p>
         <div id="certGate"><p style="margin-top:18px;color:var(--amber);font-size:13px">Complete all modules to unlock your certificate.</p></div>
         <div id="certForm" style="display:none;margin-top:18px">
           <input class="nmin" id="nameInput" placeholder="Type your name" autocomplete="off">
           <div style="margin-top:12px"><button class="btn prim" id="issueBtn">Issue my certificate 🦇</button></div>
         </div>
+        <div style="margin-top:12px"><button class="btn" id="dlBtn" style="display:none">⬇ Download certificate (PNG)</button></div>
       </div>
     </div>
   </section>
@@ -699,8 +700,10 @@
     if(cur>=LAST){document.getElementById("footer").style.display="none";}else{document.getElementById("footer").style.display="flex";nb.textContent=done[cur]?"Continue →":"Mark complete & continue →";}
     document.getElementById("modLabel").textContent="Module "+(cur+1)+" of "+MODS.length;
     if(cur===LAST){var all=true;for(var i=0;i<LAST;i++)if(!done[i])all=false;
+      var issued=all&&done.__name;
       document.getElementById("certGate").style.display=all?"none":"block";
-      document.getElementById("certForm").style.display=all?"block":"none";}
+      document.getElementById("certForm").style.display=(all&&!issued)?"block":"none";
+      if(issued){document.getElementById("certName").textContent=done.__name;document.getElementById("dlBtn").style.display="inline-flex";}}
   }
   function go(i){cur=Math.max(0,Math.min(LAST,i));
     mods.forEach(function(s){s.classList.toggle("on",+s.getAttribute("data-m")===cur);});
@@ -780,8 +783,36 @@
   // certificate confetti
   document.getElementById("issueBtn").addEventListener("click",function(){
     var v=document.getElementById("nameInput").value.trim()||"Account Manager";
-    document.getElementById("certName").textContent=v;done[LAST]=true;save();refresh();
-    this.textContent="✓ Certified — well done!";this.disabled=true;confetti();});
+    document.getElementById("certName").textContent=v;done[LAST]=true;done.__name=v;save();refresh();
+    this.textContent="✓ Certified — well done!";this.disabled=true;
+    document.getElementById("dlBtn").style.display="inline-flex";
+    confetti();if(typeof sfx==="function")sfx("reward");});
+  document.getElementById("dlBtn").addEventListener("click",downloadCert);
+  function _certDate(){var d=new Date(),mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];return d.getDate()+" "+mo[d.getMonth()]+" "+d.getFullYear();}
+  function _rr(x,rx,ry,w,h,r){x.beginPath();x.moveTo(rx+r,ry);x.arcTo(rx+w,ry,rx+w,ry+h,r);x.arcTo(rx+w,ry+h,rx,ry+h,r);x.arcTo(rx,ry+h,rx,ry,r);x.arcTo(rx,ry,rx+w,ry,r);x.closePath();}
+  function _wrap(x,txt,cx,cy,maxw,lh){var words=txt.split(" "),line="",yy=cy;for(var i=0;i<words.length;i++){var t=line+words[i]+" ";if(x.measureText(t).width>maxw&&i>0){x.fillText(line.trim(),cx,yy);line=words[i]+" ";yy+=lh;}else line=t;}x.fillText(line.trim(),cx,yy);}
+  function downloadCert(){
+    var name=(document.getElementById("certName").textContent||"Account Manager").trim();
+    var W=1400,H=990,s=2,cv=document.createElement("canvas");cv.width=W*s;cv.height=H*s;
+    var x=cv.getContext("2d");x.scale(s,s);
+    var g=x.createRadialGradient(W/2,H*0.4,60,W/2,H*0.4,W*0.75);g.addColorStop(0,"#0e1a24");g.addColorStop(1,"#070a0d");
+    x.fillStyle=g;x.fillRect(0,0,W,H);
+    x.strokeStyle="rgba(53,224,255,.55)";x.lineWidth=2.5;_rr(x,42,42,W-84,H-84,20);x.stroke();
+    x.strokeStyle="rgba(53,224,255,.2)";x.lineWidth=1;_rr(x,56,56,W-112,H-112,15);x.stroke();
+    x.save();x.translate(W/2-90,86);x.scale(1.8,1.8);x.shadowColor="rgba(53,224,255,.85)";x.shadowBlur=26;x.fillStyle="#35e0ff";
+    x.fill(new Path2D("M50 3 C48 11 45 14 41 12 C43 16 42 19 39 20 C33 15 25 16 20 23 C26 21 30 23 31 27 C25 28 20 32 18 39 C24 34 33 33 37 37 C40 30 45 28 50 33 C55 28 60 30 63 37 C67 33 76 34 82 39 C80 32 75 28 69 27 C70 23 74 21 80 23 C75 16 67 15 61 20 C58 19 57 16 59 12 C55 14 52 11 50 3 Z"));
+    x.restore();x.shadowBlur=0;x.textAlign="center";
+    x.fillStyle="#7f9aa1";x.font="600 15px ui-monospace,Menlo,monospace";x.fillText("C A V E / / O S   ·   C E R T I F I E D   O P E R A T O R",W/2,214);
+    x.fillStyle="#8ff0ff";x.font="700 48px ui-monospace,Menlo,monospace";x.fillText("Cave OS Navigator Training",W/2,282);
+    x.fillStyle="#7f9aa1";x.font="17px Georgia,serif";x.fillText("This certifies that",W/2,352);
+    x.fillStyle="#f2f7f8";x.font="italic 700 62px Georgia,'Times New Roman',serif";x.fillText(name,W/2,432);
+    var tw=Math.min(W-240,x.measureText(name).width+90);x.strokeStyle="rgba(230,192,99,.65)";x.lineWidth=2;x.beginPath();x.moveTo(W/2-tw/2,456);x.lineTo(W/2+tw/2,456);x.stroke();
+    x.fillStyle="#9fb3b9";x.font="18px Georgia,serif";_wrap(x,"has completed the CAVE//OS Navigator training and is ready to run their book.",W/2,504,W-360,26);
+    x.fillStyle="#6f8b91";x.font="14px ui-monospace,Menlo,monospace";x.fillText("Issued "+_certDate(),W/2,H-158);
+    x.strokeStyle="rgba(53,224,255,.35)";x.lineWidth=1;x.beginPath();x.moveTo(W/2-120,H-126);x.lineTo(W/2+120,H-126);x.stroke();
+    x.fillStyle="#35e0ff";x.font="700 18px ui-monospace,Menlo,monospace";x.fillText("Bat-Computer · Zoca",W/2,H-102);
+    cv.toBlob(function(b){if(!b)return;var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="CaveOS-Navigator-Training-"+name.replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"")+".png";document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u);},1000);});
+  }
   function confetti(){var cv=document.getElementById("confetti");if(!cv)return;var ctx=cv.getContext("2d");
     var card=document.getElementById("certCard");cv.width=card.clientWidth;cv.height=card.clientHeight;
     var cols=["#35e0ff","#8ff0ff","#25e39a","#e6c063","#b98cff"],ps=[];
