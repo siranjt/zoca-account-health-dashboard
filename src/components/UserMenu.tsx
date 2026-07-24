@@ -33,14 +33,24 @@ export default function UserMenu() {
         {first} <span style={{ color: "var(--cave-cy)" }}>· {roleLabel}</span>
       </span>
       {u.role === "admin" && (
-        <a
-          href="/admin/activity"
-          title="Activity log (admin)"
-          className="rounded-md border px-2 py-1.5 text-[10px] uppercase tracking-[0.12em] no-underline"
-          style={{ borderColor: "var(--cave-line)", color: "var(--cave-dim)" }}
-        >
-          📋 Activity
-        </a>
+        <>
+          <a
+            href="/admin/activity"
+            title="Activity log (admin)"
+            className="rounded-md border px-2 py-1.5 text-[10px] uppercase tracking-[0.12em] no-underline"
+            style={{ borderColor: "var(--cave-line)", color: "var(--cave-dim)" }}
+          >
+            📋 Activity
+          </a>
+          <a
+            href="/admin/alfred"
+            title="Alfred usage (admin)"
+            className="rounded-md border px-2 py-1.5 text-[10px] uppercase tracking-[0.12em] no-underline"
+            style={{ borderColor: "var(--cave-line)", color: "var(--cave-dim)" }}
+          >
+            🤖 Alfred
+          </a>
+        </>
       )}
       <button
         onClick={() => { track("sign_out"); signOut({ callbackUrl: "/signin" }); }}

@@ -25,10 +25,9 @@ export interface ActivityInput {
   detail?: Record<string, unknown> | null;
 }
 
-// Events recorded in the DB but NEVER posted to Slack — private content
-// (Alfred conversations) that we keep for making Alfred smarter + usage
-// analytics, but must not leak into the channel.
-const SILENT = new Set(["alfred_asked"]);
+// Events recorded in the DB but NEVER posted to Slack. (Currently none — Alfred
+// asks DO ping Slack, but only "who + which account", never the conversation.)
+const SILENT = new Set<string>([]);
 
 let ensured = false;
 async function ensureTable(): Promise<void> {
@@ -119,7 +118,8 @@ function formatLine(a: Actor, i: ActivityInput): string {
     case "page_view": return `:eyes: ${who(a)} viewed ${pageLabel(i.surface)}`;
     case "account_opened": return `:mag: ${who(a)} opened *${biz}*`;
     case "tab_viewed": return `:bookmark_tabs: ${who(a)} opened the *${d.tab ?? "?"}* tab on *${biz}*`;
-    case "alfred_asked": return `:robot_face: ${who(a)} asked Alfred: _${String(d.question ?? "").slice(0, 200)}_`;
+    // Never includes the question/answer — only who + which account.
+    case "alfred_asked": return `:robot_face: ${who(a)} spoke to Alfred${d.account ? ` about *${d.account}*` : ""}`;
     case "window_changed": return `:calendar: ${who(a)} set the metrics window to *${d.window ?? "?"}*`;
     case "filter_changed": return `:mag_right: ${who(a)} filtered the overview${d.label ? ` — ${d.label}` : ""}`;
     case "search": return `:mag: ${who(a)} searched "${String(d.query ?? "").slice(0, 80)}"`;

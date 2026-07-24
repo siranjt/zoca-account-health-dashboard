@@ -17,7 +17,7 @@ export type LogRec = {
 // Self-healing: creates the schema/table if missing and adds the actor columns
 // to a pre-existing alfred.messages. Runs once per warm instance.
 let ensuredAlfred = false;
-async function ensureAlfred(): Promise<void> {
+export async function ensureAlfred(): Promise<void> {
   if (ensuredAlfred) return;
   const sql = getSql();
   await sql`CREATE SCHEMA IF NOT EXISTS alfred`;

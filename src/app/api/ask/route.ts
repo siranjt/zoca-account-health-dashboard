@@ -468,16 +468,18 @@ export async function POST(req: Request) {
     const scoped = scopeAccounts(payload.accounts, viewer);
     ctx = { list: scoped, payload: { ...payload, accounts: scoped }, asOf: ddmmyy(payload.generatedAt) };
     asker = { email: viewer.email ?? null, amName: viewer.amName ?? null, role: viewer.role ?? null };
-    // DB-only activity marker (never posted to Slack — see SILENT in activity.ts)
-    void logActivity(
-      { email: asker.email, name: null, role: asker.role as "admin" | "manager" | "am" | null, amName: asker.amName },
-      { event: "alfred_asked", surface: "alfred", detail: { question: q } }
-    );
   } catch (e) {
     return NextResponse.json({ reply: "I couldn't reach the account data just now, sir — please try again in a moment." });
   }
 
   const focus = await getFocus();
+  // Slack ping: who spoke to Alfred + which account (from the pinned focus or a
+  // name mentioned in the question). NEVER the question/answer content.
+  const askAccount = focus?.entityName || mentionedEntities(q, ctx.list)[0]?.name || null;
+  void logActivity(
+    { email: asker.email, name: null, role: asker.role as "admin" | "manager" | "am" | null, amName: asker.amName },
+    { event: "alfred_asked", surface: "alfred", detail: askAccount ? { account: askAccount } : null }
+  );
   const focusNote = focus?.entityName
     ? `Pinned focus this session: ${focus.entityName}. Resolve bare references ("they", "them", "this account", "how are they doing") to ${focus.entityName} unless the user names a different account. If the user asks to change or clear the focus, use pin_focus.\n\n`
     : "";
