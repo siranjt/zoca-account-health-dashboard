@@ -10,6 +10,11 @@ import { ssoConfigured } from "@/lib/access";
 export default auth((req) => {
   const p = req.nextUrl.pathname;
 
+  // Public static assets in /public (images, fonts, .html, etc.) must load even
+  // when signed out — e.g. the Alfred crest on the sign-in page. Anything with a
+  // file extension is a static file, never a gated route.
+  if (/\.[a-zA-Z0-9]+$/.test(p)) return NextResponse.next();
+
   if (ssoConfigured()) {
     if (p.startsWith("/api/auth") || p.startsWith("/api/cron") || p === "/signin") return NextResponse.next();
     if (!req.auth?.user) {
