@@ -439,11 +439,12 @@ export function detailServicesSql(id: string): string {
     ORDER BY sc.name, ss.name LIMIT 300`;
 }
 
-/** Support/ops requests raised for the account within the window (Retool "requests"). */
-export function detailRequestsSql(id: string, windowDays: number): string {
-  const w = wDays(windowDays);
+/** Support/ops requests raised for the account (Retool "requests"). NOT
+ *  windowed — support requests are a sparse, long-lived queue an AM needs to
+ *  see in full regardless of the metrics window, so we show all active ones. */
+export function detailRequestsSql(id: string): string {
   return `SELECT to_char(created_at::date,'YYYY-MM-DD') d, status, priority, request_type, details
-    FROM requests.requests WHERE entity_id='${id}'::uuid AND is_active=true AND created_at >= now()-interval '${w} days'
+    FROM requests.requests WHERE entity_id='${id}'::uuid AND is_active=true
     ORDER BY created_at DESC LIMIT 100`;
 }
 

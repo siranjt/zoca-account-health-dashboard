@@ -306,7 +306,7 @@ export async function getAccountDetailFromMetabase(
     safe(detailPostsSql(id, w)),
     safe(detailPostsWeeklySql(id, w)),
     safe(detailServicesSql(id)),
-    safe(detailRequestsSql(id, w)),
+    safe(detailRequestsSql(id)),
     safe(detailCsatSql(id, w)),
     safe(detailOnboardingSql(id)),
     safe(detailWinOnboardedSql(id)),
