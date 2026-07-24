@@ -133,19 +133,42 @@ export async function getCcDaily(): Promise<{ d: string; active: number; convos:
   return rows;
 }
 
+// The per-account detail (all the time-series Metabase queries + Chargebee
+// payment detail) is the slow leg of "opening an account": it re-runs on every
+// dossier open and on navigate-away-and-back. Cache it per (id, window) with a
+// short TTL and coalesce concurrent misses, exactly like the book payload — so
+// revisiting an account (or bouncing between the overview and a dossier) is ~0.
+const DETAIL_TTL_MS = 120_000; // 2 min — health/comms move slowly
+const detailCache = new Map<string, { at: number; detail: AccountDetail }>();
+const detailInflight = new Map<string, Promise<AccountDetail>>();
+
 export async function getAccountDetail(id: string, windowDaysOverride?: number): Promise<AccountDetail> {
   const windowDays = windowDaysOverride && windowDaysOverride > 0 ? windowDaysOverride : getWindowDays();
   if (!useMetabase()) return getMockAccountDetail(id); // mock includes its own payments
 
-  // Real source: fetch the Metabase time-series and the Chargebee payment
-  // detail in parallel; a failure in either degrades gracefully.
-  const [base, payments] = await Promise.all([
-    getAccountDetailFromMetabase(id, windowDays).catch((err) => {
-      console.error("[data] account detail fetch failed, using mock:", err);
-      return getMockAccountDetail(id);
-    }),
-    getPaymentDetail(id).catch(() => null),
-  ]);
-  base.payments = payments;
-  return base;
+  const key = `${id}:${windowDays}`;
+  const hit = detailCache.get(key);
+  if (hit && Date.now() - hit.at < DETAIL_TTL_MS) return hit.detail;
+  const inflight = detailInflight.get(key);
+  if (inflight) return inflight;
+
+  const run = (async (): Promise<AccountDetail> => {
+    // Real source: fetch the Metabase time-series and the Chargebee payment
+    // detail in parallel; a failure in either degrades gracefully.
+    let cacheable = true;
+    const [base, payments] = await Promise.all([
+      getAccountDetailFromMetabase(id, windowDays).catch((err) => {
+        console.error("[data] account detail fetch failed, using mock:", err);
+        cacheable = false; // don't pin a degraded (mock) result — retry next open
+        return getMockAccountDetail(id);
+      }),
+      getPaymentDetail(id).catch(() => null),
+    ]);
+    base.payments = payments;
+    if (cacheable) detailCache.set(key, { at: Date.now(), detail: base });
+    return base;
+  })().finally(() => detailInflight.delete(key));
+
+  detailInflight.set(key, run);
+  return run;
 }

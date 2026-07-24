@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface PromptMeta { function: string; type: string; useCase: string; }
 
@@ -34,6 +34,36 @@ export default function AiAssist({
       .catch(() => alive && setCatalog([]));
     return () => { alive = false; };
   }, []);
+
+  // The Communication tab unmounts when you switch to another section, which
+  // used to wipe an in-progress prompt + its generated response. Persist the
+  // assist state per account in sessionStorage so returning to Communication
+  // restores exactly what was there. Keyed by entityId; survives tab switches
+  // and back-navigation within the session (cleared only when the fields empty).
+  const LS = `cave_assist_${entityId}`;
+  const skipPersist = useRef(true);
+  useEffect(() => {
+    skipPersist.current = true; // don't let the mount-time persist wipe restored data
+    try {
+      const raw = sessionStorage.getItem(`cave_assist_${entityId}`);
+      const s = raw ? JSON.parse(raw) : null;
+      setFn(s?.fn || "");
+      setType(s?.type || "");
+      setUseCase(s?.useCase || "");
+      setInstruction(s?.instruction || "");
+      setResponse(s?.response ?? null);
+      setError(s?.error ?? null);
+    } catch { /* ignore corrupt state */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entityId]);
+  useEffect(() => {
+    if (skipPersist.current) { skipPersist.current = false; return; }
+    try {
+      if (!fn && !type && !useCase && !instruction && !response && !error) sessionStorage.removeItem(LS);
+      else sessionStorage.setItem(LS, JSON.stringify({ fn, type, useCase, instruction, response, error }));
+    } catch { /* storage full / disabled — non-fatal */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [LS, fn, type, useCase, instruction, response, error]);
 
   const functions = useMemo(() => [...new Set((catalog ?? []).map((c) => c.function))].sort(), [catalog]);
   const types = useMemo(() => [...new Set((catalog ?? []).filter((c) => c.function === fn).map((c) => c.type))].sort(), [catalog, fn]);

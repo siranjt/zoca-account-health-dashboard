@@ -1498,10 +1498,19 @@ function BoardView({ rows, pinned, togglePin }: { rows: AccountRow[]; pinned: Se
             </div>
             <div className="table-scroll max-h-[70vh] space-y-1.5 overflow-auto pr-1">
               {items.map((a) => (
-                <div key={a.entityId} className="rounded-md border border-slate-200 bg-white p-2">
+                <Link
+                  key={a.entityId}
+                  href={`/account/${a.entityId}`}
+                  title={`Open ${a.name}`}
+                  className="block cursor-pointer rounded-md border border-slate-200 bg-white p-2 no-underline transition hover:border-indigo-300 hover:shadow-sm"
+                >
                   <div className="flex items-center gap-1.5">
-                    <button onClick={() => togglePin(a.entityId)} style={{ color: pinned.has(a.entityId) ? "#f5b301" : "#3a565d" }}>{pinned.has(a.entityId) ? "★" : "☆"}</button>
-                    <Link href={`/account/${a.entityId}`} className="flex-1 truncate text-xs font-medium text-slate-900 no-underline hover:text-indigo-600">{a.name}</Link>
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePin(a.entityId); }}
+                      title={pinned.has(a.entityId) ? "Unpin" : "Pin to top"}
+                      style={{ color: pinned.has(a.entityId) ? "#f5b301" : "#3a565d" }}
+                    >{pinned.has(a.entityId) ? "★" : "☆"}</button>
+                    <span className="flex-1 truncate text-xs font-medium text-slate-900 group-hover:text-indigo-600">{a.name}</span>
                     <span className="text-[10px] tabular-nums text-slate-400">{a.mrr != null ? `$${formatNumber(a.mrr)}` : ""}</span>
                   </div>
                   <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-400">
@@ -1509,7 +1518,7 @@ function BoardView({ rows, pinned, togglePin }: { rows: AccountRow[]; pinned: Se
                     <span className="ml-auto">L{formatNumber(a.leadsReceived)}</span>
                     {a.openTickets > 0 && <span className="text-red-500">🎫{a.openTickets}</span>}
                   </div>
-                </div>
+                </Link>
               ))}
               {!items.length && <div className="px-1 py-2 text-center text-[11px] text-slate-400">none</div>}
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { AccountDetail, AccountRow, PaymentInvoice } from "@/lib/types";
@@ -162,19 +162,7 @@ export default function AccountDossier({
         <span className="text-[11px] uppercase tracking-[0.22em] text-cyan-400/70">Customer Dashboard</span>
         <div className="inline-flex items-center gap-1">
           <NavArrow dir="prev" to={prev ? `/account/${prev.entityId}?tab=${encodeURIComponent(tab)}` : null} title={prev ? `← ${prev.name}` : "First account"} />
-          <select
-            value={account.entityId}
-            onChange={(e) => router.push(`/account/${e.target.value}?tab=${encodeURIComponent(tab)}`)}
-            className="min-w-[260px] max-w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm"
-          >
-            {picker.map((p) => (
-              <option key={p.entityId} value={p.entityId}>
-                {p.color === "red" ? "🔴 " : p.color === "yellow" ? "🟡 " : "🟢 "}
-                {p.name}
-                {p.am ? ` — ${p.am}` : ""}
-              </option>
-            ))}
-          </select>
+          <AccountCombo picker={picker} current={account} tab={tab} />
           <NavArrow dir="next" to={next ? `/account/${next.entityId}?tab=${encodeURIComponent(tab)}` : null} title={next ? `${next.name} →` : "Last account"} />
         </div>
 
@@ -824,6 +812,86 @@ function ReviewsList({ reviews }: { reviews: NonNullable<AccountDetail["reviewsL
   );
 }
 
+// Type-to-search account switcher — replaces the native <select> so you can
+// filter the (800+) book by name or account manager instead of scrolling.
+// Keyboard: ↓/↑ move, Enter opens, Esc closes; click-outside closes.
+function AccountCombo({ picker, current, tab }: { picker: PickerItem[]; current: AccountRow; tab: string }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [hi, setHi] = useState(0);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const results = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return picker;
+    return picker.filter((p) => p.name.toLowerCase().includes(t) || (p.am ?? "").toLowerCase().includes(t));
+  }, [picker, q]);
+
+  useEffect(() => { setHi(0); }, [q]);
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  function choose(p: PickerItem) {
+    setOpen(false);
+    setQ("");
+    inputRef.current?.blur();
+    if (p.entityId !== current.entityId) router.push(`/account/${p.entityId}?tab=${encodeURIComponent(tab)}`);
+  }
+  function onKey(e: React.KeyboardEvent) {
+    if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setHi((h) => Math.min(h + 1, results.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
+    else if (e.key === "Enter") { e.preventDefault(); if (results[hi]) choose(results[hi]); }
+    else if (e.key === "Escape") { setOpen(false); setQ(""); inputRef.current?.blur(); }
+  }
+
+  return (
+    <div ref={boxRef} className="relative">
+      <input
+        ref={inputRef}
+        value={open ? q : ""}
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={onKey}
+        placeholder={current.name}
+        title="Type to search accounts by name or manager"
+        className="min-w-[260px] max-w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 pr-7 text-sm outline-none focus:border-slate-400"
+      />
+      <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">▾</span>
+      {open && (
+        <div className="absolute left-0 top-full z-30 mt-1 max-h-[360px] w-[340px] max-w-[90vw] overflow-auto rounded-md border border-slate-200 bg-white shadow-lg">
+          {results.length ? (
+            <>
+              {results.slice(0, 200).map((p, i) => (
+                <button
+                  key={p.entityId}
+                  onMouseDown={(e) => { e.preventDefault(); choose(p); }}
+                  onMouseEnter={() => setHi(i)}
+                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${i === hi ? "bg-indigo-50" : "hover:bg-slate-50"} ${p.entityId === current.entityId ? "font-semibold" : ""}`}
+                >
+                  <span>{p.color === "red" ? "🔴" : p.color === "yellow" ? "🟡" : "🟢"}</span>
+                  <span className="flex-1 truncate text-slate-800">{p.name}</span>
+                  {p.am && <span className="max-w-[120px] truncate text-xs text-slate-400">{p.am}</span>}
+                </button>
+              ))}
+              {results.length > 200 && (
+                <div className="px-3 py-1.5 text-center text-[10px] text-slate-400">{results.length - 200} more — keep typing to narrow</div>
+              )}
+            </>
+          ) : (
+            <div className="px-3 py-3 text-center text-xs text-slate-400">No accounts match “{q}”.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LeadsTable({ leads }: { leads: NonNullable<AccountDetail["leadsList"]> }) {
   return (
     <DataTable
@@ -831,11 +899,11 @@ function LeadsTable({ leads }: { leads: NonNullable<AccountDetail["leadsList"]> 
       rows={leads as unknown as Record<string, unknown>[]}
       cols={[
         { key: "date", label: "Date", date: true },
-        { key: "source", label: "Source" },
+        { key: "source", label: "Source", filter: true },
         { key: "service", label: "Service", wide: true },
-        { key: "status", label: "Status", render: (v) => <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{v ? String(v) : "—"}</span> },
+        { key: "status", label: "Status", filter: true, render: (v) => <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{v ? String(v) : "—"}</span> },
         { key: "price", label: "Price", num: true, render: (v, row) => (v != null ? `${!row.currency || row.currency === "USD" ? "$" : ""}${formatNumber(Number(v))}` : "—") },
-        { key: "utm", label: "UTM" },
+        { key: "utm", label: "UTM", filter: true },
       ]}
     />
   );
@@ -856,7 +924,7 @@ function KeywordTable({ rows }: { rows: NonNullable<AccountDetail["keywordRankin
   );
 }
 
-type Col = { key: string; label: string; num?: boolean; money?: boolean; date?: boolean; wide?: boolean; render?: (v: unknown, row: Record<string, unknown>) => React.ReactNode };
+type Col = { key: string; label: string; num?: boolean; money?: boolean; date?: boolean; wide?: boolean; filter?: boolean; render?: (v: unknown, row: Record<string, unknown>) => React.ReactNode };
 
 function csvEsc(v: unknown): string {
   const s = v == null ? "" : String(v);
@@ -875,6 +943,7 @@ function downloadCsv(name: string, rows: string[][]) {
 
 function DataTable({ cols, rows, name = "data" }: { cols: Col[]; rows: Record<string, unknown>[]; name?: string }) {
   const [q, setQ] = useState("");
+  const [facets, setFacets] = useState<Record<string, string>>({});
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [dir, setDir] = useState<1 | -1>(1);
 
@@ -887,10 +956,26 @@ function DataTable({ cols, rows, name = "data" }: { cols: Col[]; rows: Record<st
     return s.length > 300 ? s.slice(0, 300) + "…" : s;
   };
 
+  // Distinct values per filterable column → a proper per-column dropdown filter
+  // (in addition to the free-text search), so e.g. leads can be narrowed by
+  // Source or Status without typing.
+  const facetOptions = useMemo(() => {
+    const m: Record<string, string[]> = {};
+    for (const c of cols) {
+      if (!c.filter) continue;
+      m[c.key] = Array.from(new Set(rows.map((r) => (r[c.key] == null ? "" : String(r[c.key]).trim())).filter((v) => v !== ""))).sort((a, b) => a.localeCompare(b));
+    }
+    return m;
+  }, [rows, cols]);
+
   const view = useMemo(() => {
     let out = rows;
     const term = q.trim().toLowerCase();
     if (term) out = out.filter((r) => cols.some((c) => String(r[c.key] ?? "").toLowerCase().includes(term)));
+    for (const [k, val] of Object.entries(facets)) {
+      if (!val) continue;
+      out = out.filter((r) => String(r[k] ?? "").trim() === val);
+    }
     if (sortKey) {
       const c = cols.find((x) => x.key === sortKey);
       out = [...out].sort((a, b) => {
@@ -900,7 +985,7 @@ function DataTable({ cols, rows, name = "data" }: { cols: Col[]; rows: Record<st
       });
     }
     return out;
-  }, [rows, cols, q, sortKey, dir]);
+  }, [rows, cols, q, facets, sortKey, dir]);
 
   if (!rows.length) return <NoData />;
 
@@ -918,7 +1003,26 @@ function DataTable({ cols, rows, name = "data" }: { cols: Col[]; rows: Record<st
           placeholder="Filter…"
           className="w-40 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] outline-none focus:border-slate-400"
         />
+        {cols.filter((c) => c.filter && (facetOptions[c.key]?.length ?? 0) > 1).map((c) => (
+          <select
+            key={c.key}
+            value={facets[c.key] ?? ""}
+            onChange={(e) => setFacets((f) => ({ ...f, [c.key]: e.target.value }))}
+            className="max-w-[140px] rounded border border-slate-300 bg-white px-1.5 py-1 text-[11px] outline-none focus:border-slate-400"
+            title={`Filter by ${c.label}`}
+          >
+            <option value="">All {c.label.toLowerCase()}</option>
+            {facetOptions[c.key].map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+        ))}
         <span className="text-[11px] text-slate-400">{view.length} of {rows.length}</span>
+        {(q || Object.values(facets).some(Boolean)) && (
+          <button
+            onClick={() => { setQ(""); setFacets({}); }}
+            className="text-[11px] text-slate-400 hover:text-slate-600"
+            title="Clear filters"
+          >clear</button>
+        )}
         <button
           onClick={() => downloadCsv(`${name}.csv`, [cols.map((c) => c.label), ...view.map((r) => cols.map((c) => (r[c.key] == null ? "" : String(r[c.key]))))])}
           className="ml-auto rounded border border-slate-300 px-2 py-1 text-[11px] font-medium text-slate-500 hover:bg-slate-100"
