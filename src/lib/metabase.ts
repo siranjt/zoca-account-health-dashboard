@@ -119,6 +119,30 @@ async function runDataset(cfg: MetabaseConfig, sql: string): Promise<Row[]> {
   });
 }
 
+// All-channel last-touch per entity (chat + call + SMS + email + meeting), the
+// full Message-History feed. It's current-state (window-independent) and its
+// query scans the big CallHippo/Gmail tables (~6s), so cache it on its own TTL
+// and share it across every window instead of re-running it per book fetch.
+// Coalesces concurrent misses; a failure degrades to HubSpot-only last-touch.
+const LAST_TOUCH_TTL_MS = 600_000; // 10 min
+let lastTouchCache: { at: number; map: Map<string, string> } | null = null;
+let lastTouchInflight: Promise<Map<string, string>> | null = null;
+async function getLastTouchMap(cfg: MetabaseConfig): Promise<Map<string, string>> {
+  if (lastTouchCache && Date.now() - lastTouchCache.at < LAST_TOUCH_TTL_MS) return lastTouchCache.map;
+  if (lastTouchInflight) return lastTouchInflight;
+  lastTouchInflight = (async () => {
+    const rows = await runDataset(cfg, lastTouchSql()).catch((err) => {
+      console.error("[data] last-touch fetch failed, falling back to HubSpot-only:", err);
+      return [] as Row[];
+    });
+    const m = new Map<string, string>();
+    for (const r of rows) if (r.last_touch) m.set(String(r.entity_id), String(r.last_touch));
+    if (rows.length) lastTouchCache = { at: Date.now(), map: m }; // don't pin an empty (failed) result
+    return m;
+  })().finally(() => { lastTouchInflight = null; });
+  return lastTouchInflight;
+}
+
 const num = (v: unknown): number | null => {
   if (v == null || v === "") return null;
   const n = Number(v);
@@ -192,14 +216,11 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
     runDataset(cfg, webActiveSql()).catch(() => [] as Row[]),
     // Command Center (AI-agent web app) per-entity usage — chat.* over 28d.
     runDataset(cfg, ccUsageSql()).catch(() => [] as Row[]),
-    // Last in-app chat (RM/App chat) touch per account — MAX'd with HubSpot's
-    // last-connected below so "last touch" reflects chat, not just calls/emails.
-    runDataset(cfg, lastTouchSql()).catch(() => [] as Row[]),
+    // Last real touch per account across EVERY channel (chat/call/SMS/email/
+    // meeting) — MAX'd with HubSpot's last-connected below. Current-state, so
+    // cached independently of the per-window book (see getLastTouchMap).
+    getLastTouchMap(cfg),
   ]);
-
-  // Latest in-app chat touch per entity (a full timestamp).
-  const chatTouchByEntity = new Map<string, string>();
-  for (const r of lastTouch) if (r.last_chat) chatTouchByEntity.set(String(r.entity_id), String(r.last_chat));
 
   const webActiveSet = new Set<string>(webActive.map((r) => String(r.entity_id)));
   const ccByEntity = new Map<string, { days: number; convos: number }>();
@@ -253,7 +274,7 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
       gbpVerified: r.gbp_verified === true, // null (no GBP) or false → Unverified
       websiteLive: r.website_live === true, // GBP lists a website URL (Google's own data)
       websiteUrl: (r.website_url as string) || null,
-      lastConnected: newerTouch((r.last_connected as string) || null, chatTouchByEntity.get(id) || null),
+      lastConnected: newerTouch((r.last_connected as string) || null, lastTouch.get(id) || null),
       timezone: tzFromLatLng(num(r.lat), num(r.lng)),
       leadsDelta: tr ? { cur: int0(tr.cur_leads), prev: int0(tr.prev_leads) } : undefined,
       reviewsDelta: tr ? { cur: int0(tr.cur_reviews), prev: int0(tr.prev_reviews) } : undefined,

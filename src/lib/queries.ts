@@ -92,27 +92,50 @@ LEFT JOIN gbpx USING(entity_id) LEFT JOIN hub USING(entity_id)
 ORDER BY hs.gbp_title`;
 }
 
-/** Most-recent in-app chat (RM chat / App Chat) touch per account.
- *  "Last touch" was sourced only from HubSpot's last-connected date, which does
- *  NOT include the in-app chat conversations an RM has with a customer — so
- *  accounts whose latest touch was an app-chat message showed a stale (or empty)
- *  last-touch. This maps chat the same proven way as the Message History card
- *  (entity_relationships → conversation_members → chat.messages), set-wide, so
- *  the touch date can be MAX'd with HubSpot's in metabase.ts. ~1s over the book. */
-export function lastTouchSql(): string {
+/** Most-recent real communication touch per account across EVERY channel in the
+ *  Message-History feed: in-app RM/App chat, CallHippo calls + SMS, Gmail email
+ *  (inbound + outbound), and Fireflies meetings — mapped the same proven way as
+ *  that card (entity_relationships → members/phones/emails → the source tables).
+ *  "Last touch" is then MAX(this, HubSpot last-connected) in metabase.ts, so no
+ *  channel is ignored.
+ *
+ *  Performance: the naive monolithic comms query OR-joins the big CallHippo /
+ *  Gmail tables and times out (>60s). This is fast (~6s book-wide) by (1) capping
+ *  each big-table scan to a recent window (a touch older than the cap can't be
+ *  the newest anyway; HubSpot still covers older contact), and (2) splitting the
+ *  from/to phone match into two hash equijoins instead of an un-indexable OR.
+ *  Since last-touch is current-state (window-independent) it's cached separately
+ *  from the per-window book. */
+export function lastTouchSql(windowDays = 400): string {
+  const w = Number.isFinite(windowDays) && windowDays > 0 ? Math.round(windowDays) : 400;
   return `
 WITH rel AS (
   SELECT entity_1_id AS a, entity_2_id AS m FROM entities.entity_relationships
-  UNION ALL
-  SELECT entity_2_id AS a, entity_1_id AS m FROM entities.entity_relationships
-),
-am AS (SELECT DISTINCT rel.a AS entity_id, rel.m AS member_id
-       FROM rel JOIN cx.health_score hs ON hs.entity_id = rel.a)
-SELECT am.entity_id, MAX(cm.created_at) AS last_chat
-FROM am
-JOIN chat.conversation_members ccm ON ccm.member_id = am.member_id
-JOIN chat.messages cm ON cm.conversation_id = ccm.conversation_id AND cm.is_deleted = false
-GROUP BY am.entity_id`;
+  UNION ALL SELECT entity_2_id AS a, entity_1_id AS m FROM entities.entity_relationships),
+acct AS (SELECT DISTINCT rel.a AS entity_id, rel.m AS member
+         FROM rel JOIN cx.health_score hs ON hs.entity_id = rel.a),
+ph AS (SELECT DISTINCT acct.entity_id, right(regexp_replace(p.phone_number,'\\D','','g'),10) ph10
+       FROM acct JOIN entities.phones p ON p.entity_id = acct.member
+       WHERE length(regexp_replace(p.phone_number,'\\D','','g')) >= 10),
+em AS (SELECT DISTINCT acct.entity_id, lower(p.email_address) em
+       FROM acct JOIN entities.emails p ON p.entity_id = acct.member
+       WHERE p.email_address NOT ILIKE '%zoca%' AND p.email_address NOT ILIKE '%timely%' AND p.email_address <> ''),
+rc AS (SELECT right(from_::text,10) p1, right(to_::text,10) p2, start_time t FROM call_hippo.calls    WHERE start_time >= now()-interval '${w} days'),
+rs AS (SELECT right(from_::text,10) p1, right(to_::text,10) p2, time t       FROM call_hippo.messages WHERE time       >= now()-interval '${w} days'),
+rg AS (SELECT lower(from_email) fe, to_email, received_at t                  FROM gmail.emails        WHERE received_at >= now()-interval '${w} days'),
+touch AS (
+  SELECT acct.entity_id, MAX(cm.created_at) t FROM acct
+    JOIN chat.conversation_members ccm ON ccm.member_id = acct.member
+    JOIN chat.messages cm ON cm.conversation_id = ccm.conversation_id AND cm.is_deleted = false GROUP BY 1
+  UNION ALL SELECT ph.entity_id, MAX(rc.t) FROM ph JOIN rc ON rc.p1 = ph.ph10 GROUP BY 1
+  UNION ALL SELECT ph.entity_id, MAX(rc.t) FROM ph JOIN rc ON rc.p2 = ph.ph10 GROUP BY 1
+  UNION ALL SELECT ph.entity_id, MAX(rs.t) FROM ph JOIN rs ON rs.p1 = ph.ph10 GROUP BY 1
+  UNION ALL SELECT ph.entity_id, MAX(rs.t) FROM ph JOIN rs ON rs.p2 = ph.ph10 GROUP BY 1
+  UNION ALL SELECT em.entity_id, MAX(rg.t) FROM em JOIN rg ON rg.fe = em.em GROUP BY 1
+  UNION ALL SELECT em.entity_id, MAX(g2.t) FROM em JOIN (SELECT t, trim(lower(o)) toe FROM rg, unnest(string_to_array(to_email,',')) o) g2 ON g2.toe = em.em GROUP BY 1
+  UNION ALL SELECT entity_id, MAX(meeting_time) FROM sales.fireflies_meeting WHERE meeting_time >= now()-interval '${w} days' AND entity_id IN (SELECT entity_id FROM cx.health_score) GROUP BY 1
+)
+SELECT entity_id, MAX(t) AS last_touch FROM touch GROUP BY entity_id`;
 }
 
 /** Lead-response timing (avg seconds) per account. */
