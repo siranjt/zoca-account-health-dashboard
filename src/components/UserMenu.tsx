@@ -13,8 +13,11 @@ export default function UserMenu() {
 
   useEffect(() => {
     fetch("/api/auth/session")
+      // Show the menu whenever someone is signed in (has an email) — NOT only
+      // when a role resolves. Otherwise a bad ACCESS_CONTROL parse would strip
+      // even the Sign-out button and trap the user with no way out.
       .then((r) => (r.ok ? r.json() : null))
-      .then((s) => { if (s && s.user && s.user.role) setU(s.user); })
+      .then((s) => { if (s && s.user && (s.user.email || s.user.name)) setU(s.user); })
       .catch(() => {});
   }, []);
 
@@ -23,7 +26,8 @@ export default function UserMenu() {
   const roleLabel =
     u.role === "admin" ? "Admin" :
     u.role === "manager" ? "Manager" :
-    u.role === "am" ? `AM · ${u.amName || "—"}` : "";
+    u.role === "am" ? `AM · ${u.amName || "—"}` :
+    "no role — check ACCESS_CONTROL";
   const NAME_OVERRIDES: Record<string, string> = { "siranjith.t@zoca.com": "Siranj", "siranjith.t@gmail.com": "Siranj" };
   const first = NAME_OVERRIDES[(u.email || "").toLowerCase()] || (u.name || u.email || "").split(" ")[0];
 
