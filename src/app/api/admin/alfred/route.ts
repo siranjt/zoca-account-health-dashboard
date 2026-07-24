@@ -31,7 +31,7 @@ function costOf(model: string | null | undefined, tokensIn: number, tokensOut: n
 export async function GET(req: Request) {
   const viewer = await getViewer();
   if (viewer.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  if (!neonUrl()) return NextResponse.json({ reason: "Alfred store not configured", summary: null, askers: [], accounts: [], tools: [], conversations: [] });
+  if (!neonUrl()) return NextResponse.json({ reason: "Alfred store not configured", summary: null, askers: [], accounts: [], tools: [], conversations: [], daily: [] });
 
   const { searchParams } = new URL(req.url);
   const days = Math.min(365, Math.max(1, Number(searchParams.get("days")) || 30));
@@ -78,7 +78,7 @@ export async function GET(req: Request) {
       });
     }
 
-    const [summaryR, askerRows, accounts, tools, conversations] = await Promise.all([
+    const [summaryR, askerRows, accounts, tools, conversations, dailyRows] = await Promise.all([
       sql`SELECT count(*)::int total, count(DISTINCT email)::int users,
                  coalesce(round(avg(latency_ms)),0)::int avg_ms,
                  coalesce(sum(tokens_in),0)::bigint tok_in, coalesce(sum(tokens_out),0)::bigint tok_out
@@ -102,7 +102,26 @@ export async function GET(req: Request) {
             AND (${user}::text IS NULL OR email = ${user})
             AND (${like}::text IS NULL OR question ILIKE ${like} OR reply ILIKE ${like})
           ORDER BY ts DESC LIMIT ${limit}`,
+      // per day + model, for the daily cost trend
+      sql`SELECT to_char(date_trunc('day', ts), 'YYYY-MM-DD') d, model,
+                 coalesce(sum(tokens_in),0)::bigint ti, coalesce(sum(tokens_out),0)::bigint too
+          FROM alfred.messages WHERE ts > now() - make_interval(days => ${days})
+          GROUP BY 1, 2`,
     ]);
+
+    // daily cost trend (gap-filled across the window)
+    const dayCost = new Map<string, number>();
+    for (const r of dailyRows as Array<{ d: string; model: string | null; ti: number; too: number }>) {
+      dayCost.set(r.d, (dayCost.get(r.d) ?? 0) + costOf(r.model, Number(r.ti), Number(r.too)));
+    }
+    const daily: Array<{ day: string; cost: number }> = [];
+    const today = new Date();
+    for (let i = days - 1; i >= 0; i--) {
+      const dt = new Date(today);
+      dt.setUTCDate(dt.getUTCDate() - i);
+      const key = dt.toISOString().slice(0, 10);
+      daily.push({ day: key, cost: Math.round((dayCost.get(key) ?? 0) * 100) / 100 });
+    }
 
     // roll up per-person cost (list-price estimate) from the per-model rows
     const perPerson = new Map<string, { label: string; email: string | null; n: number; cost: number }>();
@@ -124,8 +143,8 @@ export async function GET(req: Request) {
       cost_per_day: Math.round((totalCost / days) * 100) / 100,
     };
 
-    return NextResponse.json({ summary, askers, accounts, tools, conversations }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ summary, askers, accounts, tools, conversations, daily }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
-    return NextResponse.json({ reason: String((e as Error)?.message || e).slice(0, 200), summary: null, askers: [], accounts: [], tools: [], conversations: [] });
+    return NextResponse.json({ reason: String((e as Error)?.message || e).slice(0, 200), summary: null, askers: [], accounts: [], tools: [], conversations: [], daily: [] });
   }
 }

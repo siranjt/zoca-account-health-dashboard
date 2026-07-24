@@ -25,6 +25,7 @@ export default function AlfredUsageViewer() {
   const [accounts, setAccounts] = useState<Named[]>([]);
   const [tools, setTools] = useState<Named[]>([]);
   const [convos, setConvos] = useState<Convo[]>([]);
+  const [daily, setDaily] = useState<{ day: string; cost: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState<string | null>(null);
   const [days, setDays] = useState(30);
@@ -45,6 +46,7 @@ export default function AlfredUsageViewer() {
         setAccounts(d.accounts || []);
         setTools(d.tools || []);
         setConvos(d.conversations || []);
+        setDaily(d.daily || []);
         setNote(d.reason || null);
       })
       .catch((e) => setNote(String(e)))
@@ -91,6 +93,9 @@ export default function AlfredUsageViewer() {
         <Kpi label="$ / day" value={summary ? `$${summary.cost_per_day.toFixed(2)}` : "—"} accent />
       </div>
 
+      {/* daily cost trend */}
+      <CostTrend data={daily} />
+
       {/* leaderboards */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <Board title="Top askers (cost)" rows={askers.map((a) => ({ label: a.label, n: a.n, sub: `$${a.cost.toFixed(2)}` }))} />
@@ -130,6 +135,35 @@ export default function AlfredUsageViewer() {
           })}
           {!loading && convos.length === 0 && <div className="px-3 py-8 text-center text-sm text-slate-400">No Alfred conversations in this window.</div>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function CostTrend({ data }: { data: { day: string; cost: number }[] }) {
+  if (!data.length) return null;
+  const max = Math.max(0.0001, ...data.map((d) => d.cost));
+  const total = data.reduce((s, d) => s + d.cost, 0);
+  const peak = data.reduce((a, b) => (b.cost > a.cost ? b : a), data[0]);
+  const W = 100, H = 30;
+  const bw = W / data.length;
+  return (
+    <div className="rounded-lg border p-3" style={{ borderColor: "var(--cave-line)" }}>
+      <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-[10px] uppercase tracking-wide text-slate-400">Daily cost (est.)</span>
+        <span className="text-[11px] text-slate-500">peak <b className="text-cyan-600">${peak.cost.toFixed(2)}</b> on {peak.day.slice(5)} · total ${total.toFixed(2)}</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-12 w-full">
+        {data.map((d, i) => {
+          const h = (d.cost / max) * (H - 1);
+          return <rect key={i} x={i * bw + bw * 0.12} y={H - h} width={Math.max(0.35, bw * 0.76)} height={h} rx={0.3} fill={d.day === peak.day ? "rgba(53,224,255,.95)" : "rgba(53,224,255,.5)"}>
+            <title>{d.day}: ${d.cost.toFixed(2)}</title>
+          </rect>;
+        })}
+      </svg>
+      <div className="mt-0.5 flex justify-between text-[9px] text-slate-400">
+        <span>{data[0].day.slice(5)}</span>
+        <span>{data[data.length - 1].day.slice(5)}</span>
       </div>
     </div>
   );
