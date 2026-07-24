@@ -465,8 +465,30 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
 
   return (
     <div>
+      <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400/70">Overview</div>
+          <h1 className="cave-decode text-2xl font-semibold tracking-tight">Account Health Dashboard</h1>
+        </div>
+        {/* health summary — reflects the active filters (same set as the table) */}
+        <div className="flex items-center gap-4 text-sm">
+          <button onClick={() => setColorFilter((c) => (c === "green" ? "all" : "green"))} className="flex items-center gap-1.5 hover:opacity-80" title="Filter healthy">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#16a34a" }} />
+            {formatNumber(kpi.green)} healthy
+          </button>
+          <button onClick={() => setColorFilter((c) => (c === "yellow" ? "all" : "yellow"))} className="flex items-center gap-1.5 hover:opacity-80" title="Filter monitor">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#d97706" }} />
+            {formatNumber(kpi.yellow)} monitor
+          </button>
+          <button onClick={() => setColorFilter((c) => (c === "red" ? "all" : "red"))} className="flex items-center gap-1.5 hover:opacity-80" title="Filter at-risk">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ background: "#dc2626" }} />
+            {formatNumber(kpi.red)} at risk
+          </button>
+        </div>
+      </header>
+
       <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500">
-        <span>{accounts.length} active accounts</span>
+        <span>{rows.length === accounts.length ? `${accounts.length} active accounts` : `${formatNumber(rows.length)} of ${formatNumber(accounts.length)} accounts`}</span>
         <span>· metrics {allTime ? "all-time" : custom ? "from" : "over last"}</span>
         <div className="relative inline-flex items-center">
           <div
