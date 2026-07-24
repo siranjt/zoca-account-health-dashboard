@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AccountDetail, AccountRow } from "@/lib/types";
 import { VIZ } from "@/lib/theme";
 import {
@@ -62,22 +62,8 @@ export default function DetailPanel({ account, windowDays }: { account: AccountR
           {detail ? <FunnelChart f={detail.funnel} /> : <Skeleton error={error} />}
         </ChartCard>
 
-        <ChartCard title="Products active">
-          <div className="flex flex-wrap gap-1.5">
-            {account.activeProducts.length ? (
-              account.activeProducts.map((p) => (
-                <span key={p} className={`rounded px-2 py-1 text-xs font-medium ${p === "Discovery" ? "bg-slate-100 text-slate-600" : "bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200"}`}>{p}</span>
-              ))
-            ) : (
-              <span className="text-xs text-slate-400">—</span>
-            )}
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-            <Stat label="MRR" value={account.mrr != null ? `$${account.mrr}` : "—"} />
-            <Stat label="Keywords" value={account.keywordsTracked ?? "—"} />
-            <Stat label="Top-3 %" value={account.keywordsTop3Pct != null ? `${account.keywordsTop3Pct}%` : "—"} />
-            <Stat label="Impressions" value={account.keywordImpressions} />
-          </div>
+        <ChartCard title="Products active" subtitle="toggle a product for its own MRR · start date">
+          <ProductsActive account={account} detail={detail} />
         </ChartCard>
 
         <ChartCard title="Profile clicks" subtitle={`${gran} · ${winN}`}>
@@ -205,5 +191,86 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
       <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
       <div className="font-semibold tabular-nums text-slate-700">{value}</div>
     </div>
+  );
+}
+
+function ddmmyy(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso.includes("T") ? iso : iso + "T00:00:00");
+  if (isNaN(d.getTime())) return iso.slice(0, 10);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)}`;
+}
+const money = (v: number) => `$${Number.isInteger(v) ? v : v.toFixed(2)}`;
+
+function ProdBtn({ label, active, onClick, accent }: { label: string; active: boolean; onClick: () => void; accent?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+        active
+          ? accent ? "bg-cyan-600 text-white" : "bg-indigo-600 text-white"
+          : accent ? "bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200 hover:bg-cyan-100" : "bg-slate-100 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-200"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+// "Products active" — per-product MRR + subscription start date, from Chargebee.
+// Toggle "Combined" (all products summed) or any single product. Falls back to
+// plain product badges + total MRR when no billing breakdown is available.
+function ProductsActive({ account, detail }: { account: AccountRow; detail: AccountDetail | null }) {
+  const products = useMemo(() => {
+    const list = (detail?.productMrr ?? []).slice();
+    // Discovery (base) first, then the rest by MRR desc.
+    list.sort((a, b) => (a.product === "Discovery" ? -1 : b.product === "Discovery" ? 1 : b.mrr - a.mrr));
+    return list;
+  }, [detail]);
+
+  const multi = products.length > 1;
+  const combinedMrr = products.reduce((s, p) => s + p.mrr, 0);
+  const combinedStart = products.map((p) => p.startDate).filter((s): s is string => !!s).sort()[0] ?? null;
+
+  const [sel, setSel] = useState<string>("__combined__");
+  useEffect(() => {
+    setSel(multi ? "__combined__" : products[0]?.product ?? "__combined__");
+  }, [account.entityId, multi, products.length]);
+
+  const hasBreakdown = products.length > 0;
+  const selP = products.find((p) => p.product === sel);
+  const mrr = sel === "__combined__" ? combinedMrr : selP?.mrr ?? 0;
+  const start = sel === "__combined__" ? combinedStart : selP?.startDate ?? null;
+  const mrrLabel = !hasBreakdown ? "MRR" : sel === "__combined__" ? "MRR · Combined" : `MRR · ${sel}`;
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-1.5">
+        {hasBreakdown ? (
+          <>
+            {multi && <ProdBtn label="Combined" active={sel === "__combined__"} onClick={() => setSel("__combined__")} accent />}
+            {products.map((p) => (
+              <ProdBtn key={p.product} label={p.product} active={sel === p.product} onClick={() => setSel(p.product)} />
+            ))}
+          </>
+        ) : detail == null ? (
+          <span className="text-xs text-slate-400">Loading products…</span>
+        ) : account.activeProducts.length ? (
+          account.activeProducts.map((p) => (
+            <span key={p} className={`rounded px-2 py-1 text-xs font-medium ${p === "Discovery" ? "bg-slate-100 text-slate-600" : "bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200"}`}>{p}</span>
+          ))
+        ) : (
+          <span className="text-xs text-slate-400">—</span>
+        )}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <Stat label={mrrLabel} value={hasBreakdown ? money(mrr) : account.mrr != null ? money(account.mrr) : "—"} />
+        <Stat label={hasBreakdown ? (sel === "__combined__" ? "Started · earliest" : "Started") : "Started"} value={ddmmyy(start)} />
+        <Stat label="Keywords" value={account.keywordsTracked ?? "—"} />
+        <Stat label="Top-3 %" value={account.keywordsTop3Pct != null ? `${account.keywordsTop3Pct}%` : "—"} />
+        <Stat label="Impressions" value={account.keywordImpressions} />
+      </div>
+    </>
   );
 }

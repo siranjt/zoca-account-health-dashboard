@@ -135,6 +135,7 @@ export interface AccountDetail {
   reviewsDist?: { total: number; avg: number | null; last30: number; last90: number; dist: Record<string, number> } | null;
   comms?: { wk: string; chat: number; call: number; sms: number; email: number; meeting: number }[];
   leadSources?: { bucket: string; n: number }[];
+  productMrr?: { product: string; mrr: number; startDate: string | null }[];
   mediaCadence?: { wk: string; live: number }[];
   forecast?: { predicted: number | null; actual: number } | null;
   // Row-level records (Retool "Reviews List" / "Lead Table")

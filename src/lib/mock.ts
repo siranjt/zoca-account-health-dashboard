@@ -246,6 +246,13 @@ export function getMockAccountDetail(id: string): AccountDetail {
       { bucket: "AI Search", n: Math.max(1, Math.round(s.leads * 0.04)) },
       { bucket: "Paid Ads", n: Math.round(s.leads * 0.03) },
     ].filter((b) => b.n > 0),
+    productMrr: (() => {
+      const total = s.mrr ?? 0;
+      const rows = [{ product: "Discovery", mrr: Math.round(total * 0.45), startDate: daysAgoISO(420) }];
+      if (s.products.includes("WIN")) rows.push({ product: "WIN", mrr: Math.round(total * 0.35), startDate: daysAgoISO(180) });
+      if (s.products.some((p) => p !== "Discovery" && p !== "WIN")) rows.push({ product: s.products.find((p) => p !== "Discovery" && p !== "WIN")!, mrr: Math.round(total * 0.2), startDate: daysAgoISO(90) });
+      return rows.filter((r) => r.mrr > 0);
+    })(),
     mediaCadence: (() => { let live = 3; return mkSpark(2, id + "md").map((v, i) => { live += v; return { wk: new Date(2026, 4, 1 + i * 7).toISOString().slice(0, 10), live }; }); })(),
     forecast: { predicted: Math.max(20, s.leads * 2), actual: s.leads * 6 },
     reviewsList: (() => {

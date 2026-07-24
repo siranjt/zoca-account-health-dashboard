@@ -25,6 +25,7 @@ import {
   detailImpressionsSql,
   detailReviewsDistSql,
   detailLeadSourcesSql,
+  detailProductMrrSql,
   detailMediaSql,
   detailForecastSql,
   detailReviewsListSql,
@@ -286,7 +287,7 @@ export async function getAccountDetailFromMetabase(
   // point-in-time snapshots (rankings, impressions, services, onboarding,
   // scheduling status, forecast, payment links, review distribution) do not.
   const w = Number.isFinite(windowDays) && windowDays > 0 ? Math.round(windowDays) : 90;
-  const [pw, lr, rt, fn, au, bk, kr, im, rd, ls, cm, md, fc, rl, ll, ps, pw2, sv, rq, cs, ob, wo, sst, tb, bs, bc, wt, ca, pl] = await Promise.all([
+  const [pw, lr, rt, fn, au, bk, kr, im, rd, ls, cm, md, fc, rl, ll, ps, pw2, sv, rq, cs, ob, wo, sst, tb, bs, bc, wt, ca, pl, pm] = await Promise.all([
     runDataset(cfg, detailProfileWeeklySql(id, w)),
     runDataset(cfg, detailLeadsReviewsMonthlySql(id, w)),
     runDataset(cfg, detailRankTrendSql(id, w)),
@@ -316,6 +317,7 @@ export async function getAccountDetailFromMetabase(
     safe(detailWowTasksSql(id, w)),
     safe(detailCallbackActionsSql(id, w)),
     safe(detailPaymentLinksSql(id)),
+    safe(detailProductMrrSql(id)),
   ]);
   const f = fn[0] ?? {};
   const RATING = { FIVE: 5, FOUR: 4, THREE: 3, TWO: 2, ONE: 1, ZERO: 0 } as Record<string, number>;
@@ -358,6 +360,7 @@ export async function getAccountDetailFromMetabase(
     reviewsDist: rTot ? { total: rTot, avg: rRated ? Math.round((rSum / rRated) * 100) / 100 : null, last30: r30, last90: r90, dist: rDist } : null,
     comms: cm,
     leadSources: ls.map((r) => ({ bucket: String(r.bucket), n: int0(r.n) })),
+    productMrr: pm.map((r) => ({ product: String(r.product), mrr: num(r.mrr) ?? 0, startDate: (r.start_date as string) || null })),
     mediaCadence,
     forecast: fcRow.predicted != null || fcRow.actual != null ? { predicted: num(fcRow.predicted), actual: int0(fcRow.actual) } : null,
     reviewsList: rl.map((r) => ({
