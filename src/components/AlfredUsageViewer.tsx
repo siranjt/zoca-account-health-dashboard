@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-interface Summary { total: number; users: number; avg_ms: number; tok_in: number; tok_out: number }
-interface Asker { label: string; email: string | null; n: number }
+interface Summary { total: number; users: number; avg_ms: number; tok_in: number; tok_out: number; cost: number; cost_per_day: number }
+interface Asker { label: string; email: string | null; n: number; cost: number }
 interface Named { name?: string; tool?: string; n: number }
 interface Convo {
   id: number; ts: string; email: string | null; name: string | null; am_name: string | null; role: string | null;
@@ -81,17 +81,19 @@ export default function AlfredUsageViewer() {
       {note && <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">{note}</div>}
 
       {/* summary cards */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
         <Kpi label="Conversations" value={summary ? fmt(summary.total) : "—"} />
         <Kpi label="People" value={summary ? fmt(summary.users) : "—"} />
         <Kpi label="Avg latency" value={summary ? `${(summary.avg_ms / 1000).toFixed(1)}s` : "—"} />
         <Kpi label="Tokens in" value={summary ? fmt(Number(summary.tok_in)) : "—"} />
         <Kpi label="Tokens out" value={summary ? fmt(Number(summary.tok_out)) : "—"} />
+        <Kpi label="Est. cost" value={summary ? `$${summary.cost.toFixed(2)}` : "—"} accent />
+        <Kpi label="$ / day" value={summary ? `$${summary.cost_per_day.toFixed(2)}` : "—"} accent />
       </div>
 
       {/* leaderboards */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <Board title="Top askers" rows={askers.map((a) => ({ label: a.label, n: a.n }))} />
+        <Board title="Top askers (cost)" rows={askers.map((a) => ({ label: a.label, n: a.n, sub: `$${a.cost.toFixed(2)}` }))} />
         <Board title="Top accounts asked about" rows={accounts.map((a) => ({ label: a.name || "—", n: a.n }))} />
         <Board title="Top tools used" rows={tools.map((t) => ({ label: t.tool || "—", n: t.n }))} />
       </div>
@@ -133,16 +135,16 @@ export default function AlfredUsageViewer() {
   );
 }
 
-function Kpi({ label, value }: { label: string; value: string }) {
+function Kpi({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="rounded-lg border px-3 py-2" style={{ borderColor: "var(--cave-line)" }}>
+    <div className="rounded-lg border px-3 py-2" style={{ borderColor: accent ? "rgba(53,224,255,.4)" : "var(--cave-line)" }}>
       <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
-      <div className="text-lg font-semibold tabular-nums text-slate-800">{value}</div>
+      <div className={`text-lg font-semibold tabular-nums ${accent ? "text-cyan-600" : "text-slate-800"}`}>{value}</div>
     </div>
   );
 }
 
-function Board({ title, rows }: { title: string; rows: { label: string; n: number }[] }) {
+function Board({ title, rows }: { title: string; rows: { label: string; n: number; sub?: string }[] }) {
   const max = Math.max(1, ...rows.map((r) => r.n));
   return (
     <div className="rounded-lg border p-3" style={{ borderColor: "var(--cave-line)" }}>
@@ -151,11 +153,12 @@ function Board({ title, rows }: { title: string; rows: { label: string; n: numbe
         <div className="space-y-1">
           {rows.map((r, i) => (
             <div key={i} className="flex items-center gap-2 text-xs">
-              <span className="w-40 shrink-0 truncate text-slate-600" title={r.label}>{r.label}</span>
+              <span className="w-36 shrink-0 truncate text-slate-600" title={r.label}>{r.label}</span>
               <div className="relative h-3 flex-1 overflow-hidden rounded bg-slate-100">
                 <div className="h-full rounded bg-cyan-500/60" style={{ width: `${Math.max(4, (r.n / max) * 100)}%` }} />
               </div>
               <span className="w-8 shrink-0 text-right tabular-nums text-slate-500">{r.n}</span>
+              {r.sub && <span className="w-14 shrink-0 text-right tabular-nums text-cyan-600">{r.sub}</span>}
             </div>
           ))}
         </div>
