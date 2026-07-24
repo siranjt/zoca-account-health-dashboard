@@ -2,15 +2,16 @@
 
 import { useEffect, useRef } from "react";
 
-// Wayne Shine — the daylight counterpart to Gotham Rain, for the Bruce Wayne
-// (light) persona: a golden-hour penthouse. Layers, back to front —
-//   · a slow warm ambient wash (sun through the tall windows),
-//   · soft god-rays streaming in and gently swaying,
-//   · a faint Applied-Sciences blueprint grid + a slow schematic sweep,
-//   · rising Wayne-Enterprises ticker glyphs,
-//   · large soft bokeh (depth) + fine drifting dust motes that twinkle.
-// Decorative, pointer-events:none, additive. Only renders in light mode (the
-// rAF short-circuits otherwise); hidden in dark / calm / effects-off via CSS.
+// Wayne Shine — the Bruce Wayne (light) persona ambient: a gold "Applied
+// Sciences" R&D holo-desk. Layers, back to front —
+//   · a faint blueprint grid with intersection ticks,
+//   · a live node-network (drifting nodes + proximity links),
+//   · rotating orbit/atom diagrams with a gear-tooth ring,
+//   · an animated dashed schematic bracket that keeps "drawing",
+//   · corner HUD brackets framing the viewport,
+//   · rising Wayne-Enterprises data glyphs.
+// Decorative, pointer-events:none. Only renders in light mode (the rAF
+// short-circuits otherwise); hidden in dark / calm / effects-off via CSS.
 export default function WayneShine() {
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -21,22 +22,30 @@ export default function WayneShine() {
     if (!ctx) return;
     let raf = 0, w = 0, h = 0, t = 0;
     const R = (a: number, b: number) => a + Math.random() * (b - a);
+    const G = (a: number) => `rgba(176,132,43,${a})`;   // gold line
+    const GB = (a: number) => `rgba(214,170,90,${a})`;  // brighter gold accent
 
-    type Ray = { base: number; wid: number; a: number; sway: number; ph: number };
-    type Bokeh = { x: number; y: number; r: number; a: number; vy: number; drift: number; ph: number };
-    type Mote = { x: number; y: number; r: number; a: number; vy: number; drift: number; ph: number; tw: number };
+    type Node = { x: number; y: number; vx: number; vy: number };
+    type Ring = { r: number; sp: number; n: number; ph: number };
+    type Orbit = { cx: number; cy: number; rings: Ring[] };
     type Tick = { x: number; y: number; vy: number; a: number; txt: string; size: number };
 
-    let rays: Ray[] = [], bokeh: Bokeh[] = [], motes: Mote[] = [], ticks: Tick[] = [];
-    const GLYPHS = ["312.40", "▲", "+1.8%", "WYE", "826", "▼", "0.4%", "APPLIED", "R&D", "+2.1%", "▲", "NYSE", "◆", "WE"];
+    let nodes: Node[] = [], orbits: Orbit[] = [], ticks: Tick[] = [];
+    const GLYPHS = ["312.40", "▲", "+1.8%", "R&D", "826", "▼", "0.4%", "WYE", "NYSE", "◆", "+2.1%", "APPLIED"];
 
     function seed() {
-      rays = Array.from({ length: 6 }, (_, i) => ({ base: -0.12 + i * 0.12 + R(-0.02, 0.02), wid: R(70, 190), a: R(0.05, 0.12), sway: R(0.06, 0.16), ph: R(0, 6.28) }));
-      const bk = Math.min(18, Math.max(9, Math.round((w * h) / 130000)));
-      bokeh = Array.from({ length: bk }, () => ({ x: Math.random() * w, y: Math.random() * h, r: R(26, 78), a: R(0.03, 0.09), vy: R(0.05, 0.18), drift: R(10, 34), ph: R(0, 6.28) }));
-      const nm = Math.min(90, Math.max(42, Math.round((w * h) / 18000)));
-      motes = Array.from({ length: nm }, () => ({ x: Math.random() * w, y: Math.random() * h, r: R(0.7, 3.1), a: R(0.22, 0.62), vy: R(0.06, 0.32), drift: R(6, 26), ph: R(0, 6.28), tw: R(0.6, 1.8) }));
-      ticks = Array.from({ length: 12 }, () => ({ x: Math.random() * w, y: R(0, h), vy: R(0.14, 0.4), a: R(0.1, 0.32), txt: GLYPHS[(Math.random() * GLYPHS.length) | 0], size: R(9, 14) }));
+      const nn = Math.min(48, Math.max(22, Math.round((w * h) / 42000)));
+      nodes = Array.from({ length: nn }, () => ({ x: Math.random() * w, y: Math.random() * h, vx: R(-0.12, 0.12), vy: R(-0.12, 0.12) }));
+      orbits = [
+        { cx: w * 0.17, cy: h * 0.26 }, { cx: w * 0.84, cy: h * 0.72 }, { cx: w * 0.5, cy: h * 0.52 },
+      ].map((o) => ({
+        cx: o.cx, cy: o.cy,
+        rings: [
+          { r: R(30, 46), sp: R(0.22, 0.42), n: 2 + ((Math.random() * 2) | 0), ph: R(0, 6.28) },
+          { r: R(60, 84), sp: -R(0.12, 0.28), n: 3, ph: R(0, 6.28) },
+        ],
+      }));
+      ticks = Array.from({ length: 10 }, () => ({ x: Math.random() * w, y: R(0, h), vy: R(0.14, 0.36), a: R(0.1, 0.3), txt: GLYPHS[(Math.random() * GLYPHS.length) | 0], size: R(9, 13) }));
     }
     function resize() { w = cv!.width = window.innerWidth; h = cv!.height = window.innerHeight; seed(); }
     resize();
@@ -44,84 +53,74 @@ export default function WayneShine() {
 
     function frame() {
       raf = requestAnimationFrame(frame);
-      // Only draw in the Bruce Wayne persona — save CPU in Batman mode.
       if (!document.documentElement.classList.contains("light")) { ctx!.clearRect(0, 0, w, h); return; }
       t += 0.016;
       ctx!.clearRect(0, 0, w, h);
-      const sunX = w * 0.82, sunY = -40;
 
-      // 1 · warm ambient wash from the sun corner (breathing)
-      const washA = 0.05 + 0.03 * Math.sin(t * 0.35);
-      const wash = ctx!.createRadialGradient(sunX, sunY + 40, 40, sunX, sunY + 40, Math.hypot(w, h) * 0.9);
-      wash.addColorStop(0, `rgba(232,196,120,${washA})`);
-      wash.addColorStop(0.5, `rgba(214,170,90,${washA * 0.4})`);
-      wash.addColorStop(1, "rgba(214,170,90,0)");
-      ctx!.fillStyle = wash; ctx!.fillRect(0, 0, w, h);
-
-      // 2 · god-rays streaming from the corner, swaying
-      const len = Math.hypot(w, h) * 1.25;
-      for (const r of rays) {
-        const ang = r.base + Math.sin(t * r.sway + r.ph) * 0.05;
-        const al = r.a * (0.6 + 0.4 * Math.sin(t * 0.5 + r.ph));
-        ctx!.save();
-        ctx!.translate(sunX, sunY);
-        ctx!.rotate(Math.PI * 0.62 + ang); // fan down-left into the room
-        const g = ctx!.createLinearGradient(0, 0, 0, len);
-        g.addColorStop(0, `rgba(236,200,120,${Math.max(0, al)})`);
-        g.addColorStop(0.7, `rgba(226,184,100,${Math.max(0, al) * 0.25})`);
-        g.addColorStop(1, "rgba(226,184,100,0)");
-        ctx!.fillStyle = g;
-        ctx!.beginPath();
-        ctx!.moveTo(-r.wid / 2, 0); ctx!.lineTo(r.wid / 2, 0); ctx!.lineTo(r.wid * 1.5, len); ctx!.lineTo(-r.wid * 1.5, len); ctx!.closePath();
-        ctx!.fill();
-        ctx!.restore();
+      // 1 · blueprint grid + intersection ticks
+      ctx!.lineWidth = 1;
+      ctx!.strokeStyle = G(0.04);
+      const gs = 94;
+      for (let x = 0; x < w; x += gs) { ctx!.beginPath(); ctx!.moveTo(x, 0); ctx!.lineTo(x, h); ctx!.stroke(); }
+      for (let y = 0; y < h; y += gs) { ctx!.beginPath(); ctx!.moveTo(0, y); ctx!.lineTo(w, y); ctx!.stroke(); }
+      ctx!.strokeStyle = G(0.07);
+      for (let x = gs; x < w; x += gs) for (let y = gs; y < h; y += gs) {
+        ctx!.beginPath(); ctx!.moveTo(x - 3, y); ctx!.lineTo(x + 3, y); ctx!.moveTo(x, y - 3); ctx!.lineTo(x, y + 3); ctx!.stroke();
       }
 
-      // 3 · faint blueprint grid + a slow schematic sweep
+      // 2 · node-network (drift + proximity links)
+      for (const n of nodes) { n.x += n.vx; n.y += n.vy; if (n.x < 0 || n.x > w) n.vx *= -1; if (n.y < 0 || n.y > h) n.vy *= -1; }
       ctx!.lineWidth = 1;
-      ctx!.strokeStyle = "rgba(176,132,43,0.04)";
-      const gs = 96, off = (t * 4) % gs;
-      for (let x = off; x < w; x += gs) { ctx!.beginPath(); ctx!.moveTo(x, 0); ctx!.lineTo(x, h); ctx!.stroke(); }
-      for (let y = 0; y < h; y += gs) { ctx!.beginPath(); ctx!.moveTo(0, y); ctx!.lineTo(w, y); ctx!.stroke(); }
-      ctx!.strokeStyle = "rgba(176,132,43,0.07)";
-      const d1 = ((t * 15) % (w + 340)) - 170;
-      ctx!.beginPath(); ctx!.moveTo(d1, 0); ctx!.lineTo(d1 + 240, h); ctx!.stroke();
+      for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+        const dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y, d = Math.hypot(dx, dy);
+        if (d < 155) { ctx!.strokeStyle = G(0.1 * (1 - d / 155)); ctx!.beginPath(); ctx!.moveTo(nodes[i].x, nodes[i].y); ctx!.lineTo(nodes[j].x, nodes[j].y); ctx!.stroke(); }
+      }
+      ctx!.fillStyle = GB(0.28);
+      for (const n of nodes) { ctx!.beginPath(); ctx!.arc(n.x, n.y, 1.3, 0, 6.283); ctx!.fill(); }
 
-      // 4 · rising ticker glyphs (fade near the top edge)
+      // 3 · orbit / atom diagrams with gear-tooth ring
+      for (const o of orbits) {
+        ctx!.fillStyle = GB(0.5); ctx!.beginPath(); ctx!.arc(o.cx, o.cy, 2.4, 0, 6.283); ctx!.fill();
+        for (const rg of o.rings) {
+          ctx!.lineWidth = 1; ctx!.strokeStyle = G(0.1);
+          ctx!.beginPath(); ctx!.arc(o.cx, o.cy, rg.r, 0, 6.283); ctx!.stroke();
+          for (let k = 0; k < rg.n; k++) {
+            const ang = t * rg.sp + rg.ph + (k * 6.283) / rg.n;
+            const px = o.cx + Math.cos(ang) * rg.r, py = o.cy + Math.sin(ang) * rg.r;
+            ctx!.strokeStyle = G(0.05); ctx!.beginPath(); ctx!.moveTo(o.cx, o.cy); ctx!.lineTo(px, py); ctx!.stroke();
+            ctx!.fillStyle = GB(0.5); ctx!.beginPath(); ctx!.arc(px, py, 2.2, 0, 6.283); ctx!.fill();
+          }
+        }
+        const outer = o.rings[o.rings.length - 1].r + 14, teeth = 26;
+        ctx!.strokeStyle = G(0.1); ctx!.lineWidth = 1;
+        for (let k = 0; k < teeth; k++) {
+          const a = t * 0.14 + (k * 6.283) / teeth;
+          ctx!.beginPath();
+          ctx!.moveTo(o.cx + Math.cos(a) * outer, o.cy + Math.sin(a) * outer);
+          ctx!.lineTo(o.cx + Math.cos(a) * (outer + 4), o.cy + Math.sin(a) * (outer + 4));
+          ctx!.stroke();
+        }
+      }
+
+      // 4 · animated dashed schematic bracket (keeps drawing)
+      ctx!.setLineDash([6, 6]); ctx!.lineDashOffset = -t * 24; ctx!.strokeStyle = G(0.13); ctx!.lineWidth = 1;
+      ctx!.strokeRect(w * 0.5 - 78, h * 0.52 - 60, 156, 120);
+      ctx!.setLineDash([]);
+
+      // 5 · corner HUD brackets
+      ctx!.strokeStyle = G(0.16); ctx!.lineWidth = 1.5;
+      const m = 26, L = 26;
+      const corners: [number, number, number, number][] = [[m, m, 1, 1], [w - m, m, -1, 1], [m, h - m, 1, -1], [w - m, h - m, -1, -1]];
+      for (const [cx, cy, sx, sy] of corners) { ctx!.beginPath(); ctx!.moveTo(cx + sx * L, cy); ctx!.lineTo(cx, cy); ctx!.lineTo(cx, cy + sy * L); ctx!.stroke(); }
+
+      // 6 · rising data glyphs
       ctx!.textAlign = "left";
       for (const tk of ticks) {
         tk.y -= tk.vy;
-        if (tk.y < -18) { tk.y = h + R(10, 70); tk.x = Math.random() * w; tk.txt = GLYPHS[(Math.random() * GLYPHS.length) | 0]; }
-        const fade = Math.min(1, tk.y / 80);
+        if (tk.y < -16) { tk.y = h + R(10, 60); tk.x = Math.random() * w; tk.txt = GLYPHS[(Math.random() * GLYPHS.length) | 0]; }
         ctx!.font = `600 ${tk.size}px ui-monospace, Menlo, monospace`;
-        ctx!.fillStyle = `rgba(176,132,43,${tk.a * fade})`;
+        ctx!.fillStyle = G(tk.a * Math.min(1, tk.y / 80));
         ctx!.fillText(tk.txt, tk.x, tk.y);
-      }
-
-      // 5a · soft bokeh (depth layer)
-      for (const b of bokeh) {
-        b.y -= b.vy;
-        if (b.y < -b.r) { b.y = h + b.r + R(2, 40); b.x = Math.random() * w; }
-        const gx = b.x + Math.sin(t * 0.4 + b.ph) * b.drift;
-        const grd = ctx!.createRadialGradient(gx, b.y, 0, gx, b.y, b.r);
-        grd.addColorStop(0, `rgba(238,202,124,${b.a})`);
-        grd.addColorStop(1, "rgba(238,202,124,0)");
-        ctx!.fillStyle = grd;
-        ctx!.beginPath(); ctx!.arc(gx, b.y, b.r, 0, Math.PI * 2); ctx!.fill();
-      }
-
-      // 5b · fine dust motes (twinkle + sway)
-      for (const m of motes) {
-        m.y -= m.vy;
-        if (m.y < -6) { m.y = h + R(2, 30); m.x = Math.random() * w; }
-        const gx = m.x + Math.sin(t * 0.6 + m.ph) * m.drift;
-        const a = m.a * (0.55 + 0.45 * Math.sin(t * m.tw + m.ph));
-        const rad = m.r * 3;
-        const grd = ctx!.createRadialGradient(gx, m.y, 0, gx, m.y, rad);
-        grd.addColorStop(0, `rgba(198,150,58,${Math.max(0, a)})`);
-        grd.addColorStop(1, "rgba(198,150,58,0)");
-        ctx!.fillStyle = grd;
-        ctx!.beginPath(); ctx!.arc(gx, m.y, rad, 0, Math.PI * 2); ctx!.fill();
       }
     }
     raf = requestAnimationFrame(frame);
