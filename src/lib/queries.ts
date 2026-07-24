@@ -92,6 +92,29 @@ LEFT JOIN gbpx USING(entity_id) LEFT JOIN hub USING(entity_id)
 ORDER BY hs.gbp_title`;
 }
 
+/** Most-recent in-app chat (RM chat / App Chat) touch per account.
+ *  "Last touch" was sourced only from HubSpot's last-connected date, which does
+ *  NOT include the in-app chat conversations an RM has with a customer — so
+ *  accounts whose latest touch was an app-chat message showed a stale (or empty)
+ *  last-touch. This maps chat the same proven way as the Message History card
+ *  (entity_relationships → conversation_members → chat.messages), set-wide, so
+ *  the touch date can be MAX'd with HubSpot's in metabase.ts. ~1s over the book. */
+export function lastTouchSql(): string {
+  return `
+WITH rel AS (
+  SELECT entity_1_id AS a, entity_2_id AS m FROM entities.entity_relationships
+  UNION ALL
+  SELECT entity_2_id AS a, entity_1_id AS m FROM entities.entity_relationships
+),
+am AS (SELECT DISTINCT rel.a AS entity_id, rel.m AS member_id
+       FROM rel JOIN cx.health_score hs ON hs.entity_id = rel.a)
+SELECT am.entity_id, MAX(cm.created_at) AS last_chat
+FROM am
+JOIN chat.conversation_members ccm ON ccm.member_id = am.member_id
+JOIN chat.messages cm ON cm.conversation_id = ccm.conversation_id AND cm.is_deleted = false
+GROUP BY am.entity_id`;
+}
+
 /** Lead-response timing (avg seconds) per account. */
 export function timingSql(leadDays = 90, mixpanelDays = 120): string {
   return `

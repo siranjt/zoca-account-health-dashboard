@@ -12,6 +12,7 @@ import {
   masterSql,
   timingSql,
   trendsSql,
+  lastTouchSql,
   webActiveSql,
   ccUsageSql,
   ccDailySql,
@@ -129,6 +130,15 @@ const secToMs = (v: unknown): number | null => {
   return n == null ? null : Math.round(n * 1000);
 };
 
+// "Last touch" = the most recent of HubSpot's last-connected date and the last
+// in-app chat (RM/App chat) message. Both start YYYY-MM-DD (HubSpot is date-only,
+// chat is a full ISO timestamp); return the later, normalised to YYYY-MM-DD so
+// the day-granularity renderer/sort/CSV stay consistent.
+function newerTouch(hub: string | null, chat: string | null): string | null {
+  const pick = !hub ? chat : !chat ? hub : (Date.parse(chat) || 0) > (Date.parse(hub) || 0) ? chat : hub;
+  return pick ? pick.slice(0, 10) : null;
+}
+
 function parseProducts(agents: unknown): string[] {
   if (!agents || typeof agents !== "string") return [];
   const seen = new Set<string>();
@@ -172,7 +182,7 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
   const cfg = readMetabaseConfig();
   if (!cfg) throw new Error("Metabase not configured (METABASE_BASE_URL / METABASE_API_KEY)");
 
-  const [master, timing, trends, ticketCounts, webActive, ccUsage] = await Promise.all([
+  const [master, timing, trends, ticketCounts, webActive, ccUsage, lastTouch] = await Promise.all([
     runDataset(cfg, masterSql(rangeArg.from, rangeArg.to)),
     runDataset(cfg, timingSql()),
     runDataset(cfg, trendsSql(rangeArg.from, rangeArg.to, rangeArg.days)),
@@ -182,7 +192,14 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
     runDataset(cfg, webActiveSql()).catch(() => [] as Row[]),
     // Command Center (AI-agent web app) per-entity usage — chat.* over 28d.
     runDataset(cfg, ccUsageSql()).catch(() => [] as Row[]),
+    // Last in-app chat (RM/App chat) touch per account — MAX'd with HubSpot's
+    // last-connected below so "last touch" reflects chat, not just calls/emails.
+    runDataset(cfg, lastTouchSql()).catch(() => [] as Row[]),
   ]);
+
+  // Latest in-app chat touch per entity (a full timestamp).
+  const chatTouchByEntity = new Map<string, string>();
+  for (const r of lastTouch) if (r.last_chat) chatTouchByEntity.set(String(r.entity_id), String(r.last_chat));
 
   const webActiveSet = new Set<string>(webActive.map((r) => String(r.entity_id)));
   const ccByEntity = new Map<string, { days: number; convos: number }>();
@@ -236,7 +253,7 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
       gbpVerified: r.gbp_verified === true, // null (no GBP) or false → Unverified
       websiteLive: r.website_live === true, // GBP lists a website URL (Google's own data)
       websiteUrl: (r.website_url as string) || null,
-      lastConnected: (r.last_connected as string) || null,
+      lastConnected: newerTouch((r.last_connected as string) || null, chatTouchByEntity.get(id) || null),
       timezone: tzFromLatLng(num(r.lat), num(r.lng)),
       leadsDelta: tr ? { cur: int0(tr.cur_leads), prev: int0(tr.prev_leads) } : undefined,
       reviewsDelta: tr ? { cur: int0(tr.cur_reviews), prev: int0(tr.prev_reviews) } : undefined,
