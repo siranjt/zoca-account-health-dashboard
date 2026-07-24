@@ -6,6 +6,7 @@ import Toaster from "@/components/Toaster";
 import ShortcutsHelp from "@/components/ShortcutsHelp";
 import BatFX from "@/components/BatFX";
 import GothamRain from "@/components/GothamRain";
+import WayneShine from "@/components/WayneShine";
 import WelcomeSplash from "@/components/WelcomeSplash";
 import ActivityTracker from "@/components/ActivityTracker";
 
@@ -47,6 +48,7 @@ export default function RootLayout({
         <ActivityTracker />
         <WelcomeSplash />
         <GothamRain />
+        <WayneShine />
         <BatFX />
         <CommandPalette />
         <ShortcutsHelp />

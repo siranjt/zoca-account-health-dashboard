@@ -564,6 +564,13 @@ html.light .gotham-lightning,
 html.calm .gotham-lightning,
 html.rain-off .gotham-lightning { display: none; }
 
+/* Wayne Shine — daylight counterpart to the rain (Bruce Wayne / light only).
+   Shares the same on/off preference (rain-off) and calm gate as the rain. */
+.wayne-shine { position: fixed; inset: 0; pointer-events: none; z-index: 12; display: none; }
+html.light .wayne-shine { display: block; }
+html.light.calm .wayne-shine,
+html.light.rain-off .wayne-shine { display: none; }
+
 /* ══ DETECTIVE MODE (Arkham-style vision lens) ═══════════════════════════ */
 .detective-tint { position: fixed; inset: 0; pointer-events: none; z-index: 2147483200; display: none; }
 .detective-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 2147483201; display: none; }
