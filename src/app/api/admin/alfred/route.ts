@@ -23,6 +23,41 @@ export async function GET(req: Request) {
     await ensureAlfred();
     const sql = getSql();
     const like = q ? `%${q}%` : null;
+
+    // CSV export of the (filtered) conversation log.
+    if (searchParams.get("format") === "csv") {
+      const rows = (await sql`
+        SELECT ts, email, name, am_name, role, question, reply, tools, entities, status, latency_ms, tokens_in, tokens_out, model
+        FROM alfred.messages
+        WHERE ts > now() - make_interval(days => ${days})
+          AND (${user}::text IS NULL OR email = ${user})
+          AND (${like}::text IS NULL OR question ILIKE ${like} OR reply ILIKE ${like})
+        ORDER BY ts DESC LIMIT 5000`) as Array<Record<string, unknown>>;
+      const cell = (v: unknown) => {
+        const s = v == null ? "" : String(v);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const header = ["When", "Who", "Email", "Role", "AM", "Accounts", "Question", "Reply", "Tools", "LatencyMs", "TokensIn", "TokensOut", "Model", "Status"];
+      const lines = [header.join(",")];
+      for (const r of rows) {
+        const ents = Array.isArray(r.entities) ? (r.entities as Array<{ name?: string }>).map((e) => e?.name).filter(Boolean).join(" | ") : "";
+        const tools = Array.isArray(r.tools) ? (r.tools as string[]).join(" | ") : "";
+        const email = (r.email as string) || "";
+        lines.push([
+          new Date(r.ts as string).toISOString(), (r.name as string) || email.split("@")[0] || "", email,
+          (r.role as string) || "", (r.am_name as string) || "", ents, (r.question as string) || "", (r.reply as string) || "",
+          tools, r.latency_ms ?? "", r.tokens_in ?? "", r.tokens_out ?? "", (r.model as string) || "", (r.status as string) || "",
+        ].map(cell).join(","));
+      }
+      return new NextResponse(lines.join("\n"), {
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="alfred-conversations-${days}d.csv"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
     const [summary, askers, accounts, tools, conversations] = await Promise.all([
       sql`SELECT count(*)::int total, count(DISTINCT email)::int users,
                  coalesce(round(avg(latency_ms)),0)::int avg_ms,

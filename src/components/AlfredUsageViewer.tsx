@@ -53,6 +53,13 @@ export default function AlfredUsageViewer() {
 
   useEffect(() => { load(); }, [days, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  function exportCsv() {
+    const qs = new URLSearchParams({ days: String(days), format: "csv" });
+    if (user) qs.set("user", user);
+    if (q.trim()) qs.set("q", q.trim());
+    window.location.href = `/api/admin/alfred?${qs.toString()}`;
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -67,6 +74,7 @@ export default function AlfredUsageViewer() {
         </select>
         <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} placeholder="Search question / reply…" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs" />
         <button onClick={load} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">Search</button>
+        <button onClick={exportCsv} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">⬇ Export CSV</button>
         <span className="text-xs text-slate-400">{loading ? "loading…" : `${convos.length} shown`}</span>
       </div>
 
