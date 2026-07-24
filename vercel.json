@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/snapshot", "schedule": "0 6 * * *" }
+    { "path": "/api/snapshot", "schedule": "0 6 * * *" },
+    { "path": "/api/cron/activity-digest", "schedule": "0 * * * *" }
   ]
 }

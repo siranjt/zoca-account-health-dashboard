@@ -27,6 +27,7 @@ import { formatNumber, formatDuration, formatTenure } from "@/lib/format";
 import RetoolAllData from "./RetoolAllData";
 import CommunicationTab from "./CommunicationTab";
 import ChangesTab from "./ChangesTab";
+import { track } from "@/lib/track";
 
 const WINDOWS = [7, 30, 90, 180];
 
@@ -68,6 +69,7 @@ export default function AccountDossier({
   // keep the active tab in the URL (deep-linkable, shareable, back-button-safe)
   function selectTab(t: Tab) {
     setTab(t);
+    track("tab_viewed", { surface: "account_dossier", entityId: account.entityId, detail: { tab: t, bizname: account.name } });
     const qs = new URLSearchParams(Array.from(searchParams.entries()));
     qs.set("tab", t);
     router.replace(`/account/${account.entityId}?${qs.toString()}`, { scroll: false });
@@ -121,6 +123,7 @@ export default function AccountDossier({
     } catch {
       /* ignore */
     }
+    track("account_opened", { surface: "account_dossier", entityId: account.entityId, detail: { bizname: account.name } });
   }, [account.entityId, account.name]);
 
   const h = account.health;

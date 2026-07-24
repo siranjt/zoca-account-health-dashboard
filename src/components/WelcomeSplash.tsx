@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { track } from "@/lib/track";
 
 // A one-time, cinematic "Welcome, <first name>" splash shown right after sign-in.
 // Reads the session, derives the person's first name (Google display name →
@@ -35,6 +36,7 @@ export default function WelcomeSplash() {
           if (sessionStorage.getItem(key)) return;
           sessionStorage.setItem(key, "1");
         } catch { /* ignore */ }
+        track("sign_in");
         setName(firstName(s.user));
       })
       .catch(() => {});

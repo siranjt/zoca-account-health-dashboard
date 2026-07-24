@@ -11,6 +11,7 @@ import DetailPanel from "./DetailPanel";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="py-16 text-center text-sm text-slate-400">Loading map…</div> });
 import { Sparkline, DeltaBadge } from "./Sparkline";
+import { track } from "@/lib/track";
 import { VIZ } from "@/lib/theme";
 import {
   formatDate,
@@ -196,7 +197,11 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
-      else next.add(id);
+      else {
+        next.add(id);
+        const a = accounts.find((x) => x.entityId === id);
+        track("account_opened", { surface: "overview_drawer", entityId: id, detail: { bizname: a?.name } });
+      }
       return next;
     });
   }
@@ -223,6 +228,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
       setTo(p.to);
       setCustom(p.custom);
       setAllTime(!!p.allTime);
+      track("window_changed", { surface: "overview", detail: { window: p.allTime ? "all-time" : p.custom ? `${p.from?.slice(0, 10)}→${p.to?.slice(0, 10)}` : `${p.windowDays}d` } });
     } catch {
       /* keep existing data on error */
     } finally {
@@ -377,6 +383,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
     link.click();
     URL.revokeObjectURL(url);
     window.dispatchEvent(new CustomEvent("cave-toast", { detail: { message: `Exported ${rows.length} accounts` } }));
+    track("csv_exported", { surface: "overview", detail: { count: rows.length } });
   }
 
   function metricPop(a: AccountRow, key: string): React.ReactNode {

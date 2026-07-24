@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
+import { track } from "@/lib/track";
 
 type U = { name?: string; email?: string; role?: string; amName?: string };
 
@@ -31,8 +32,18 @@ export default function UserMenu() {
       <span className="hidden text-[11px] sm:inline" title={u.email} style={{ color: "var(--cave-dim)" }}>
         {first} <span style={{ color: "var(--cave-cy)" }}>· {roleLabel}</span>
       </span>
+      {u.role === "admin" && (
+        <a
+          href="/admin/activity"
+          title="Activity log (admin)"
+          className="rounded-md border px-2 py-1.5 text-[10px] uppercase tracking-[0.12em] no-underline"
+          style={{ borderColor: "var(--cave-line)", color: "var(--cave-dim)" }}
+        >
+          📋 Activity
+        </a>
+      )}
       <button
-        onClick={() => signOut({ callbackUrl: "/signin" })}
+        onClick={() => { track("sign_out"); signOut({ callbackUrl: "/signin" }); }}
         title="Sign out"
         className="rounded-md border px-2 py-1.5 text-[10px] uppercase tracking-[0.12em]"
         style={{ borderColor: "var(--cave-line)", color: "var(--cave-dim)" }}

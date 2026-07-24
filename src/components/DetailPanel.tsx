@@ -19,6 +19,7 @@ import {
   commsSeries,
 } from "./Charts";
 import WebsiteLiveCard from "./WebsiteLiveCard";
+import { track } from "@/lib/track";
 
 export default function DetailPanel({ account, windowDays }: { account: AccountRow; windowDays: number }) {
   const [detail, setDetail] = useState<AccountDetail | null>(null);
@@ -251,7 +252,7 @@ function ProductsActive({ account, detail }: { account: AccountRow; detail: Acco
           <>
             {multi && <ProdBtn label="Combined" active={sel === "__combined__"} onClick={() => setSel("__combined__")} accent />}
             {products.map((p) => (
-              <ProdBtn key={p.product} label={p.product} active={sel === p.product} onClick={() => setSel(p.product)} />
+              <ProdBtn key={p.product} label={p.product} active={sel === p.product} onClick={() => { setSel(p.product); track("product_toggled", { surface: "overview_drawer", entityId: account.entityId, detail: { product: p.product, bizname: account.name } }); }} />
             ))}
           </>
         ) : detail == null ? (

@@ -7,6 +7,7 @@ import { getReviewsDetail } from "@/lib/insights";
 import { getAccountTickets, getManagerTickets } from "@/lib/tickets";
 import { logInteraction, recall, rememberFact, getSavedNotes, getUsageStats, setFocus, clearFocus, getFocus } from "@/lib/memory";
 import { HEALTH_WEIGHTS } from "@/lib/health";
+import { logActivity } from "@/lib/activity";
 import type { AccountRow, AccountsPayload } from "@/lib/types";
 
 // Alfred — the reasoning layer over the live Account Health data (Anthropic
@@ -465,6 +466,10 @@ export async function POST(req: Request) {
     // AMs: Alfred only reasons over their own book. Managers/admins: everything.
     const scoped = scopeAccounts(payload.accounts, viewer);
     ctx = { list: scoped, payload: { ...payload, accounts: scoped }, asOf: ddmmyy(payload.generatedAt) };
+    void logActivity(
+      { email: viewer.email ?? null, name: null, role: viewer.role ?? null, amName: viewer.amName ?? null },
+      { event: "alfred_asked", surface: "alfred", detail: { question: q } }
+    );
   } catch (e) {
     return NextResponse.json({ reply: "I couldn't reach the account data just now, sir — please try again in a moment." });
   }

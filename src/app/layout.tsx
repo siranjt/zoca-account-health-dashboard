@@ -7,6 +7,7 @@ import ShortcutsHelp from "@/components/ShortcutsHelp";
 import BatFX from "@/components/BatFX";
 import GothamRain from "@/components/GothamRain";
 import WelcomeSplash from "@/components/WelcomeSplash";
+import ActivityTracker from "@/components/ActivityTracker";
 
 export const metadata: Metadata = {
   title: "CAVE//OS — Account Health Command Deck",
@@ -43,6 +44,7 @@ export default function RootLayout({
           <div className="pct" id="cave-pct">0%</div>
         </div>
         {children}
+        <ActivityTracker />
         <WelcomeSplash />
         <GothamRain />
         <BatFX />
