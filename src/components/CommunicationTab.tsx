@@ -70,7 +70,7 @@ export default function CommunicationTab({ entityId, windowDays }: { entityId: s
       <div className="rounded-xl border p-3" style={{ borderColor: "var(--cave-line)", background: "var(--cave-panel)" }}>
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold" style={{ color: "var(--cave-cy)" }}>Message History</span>
-          <span className="text-xs text-slate-400">· {data.total} message{data.total === 1 ? "" : "s"} · last {data.windowDays}d{data.capped ? ` (showing ${data.messages.length})` : ""}</span>
+          <span className="text-xs text-slate-400">· {data.total} message{data.total === 1 ? "" : "s"} · {data.windowDays >= 365 ? "all-time" : `last ${data.windowDays}d`}{data.capped ? ` (showing ${data.messages.length})` : ""}</span>
         </div>
 
         {data.total === 0 ? (

@@ -30,6 +30,11 @@ import ChangesTab from "./ChangesTab";
 import { track } from "@/lib/track";
 
 const WINDOWS = [7, 30, 90, 180];
+// "Default" — all data, no timeframe. Floored at 2020-01-01 to match the
+// overview's all-time convention: earliest Zoca data is 2022, so this captures
+// every account's full history without spawning empty monthly chart buckets
+// that a true epoch floor would. Rendered as its own button after the presets.
+const ALL_TIME_DAYS = Math.max(365, Math.round((Date.now() - Date.UTC(2020, 0, 1)) / 86_400_000));
 
 // Sections mirror the real Retool "Customer Dashboard" export order/vocabulary:
 // Profile & GBP → Reviews → Funnel & Leads → Rankings → Payments → Scheduling & App.
@@ -128,8 +133,10 @@ export default function AccountDossier({
 
   const h = account.health;
   const skel = <Skeleton error={error} />;
+  const allTime = windowDays >= 365;
   const gran = windowDays <= 31 ? "daily" : windowDays <= 180 ? "weekly" : "monthly";
-  const winN = windowDays >= 365 ? "all-time" : `last ${windowDays}d`;
+  const winN = allTime ? "all-time" : `last ${windowDays}d`;
+  const winShort = allTime ? "all-time" : `${windowDays}d`;
   const pay = detail?.payments;
 
   return (
@@ -183,6 +190,15 @@ export default function AccountDossier({
               {d}d
             </button>
           ))}
+          <button
+            onClick={() => setWindowDays(ALL_TIME_DAYS)}
+            title="Default — all data, no timeframe"
+            className={`border-l border-slate-300 px-2.5 py-1 text-xs font-medium ${
+              allTime ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            Default
+          </button>
         </div>
       </div>
 
@@ -254,8 +270,8 @@ export default function AccountDossier({
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <Kpi label="Composite" value={h.composite != null ? h.composite.toFixed(1) : "—"} />
           <Kpi label="MRR" value={account.mrr != null ? `$${formatNumber(account.mrr)}` : "—"} />
-          <Kpi label={`Leads · ${windowDays}d`} value={formatNumber(account.leadsReceived)} />
-          <Kpi label={`Reviews · ${windowDays}d`} value={formatNumber(account.reviewsReceived)} />
+          <Kpi label={`Leads · ${winShort}`} value={formatNumber(account.leadsReceived)} />
+          <Kpi label={`Reviews · ${winShort}`} value={formatNumber(account.reviewsReceived)} />
           <Kpi label="Open tickets" value={formatNumber(account.openTickets)} alert={account.openTickets > 0} />
           <Kpi
             label="Due amount"

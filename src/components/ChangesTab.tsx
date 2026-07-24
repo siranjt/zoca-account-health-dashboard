@@ -68,7 +68,7 @@ export default function ChangesTab({ entityId, windowDays }: { entityId: string;
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="text-sm font-semibold" style={{ color: "var(--cave-cy)" }}>Changes Log</span>
-        <span className="text-xs text-slate-400">· {data.total} change{data.total === 1 ? "" : "s"} across {activeGroups.length} area{activeGroups.length === 1 ? "" : "s"} · last {data.windowDays}d{data.capped ? " (most recent 800)" : ""}</span>
+        <span className="text-xs text-slate-400">· {data.total} change{data.total === 1 ? "" : "s"} across {activeGroups.length} area{activeGroups.length === 1 ? "" : "s"} · {data.windowDays >= 365 ? "all-time" : `last ${data.windowDays}d`}{data.capped ? " (most recent 800)" : ""}</span>
       </div>
 
       {data.total === 0 ? (
