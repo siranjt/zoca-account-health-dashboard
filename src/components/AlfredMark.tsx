@@ -7,7 +7,7 @@
 export default function AlfredMark({
   size = 22,
   full = false,
-  framed = true,
+  framed = false,
   className = "",
 }: {
   size?: number;
@@ -20,7 +20,7 @@ export default function AlfredMark({
   }
   const h = size;
   const w = Math.round((size * 660) / 810); // emblem aspect (660×810)
-  const img = <img src="/alfred/alfred-emblem.png" alt="Alfred" width={w} height={h} style={{ display: "block", objectFit: "cover" }} />;
+  const img = <img src="/alfred/alfred-emblem.png" alt="Alfred" width={w} height={h} style={{ display: "block", objectFit: "contain" }} />;
   if (!framed) return <span className={className} style={{ display: "inline-flex" }}>{img}</span>;
   return (
     <span
