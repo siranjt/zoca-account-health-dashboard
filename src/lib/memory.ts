@@ -10,17 +10,40 @@ export type LogRec = {
   question: string; reply: string; tools: string[];
   entities: Array<{ name: string; entityId: string }>;
   status: string; latency_ms: number; tokens_in: number; tokens_out: number; model: string;
+  // who asked — so conversations are attributed per person (for training + usage)
+  email?: string | null; name?: string | null; am_name?: string | null; role?: string | null;
 };
+
+// Self-healing: creates the schema/table if missing and adds the actor columns
+// to a pre-existing alfred.messages. Runs once per warm instance.
+let ensuredAlfred = false;
+async function ensureAlfred(): Promise<void> {
+  if (ensuredAlfred) return;
+  const sql = getSql();
+  await sql`CREATE SCHEMA IF NOT EXISTS alfred`;
+  await sql`CREATE TABLE IF NOT EXISTS alfred.messages (
+    id BIGSERIAL PRIMARY KEY, ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+    question TEXT, reply TEXT, tools JSONB, entities JSONB, status TEXT,
+    latency_ms INT, tokens_in INT, tokens_out INT, model TEXT
+  )`;
+  await sql`ALTER TABLE alfred.messages ADD COLUMN IF NOT EXISTS email TEXT`;
+  await sql`ALTER TABLE alfred.messages ADD COLUMN IF NOT EXISTS name TEXT`;
+  await sql`ALTER TABLE alfred.messages ADD COLUMN IF NOT EXISTS am_name TEXT`;
+  await sql`ALTER TABLE alfred.messages ADD COLUMN IF NOT EXISTS role TEXT`;
+  ensuredAlfred = true;
+}
 
 export async function logInteraction(r: LogRec): Promise<void> {
   if (!neonUrl()) return;
   try {
+    await ensureAlfred();
     await getSql()`
       INSERT INTO alfred.messages
-        (question, reply, tools, entities, status, latency_ms, tokens_in, tokens_out, model)
+        (question, reply, tools, entities, status, latency_ms, tokens_in, tokens_out, model, email, name, am_name, role)
       VALUES
         (${r.question}, ${r.reply}, ${JSON.stringify(r.tools)}::jsonb, ${JSON.stringify(r.entities)}::jsonb,
-         ${r.status}, ${r.latency_ms}, ${r.tokens_in}, ${r.tokens_out}, ${r.model})`;
+         ${r.status}, ${r.latency_ms}, ${r.tokens_in}, ${r.tokens_out}, ${r.model},
+         ${r.email ?? null}, ${r.name ?? null}, ${r.am_name ?? null}, ${r.role ?? null})`;
   } catch { /* memory logging must never break a reply */ }
 }
 

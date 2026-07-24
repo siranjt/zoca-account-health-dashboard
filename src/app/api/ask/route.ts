@@ -455,6 +455,7 @@ const textOf = (resp: any) => (resp?.content || []).filter((b: any) => b.type ==
 
 export async function POST(req: Request) {
   let q = "", history: { role: string; text: string }[] = [];
+  let asker: { email: string | null; amName: string | null; role: string | null } = { email: null, amName: null, role: null };
   try { const b = await req.json(); q = String(b.q || "").slice(0, 800).trim(); if (Array.isArray(b.history)) history = b.history; } catch {}
   if (!q) return NextResponse.json({ error: "empty question" }, { status: 400 });
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ reply: "My reasoning engine has no API key configured, sir — set ANTHROPIC_API_KEY in the Vercel project." });
@@ -466,8 +467,10 @@ export async function POST(req: Request) {
     // AMs: Alfred only reasons over their own book. Managers/admins: everything.
     const scoped = scopeAccounts(payload.accounts, viewer);
     ctx = { list: scoped, payload: { ...payload, accounts: scoped }, asOf: ddmmyy(payload.generatedAt) };
+    asker = { email: viewer.email ?? null, amName: viewer.amName ?? null, role: viewer.role ?? null };
+    // DB-only activity marker (never posted to Slack — see SILENT in activity.ts)
     void logActivity(
-      { email: viewer.email ?? null, name: null, role: viewer.role ?? null, amName: viewer.amName ?? null },
+      { email: asker.email, name: null, role: asker.role as "admin" | "manager" | "am" | null, amName: asker.amName },
       { event: "alfred_asked", surface: "alfred", detail: { question: q } }
     );
   } catch (e) {
@@ -528,7 +531,7 @@ export async function POST(req: Request) {
     logTrace({ status, q: q.slice(0, 120), tools: toolsUsed, iters, ms, tok_in: tokIn, tok_out: tokOut, tok_cache_read: tokCache, model: MODEL, reply_len: reply.length });
     // Durable memory — log the interaction (swallows its own errors; awaited so
     // the write completes before the serverless function freezes).
-    await logInteraction({ question: q, reply, tools: toolsUsed, entities: mentionedEntities(q + " " + reply, ctx.list), status, latency_ms: ms, tokens_in: tokIn, tokens_out: tokOut, model: MODEL });
+    await logInteraction({ question: q, reply, tools: toolsUsed, entities: mentionedEntities(q + " " + reply, ctx.list), status, latency_ms: ms, tokens_in: tokIn, tokens_out: tokOut, model: MODEL, email: asker.email, am_name: asker.amName, role: asker.role });
     return NextResponse.json({ reply, action });
   };
 

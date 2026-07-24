@@ -25,6 +25,11 @@ export interface ActivityInput {
   detail?: Record<string, unknown> | null;
 }
 
+// Events recorded in the DB but NEVER posted to Slack — private content
+// (Alfred conversations) that we keep for making Alfred smarter + usage
+// analytics, but must not leak into the channel.
+const SILENT = new Set(["alfred_asked"]);
+
 let ensured = false;
 async function ensureTable(): Promise<void> {
   if (ensured) return;
@@ -60,8 +65,11 @@ export async function logActivity(actor: Actor, input: ActivityInput): Promise<v
   } catch (e) {
     console.warn("[activity] db write failed:", e);
   }
-  // Every event is reflected in the Slack channel in real time.
-  postActivitySlack(formatLine(actor, input)).catch(() => {});
+  // Every event is reflected in Slack in real time — except SILENT ones
+  // (Alfred conversations), which stay DB-only for privacy.
+  if (!SILENT.has(input.event)) {
+    postActivitySlack(formatLine(actor, input)).catch(() => {});
+  }
 }
 
 // ---- Slack ----------------------------------------------------------------
