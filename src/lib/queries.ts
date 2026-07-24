@@ -331,14 +331,22 @@ export function detailMediaSql(id: string, windowDays: number): string {
     SELECT to_char(b,'${f}') wk, sum(p)::int delta FROM s WHERE b IS NOT NULL AND b >= date_trunc('${u}', now()-interval '${w} days') GROUP BY 1 ORDER BY 1`;
 }
 
-/** Per-product MRR + subscription start date, from Chargebee active-sub line
- *  items mapped to product labels. Lets the "Products active" card break the
- *  combined MRR down by product (Discovery / WIN / Social / Ads / …). */
+/** Per-product MONTHLY MRR + subscription start date, from Chargebee active-sub
+ *  line items mapped to product labels. The line-item `amount` is the charge for
+ *  the whole billing period (weekly / monthly / quarterly / annual / …), so it is
+ *  NOT the monthly figure. Chargebee's own `subscriptions.mrr` IS the normalized
+ *  monthly value, so we allocate each subscription's mrr across its items in
+ *  proportion to their amounts — this yields the correct monthly MRR per product
+ *  for ANY billing frequency, and the per-product sum equals Chargebee's mrr. */
 export function detailProductMrrSql(id: string): string {
   return `
-WITH ec AS (SELECT DISTINCT s.id sub_id, s.started_at::date sdate
-            FROM chargebee.subscriptions s
-            WHERE (s.custom_fields::jsonb->>'cf_entity_id') = '${id}' AND s.status IN ('active','non_renewing')),
+WITH ec AS (
+  SELECT s.id sub_id, s.started_at::date sdate, s.mrr sub_mrr,
+         (SELECT sum(si.amount) FROM chargebee.subscriptions__subscription_items si
+          WHERE si._sdc_source_key_id = s.id AND si.amount > 0) raw_sum
+  FROM chargebee.subscriptions s
+  WHERE (s.custom_fields::jsonb->>'cf_entity_id') = '${id}' AND s.status IN ('active','non_renewing')
+),
 items AS (
   SELECT CASE
       WHEN si.item_price_id ~* '^(Discovery-Agent|Local-SEO|Website)' THEN 'Discovery'
@@ -351,11 +359,14 @@ items AS (
       WHEN si.item_price_id ~* '^Domain' THEN 'Domain'
       ELSE initcap(replace(split_part(si.item_price_id,'-USD',1),'-',' '))
     END product,
-    si.amount, ec.sdate
+    -- monthly MRR share of this item = amount × (sub monthly mrr / sub raw total)
+    si.amount * (ec.sub_mrr::numeric / NULLIF(ec.raw_sum, 0)) monthly_amount,
+    ec.sdate
   FROM ec JOIN chargebee.subscriptions__subscription_items si ON si._sdc_source_key_id = ec.sub_id
-  WHERE si.amount > 0)
-SELECT product, (sum(amount)/100.0)::numeric(10,2) mrr, min(sdate)::text start_date
-FROM items GROUP BY product ORDER BY 2 DESC`;
+  WHERE si.amount > 0 AND ec.sub_mrr > 0
+)
+SELECT product, (sum(monthly_amount)/100.0)::numeric(10,2) mrr, min(sdate)::text start_date
+FROM items GROUP BY product HAVING round(sum(monthly_amount)/100.0, 2) > 0 ORDER BY 2 DESC`;
 }
 
 /** ICP-predicted 6-month leads vs actual leads delivered. */
