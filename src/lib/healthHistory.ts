@@ -70,7 +70,7 @@ function inScope(am: string, viewer: { role: string | null; amName: string | nul
   return true; // manager / admin
 }
 
-export interface Decliner { entityId: string; name: string; am: string; latest: number; prev: number; delta: number; tier: string; spark: number[] }
+export interface AcctTrend { entityId: string; name: string; am: string; latest: number; prev: number; delta: number; tier: string; spark: number[] }
 export interface TrajectoryPoint { d: string; avg: number; green: number; yellow: number; red: number; n: number }
 
 export interface HealthHistoryPayload {
@@ -78,20 +78,21 @@ export interface HealthHistoryPayload {
   days: string[];
   lookbackWeeks: number;
   trajectory: TrajectoryPoint[];
-  decliners: Decliner[];
+  accounts: AcctTrend[];
+  decliners: number;
   scopedAccounts: number;
 }
 
-/** Book trajectory + decliners, scoped to the viewer. lookback = snapshots back
- *  for the "recent drop" comparison (default 4 ≈ 1 month). */
+/** Book trajectory + EVERY scoped account's health trend, sorted biggest-drop
+ *  first (decliners lead the list). lookback = snapshots back for the change
+ *  comparison (default 4 ≈ 1 month). The client searches/filters the full list. */
 export async function getHealthHistory(
   viewer: { role: string | null; amName: string | null },
-  opts: { lookback?: number; limit?: number } = {},
+  opts: { lookback?: number } = {},
 ): Promise<HealthHistoryPayload> {
   const lookback = Math.max(1, Math.min(19, Math.round(opts.lookback ?? 4)));
-  const limit = Math.max(1, Math.min(100, Math.round(opts.limit ?? 25)));
   let data: HealthData;
-  try { data = await load(); } catch { return { configured: false, days: [], lookbackWeeks: lookback, trajectory: [], decliners: [], scopedAccounts: 0 }; }
+  try { data = await load(); } catch { return { configured: false, days: [], lookbackWeeks: lookback, trajectory: [], accounts: [], decliners: 0, scopedAccounts: 0 }; }
 
   const scoped = Array.from(data.accounts.values()).filter((a) => inScope(a.am, viewer));
 
@@ -108,9 +109,10 @@ export async function getHealthHistory(
     .filter((d) => byDay.has(d))
     .map((d) => { const b = byDay.get(d)!; return { d, avg: Math.round((b.sum / b.n) * 10) / 10, green: b.green, yellow: b.yellow, red: b.red, n: b.n }; });
 
-  // decliners: latest vs `lookback` snapshots earlier, biggest drop first
-  const decliners: Decliner[] = scoped
-    .map((a): Decliner | null => {
+  // EVERY scoped account: latest vs `lookback` snapshots earlier, biggest drop
+  // first so decliners lead. The client searches this full list.
+  const accounts: AcctTrend[] = scoped
+    .map((a): AcctTrend | null => {
       const pts = a.points;
       if (pts.length < 2) return null;
       const latest = pts[pts.length - 1];
@@ -118,11 +120,10 @@ export async function getHealthHistory(
       const delta = Math.round((latest.c - prev.c) * 10) / 10;
       return { entityId: a.entityId, name: a.name, am: a.am, latest: latest.c, prev: prev.c, delta, tier: latest.tier, spark: pts.map((p) => p.c) };
     })
-    .filter((x): x is Decliner => !!x && x.delta < 0)
-    .sort((a, b) => a.delta - b.delta)
-    .slice(0, limit);
+    .filter((x): x is AcctTrend => !!x)
+    .sort((a, b) => a.delta - b.delta);
 
-  return { configured: true, days: data.days, lookbackWeeks: lookback, trajectory, decliners, scopedAccounts: scoped.length };
+  return { configured: true, days: data.days, lookbackWeeks: lookback, trajectory, accounts, decliners: accounts.filter((a) => a.delta < 0).length, scopedAccounts: scoped.length };
 }
 
 /** One account's full health line (scoped). */

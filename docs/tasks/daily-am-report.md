@@ -47,20 +47,115 @@ Field names verified against `src/lib/types.ts` → `AccountRow`.
 
 ## Blockers
 
-**1. Churn cannot be computed from the book.** Repo `CLAUDE.md`: *"The book excludes churned
-accounts — no `cx.health_score` row, no appearance."* A churned account disappears from
-`getAccountsPayload()` entirely, so churn is not a filter over existing rows — it needs a second
-source (Chargebee cancelled/non-renewing subscriptions, or Aurora directly).
+**1. Churn — RESOLVED 27/07/26. Working, measured against live data.**
 
-Separately, **daily churn percent per AM is a bad metric.** With ~831 accounts across the
-roster, an AM's daily churn is 0 most days and one cancellation spikes it to a meaningless
-percentage. Recommend **30-day rolling churn**, shown daily. Same query cost, a number that
-means something.
+Decisions recorded: Chargebee `cancelled` **is** true churn (owner's call, 27/07/26). AM
+attribution is **the AM assigned to the account** (owner's call, 27/07/26) — not ownership
+reconstructed at cancellation time.
 
-**2. "Retention-risk tickets" has no definition.** Options: (a) a Linear label, (b) tickets on
-accounts whose `health.tier` is `at_risk` / `critical`, (c) a ticket age/priority threshold.
-(b) needs no Linear change and reuses the health tier already on the row — cheapest and
-defensible. Decide before coding.
+Method: Chargebee `GET /subscriptions` with `status[is]=cancelled` + `cancelled_at[after]`
+→ `cf_entity_id` → AM via BaseSheet (card 1335), falling back to `cx.am_mapping` →
+`entities.employees`. Probe: `churn_by_am.py` (session scratchpad; port into the repo when wired).
+
+Verified figures, 30-day window ending 27/07/26:
+
+| Measure | Value |
+|---|---|
+| Active accounts (distinct entities) | 819 |
+| Subscriptions cancelled | 77 (across 75 entities) |
+| Fully churned accounts (no active sub left) | 62 |
+| Partial (cancelled one sub, still active) | 13 |
+| 30-day account churn | 7.0% |
+| `cf_entity_id` coverage | 77/77 cancelled · 925/925 active |
+| AM mapping, active accounts | 818/819 |
+
+**Report account churn, not subscription churn.** 77 cancellations are 62 churned accounts;
+using 77 overstates churn by 24%.
+
+**Daily churn percent per AM is still a bad metric** — an AM churns nobody most days and one
+cancellation spikes the rate. Use a **30-day rolling** figure displayed daily.
+
+### Calendar-month churn (added 27/07/26, owner's request)
+
+A month runs 1st 00:00 → 1st 00:00. Denominator is accounts with ≥1 subscription active **at
+the month start**, reconstructed from `activated_at`/`started_at` and `cancelled_at` — not
+today's book. Numerator is those accounts holding no active subscription by month end.
+Probe: `month_churn.py`. Source: 2,737 subscriptions, all statuses.
+
+| Month | Active @ start | Churned | Churn % |
+|---|---|---|---|
+| Aug 25 | 618 | 23 | 3.7% |
+| Sep 25 | 739 | 54 | 7.3% |
+| Oct 25 | 888 | 83 | 9.3% |
+| Nov 25 | 1009 | 115 | 11.4% |
+| Dec 25 | 1007 | 89 | 8.8% |
+| **Jan 26** | 1038 | **179** | **17.2%** |
+| Feb 26 | 916 | 93 | 10.2% |
+| Mar 26 | 899 | 69 | 7.7% |
+| Apr 26 | 907 | 65 | 7.2% |
+| May 26 | 902 | 61 | 6.8% |
+| Jun 26 | 887 | 93 | 10.5% |
+| Jul 26 | 839 | 33 | 3.9% (MTD, to 27/07) |
+
+**The book peaked at 1,038 accounts in Jan 26 and is 839 today — down 19% in six months.**
+Churn improved Feb→May then re-accelerated in June to 10.5%.
+
+**Jan 26 needs explaining before this series is shown to anyone.** 179 churned accounts in one
+month is 2.5× the trailing average; it is either a real event (pricing, a cohort renewal) or a
+Chargebee bulk operation. Do not publish the series until that month is understood.
+
+**Caveat — coverage.** 342 of 2,737 subscriptions (12.5%) lack `cf_entity_id` or a start
+timestamp and are excluded, so monthly figures may undercount. The 30-day probe found 100%
+coverage on recent records, so the gap is concentrated in older subscriptions.
+
+**Caveat — per-AM counts are not per-AM rates.** The matrix below counts churned accounts by
+*current* assignment. Counts favour whoever holds the biggest book, and applying today's
+assignment to historical churn is anachronistic. Per-AM month denominators (each AM's active
+book at month start) are required before any AM comparison is published.
+
+Churned accounts by AM, last 6 months (counts, not rates):
+
+| AM | Feb | Mar | Apr | May | Jun | Jul | Total |
+|---|---|---|---|---|---|---|---|
+| Kanak sharma | 20 | 5 | 3 | 8 | 13 | 4 | 53 |
+| Bikash Mishra | 2 | 4 | 4 | 14 | 10 | 6 | 40 |
+| Sudha Goutami | 4 | 6 | 12 | 6 | 7 | 3 | 38 |
+| Hubern C | 4 | 7 | 9 | 4 | 9 | 1 | 34 |
+| Atharv Y | 0 | 2 | 4 | 9 | 13 | 2 | 30 |
+| Siddhi Shetty | 8 | 8 | 3 | 4 | 6 | 1 | 30 |
+| Anu Srivastava | 4 | 9 | 5 | 4 | 3 | 4 | 29 |
+| (unassigned) | 7 | 3 | 4 | 1 | 9 | 3 | 27 |
+| Santhosh V | 14 | 5 | 6 | 1 | 1 | 0 | 27 |
+| Shruti Sinha | 0 | 0 | 4 | 4 | 10 | 4 | 22 |
+| Sakshi Mamgain | 2 | 5 | 2 | 2 | 5 | 4 | 20 |
+| Others (7 AMs) | 28 | 15 | 9 | 4 | 7 | 1 | 64 |
+| **Total** | **93** | **69** | **65** | **61** | **93** | **33** | **414** |
+
+**Known data-quality finding: half of churn has no live owner.** Of 62 churned accounts, only
+30 sit with an AM who still has a book. The rest split into 19 with no AM assignment in either
+source, and 13 assigned to three AMs holding zero active accounts (Shruti Sinha 8, Atharv Y 4,
+Santhosh V 1). Assignment appears to be cleared when an account cancels. Consequences for the
+report: show `(unassigned)` as its own row, and **suppress the percentage wherever the active
+book is 0** — a 100% churn rate on an empty denominator is noise that will be read as blame.
+
+**2. Retention-risk tickets — RESOLVED 27/07/26.** Superseded my `health.tier` proposal; the
+owner's Metabase query already carries the fields. Public CSV:
+`metabase.zoca.ai/public/question/a3f0ebc6-c0fd-4a0f-a000-2e4d5fd0e781.csv`
+
+90 open tickets (04/12/25 → 24/07/26). Columns include `entity_id`, `am_name`,
+`ticket_category`, `ticket_classification`, `churn_potential_status`, `state_name`.
+
+- `ticket_classification`: Retention Risk Alert 51 · Churn Ticket 23 · paid_user_offboarding 11
+  · Subscription Support 4 · Subscription_Cancellation 1
+- `churn_potential_status`: POTENTIAL 55 · blank 34 · FALSE_ALERT 1
+- `state_name`: Todo 79 · In Progress 6 · In Review 5 — **open states only**, which is what a
+  daily report wants
+- 17 rows have a blank `am_name`; 3 have a blank `entity_id`
+
+Definition: group by `am_name` where `ticket_classification` is `Retention Risk Alert` or
+`Churn Ticket`; exclude `churn_potential_status = FALSE_ALERT`. Row counts come from a CSV
+parser, not `wc -l` — the `description` field contains embedded newlines (raw line count reads
+3,408 against 90 real rows).
 
 **3. "Active users on payments" has no definition.** Ambiguous between: accounts paying
 successfully (billing state — derivable from `daysOverdue` / `failedPayments`), and end-users of
