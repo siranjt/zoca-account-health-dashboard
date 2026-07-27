@@ -55,6 +55,13 @@ export async function GET(req: Request) {
       if (look.id) { const { text, blocks } = renderDigestBlocks(picked); const r = await slackDM(look.id, text, blocks); out.slack = { ok: r.ok, error: r.error }; }
       else out.slack = { ok: false, lookupError: look.error, auth: await slackAuthTest() };
     }
+    // &channel=1 also posts the manager roll-up to DIGEST_SLACK_CHANNEL, so the
+    // channel summary can be verified in isolation before the real Monday send.
+    if (sp.get("channel") === "1" && slack && channel && digests.length) {
+      const { text, blocks } = renderChannelSummary(digests);
+      const r = await slackPost(channel, text, blocks);
+      out.channelPost = { channel, ok: r.ok, error: r.error };
+    }
     return NextResponse.json(out);
   }
 
