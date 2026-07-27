@@ -46,6 +46,25 @@ export default function ImpactViewer() {
   const [days, setDays] = useState(30);
   const [data, setData] = useState<Readout | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [sendMsg, setSendMsg] = useState<string | null>(null);
+
+  async function sendDigest() {
+    if (sending) return;
+    if (!confirm("Send the weekly digest to all AMs right now? This DMs every account manager with an at-risk book (and posts the manager roll-up if a channel is set).")) return;
+    setSending(true);
+    setSendMsg("Sending…");
+    try {
+      const r = await fetch("/api/admin/send-digest", { method: "POST" });
+      const d = await r.json();
+      if (d.ok) setSendMsg(`✓ Sent — ${d.dmSent ?? 0} DM${d.dmSent === 1 ? "" : "s"} of ${d.candidates ?? 0}${d.channelPosted ? " · channel roll-up posted" : d.transports?.slackChannel ? " · channel post FAILED (bot in channel?)" : ""}`);
+      else setSendMsg(`✗ ${d.error || "send failed"}`);
+    } catch (e) {
+      setSendMsg(`✗ ${String(e)}`);
+    } finally {
+      setSending(false);
+    }
+  }
 
   useEffect(() => {
     setLoading(true);
@@ -75,6 +94,16 @@ export default function ImpactViewer() {
           className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">
           ⭳ Export CSV
         </a>
+        <button
+          onClick={sendDigest}
+          disabled={sending}
+          title="Send the weekly AM digest to all AMs now (same as the Monday cron)"
+          className="ml-auto rounded-md border px-2.5 py-1 text-xs font-semibold disabled:opacity-50"
+          style={{ borderColor: "#0f172a", background: "#0f172a", color: "#fff" }}
+        >
+          {sending ? "Sending…" : "📨 Send digest now"}
+        </button>
+        {sendMsg && <span className="text-xs" style={{ color: sendMsg.startsWith("✓") ? "#16a34a" : sendMsg.startsWith("✗") ? "#dc2626" : "#64748b" }}>{sendMsg}</span>}
         {loading && <span className="text-xs text-slate-400">loading…</span>}
       </div>
 
