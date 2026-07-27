@@ -57,28 +57,26 @@ export async function slackPost(channel: string, text: string, blocks: unknown[]
 
 const mEsc = (s: string) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/** Per-AM detailed digest as Slack Block Kit (each account = section + URL button). */
+/** Per-AM digest as Slack Block Kit, grouped by problem category (each category
+ *  = a header line + its accounts as section + URL button). */
 export function renderDigestBlocks(d: AmDigest): { text: string; blocks: unknown[] } {
   const first = mEsc((d.amName || "there").split(/\s+/)[0]);
-  const n = d.accounts.length;
-  const cards = d.accounts.flatMap((a) => [
-    {
+  const body = d.groups.flatMap((g) => [
+    { type: "section", text: { type: "mrkdwn", text: `${g.emoji} *${mEsc(g.label)}*  _(${g.count})_` } },
+    ...g.accounts.map((a) => ({
       type: "section",
-      text: { type: "mrkdwn", text: `*${mEsc(a.name)}*\n${mEsc(a.driver)}\n_${mEsc(a.tierLabel)}${a.mrr != null ? ` · $${a.mrr.toLocaleString()} MRR` : ""}_` },
+      text: { type: "mrkdwn", text: `*${mEsc(a.name)}*\n${mEsc(a.reason)}${a.mrr != null ? ` · $${a.mrr.toLocaleString()} MRR` : ""}` },
       accessory: { type: "button", text: { type: "plain_text", text: "Open →", emoji: true }, url: a.link },
-    },
+    })),
     { type: "divider" },
   ]);
-  const more = d.totalAtRisk > n
-    ? [{ type: "context", elements: [{ type: "mrkdwn", text: `…and ${d.totalAtRisk - n} more on your book. <${appBaseUrl()}/overview|See your full book →>` }] }]
-    : [{ type: "context", elements: [{ type: "mrkdwn", text: `<${appBaseUrl()}/overview|See your full book →>` }] }];
   return {
-    text: `${n} account${n === 1 ? "" : "s"} on your book need attention`,
+    text: `Your book — ${d.totalAtRisk} account${d.totalAtRisk === 1 ? "" : "s"} need attention`,
     blocks: [
-      { type: "header", text: { type: "plain_text", text: `${n} account${n === 1 ? "" : "s"} need your attention`, emoji: true } },
-      { type: "section", text: { type: "mrkdwn", text: `Hi ${first} — your ${n} most at-risk account${n === 1 ? "" : "s"} this week. One tap opens each.` } },
-      ...cards,
-      ...more,
+      { type: "header", text: { type: "plain_text", text: "Your book needs attention", emoji: true } },
+      { type: "section", text: { type: "mrkdwn", text: `Hi ${first} — *${d.totalAtRisk}* at-risk, grouped by what's wrong. Your top ${d.shown} to act on:` } },
+      ...body,
+      { type: "context", elements: [{ type: "mrkdwn", text: `<${appBaseUrl()}/overview|See your full book →>` }] },
     ],
   };
 }
@@ -88,7 +86,7 @@ export function renderChannelSummary(digests: AmDigest[]): { text: string; block
   const rows = digests
     .slice()
     .sort((a, b) => b.totalAtRisk - a.totalAtRisk)
-    .map((d) => `• *${mEsc(d.amName)}* — ${d.totalAtRisk} at-risk · top: ${mEsc(d.accounts[0]?.name || "—")}`);
+    .map((d) => `• *${mEsc(d.amName)}* — ${d.totalAtRisk} at-risk · top: ${mEsc(d.groups[0]?.accounts[0]?.name || "—")}`);
   return {
     text: "Weekly book attention",
     blocks: [

@@ -35,8 +35,8 @@ export async function GET(req: Request) {
       transports: { email, slackDM: slack, slackChannel: slack && !!channel ? channel : false },
       candidates: digests.length,
       preview: digests.map((d) => ({
-        to: d.email, am: d.amName, subject: renderDigestEmail(d).subject, totalAtRisk: d.totalAtRisk,
-        accounts: d.accounts.map((a) => ({ name: a.name, driver: a.driver, tier: a.tierLabel, mrr: a.mrr, link: a.link })),
+        to: d.email, am: d.amName, subject: renderDigestEmail(d).subject, totalAtRisk: d.totalAtRisk, shown: d.shown,
+        groups: d.groups.map((g) => ({ category: g.label, count: g.count, accounts: g.accounts.map((a) => `${a.name} — ${a.reason}`) })),
       })),
     });
   }
@@ -48,7 +48,7 @@ export async function GET(req: Request) {
     const amq = (sp.get("am") || "").toLowerCase();
     const picked = (amq ? digests.find((d) => d.email.toLowerCase() === amq || d.amName.toLowerCase().includes(amq)) : null) || digests[0];
     if (!picked) return NextResponse.json({ ok: false, reason: "no digest available (no at-risk accounts on any book)" });
-    const out: Record<string, unknown> = { ok: true, test: true, previewOf: picked.amName, accounts: picked.accounts.length, sentTo: testTo };
+    const out: Record<string, unknown> = { ok: true, test: true, previewOf: picked.amName, accounts: picked.shown, sentTo: testTo };
     if (email) { const { subject, html } = renderDigestEmail(picked); const r = await sendEmail({ to: testTo, subject, html }); out.email = { ok: r.ok, error: r.error }; }
     if (slack) {
       const uid = await slackUserId(testTo);
@@ -62,13 +62,13 @@ export async function GET(req: Request) {
   let emailSent = 0, dmSent = 0;
 
   for (const d of digests) {
-    const row: (typeof results)[number] = { email: d.email, accounts: d.accounts.length };
+    const row: (typeof results)[number] = { email: d.email, accounts: d.shown };
 
     if (email) {
       const { subject, html } = renderDigestEmail(d);
       const r = await sendEmail({ to: d.email, subject, html });
       row.emailOk = r.ok;
-      if (r.ok) { emailSent++; await logDigestSent(d.email, d.amName, d.accounts.length, d.totalAtRisk, "email"); }
+      if (r.ok) { emailSent++; await logDigestSent(d.email, d.amName, d.shown, d.totalAtRisk, "email"); }
     }
 
     if (slack) {
@@ -78,7 +78,7 @@ export async function GET(req: Request) {
         const { text, blocks } = renderDigestBlocks(d);
         const r = await slackDM(uid, text, blocks);
         row.slackOk = r.ok; row.slackError = r.error;
-        if (r.ok) { dmSent++; await logDigestSent(d.email, d.amName, d.accounts.length, d.totalAtRisk, "slack_dm"); }
+        if (r.ok) { dmSent++; await logDigestSent(d.email, d.amName, d.shown, d.totalAtRisk, "slack_dm"); }
       }
     }
 
