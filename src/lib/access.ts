@@ -56,6 +56,18 @@ export function ssoConfigured(): boolean {
   return hasGoogle && hasSecret && loadConfig() !== null;
 }
 
+/** The full roster (for adoption analytics — who *could* use the app). Empty
+ *  arrays when ACCESS_CONTROL is unset/invalid. Emails are lowercased. */
+export function listRoster(): { admins: string[]; managers: string[]; ams: Array<{ email: string; name: string }> } {
+  const cfg = loadConfig();
+  if (!cfg) return { admins: [], managers: [], ams: [] };
+  return {
+    admins: [...cfg.admins],
+    managers: [...cfg.managers],
+    ams: Object.entries(cfg.ams).map(([email, name]) => ({ email, name })),
+  };
+}
+
 /** Resolve an email to its Identity, or null if the email is not on the roster. */
 export function identityFor(email?: string | null): Identity | null {
   if (!email) return null;

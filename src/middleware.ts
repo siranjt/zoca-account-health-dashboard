@@ -25,9 +25,26 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
-  // legacy password gate
+  // SSO is NOT fully configured. This path must FAIL CLOSED, never open: a
+  // missing Google/AUTH_SECRET var — or a malformed ACCESS_CONTROL that flips
+  // ssoConfigured() to false — is an operational failure, not a reason to drop
+  // auth on an app holding customer PII. The only non-SSO way in is an EXPLICIT
+  // Basic-auth password (DASHBOARD_PASSWORD). With no password set:
+  //   • production/preview  → hard block (503), so env drift can't expose data;
+  //   • local dev only      → allow through, so `next dev` isn't gated.
   const password = process.env.DASHBOARD_PASSWORD;
-  if (!password) return NextResponse.next();
+  const isDeployed = process.env.VERCEL_ENV === "production" || process.env.VERCEL_ENV === "preview" || process.env.NODE_ENV === "production";
+
+  if (!password) {
+    if (isDeployed) {
+      return new NextResponse(
+        "Access denied — authentication is not configured. (SSO env missing or ACCESS_CONTROL invalid.)",
+        { status: 503 },
+      );
+    }
+    return NextResponse.next(); // local dev convenience only
+  }
+
   const authz = req.headers.get("authorization");
   if (authz?.startsWith("Basic ")) {
     try {
