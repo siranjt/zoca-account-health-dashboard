@@ -21,7 +21,9 @@ export async function GET(req: Request) {
     if (authz !== `Bearer ${secret}`) return new NextResponse("unauthorized", { status: 401 });
   }
 
-  const dry = new URL(req.url).searchParams.get("dry") === "1";
+  const sp = new URL(req.url).searchParams;
+  const dry = sp.get("dry") === "1";
+  const testTo = sp.get("test"); // one-off: DM a single real digest to this address only
   const email = mailerConfigured();
   const slack = slackConfigured();
   const channel = process.env.DIGEST_SLACK_CHANNEL || null;
@@ -32,8 +34,28 @@ export async function GET(req: Request) {
       ok: true, dry: true,
       transports: { email, slackDM: slack, slackChannel: slack && !!channel ? channel : false },
       candidates: digests.length,
-      preview: digests.map((d) => ({ to: d.email, am: d.amName, subject: renderDigestEmail(d).subject, totalAtRisk: d.totalAtRisk, accounts: d.accounts.map((a) => `${a.name} — ${a.driver}`) })),
+      preview: digests.map((d) => ({
+        to: d.email, am: d.amName, subject: renderDigestEmail(d).subject, totalAtRisk: d.totalAtRisk,
+        accounts: d.accounts.map((a) => ({ name: a.name, driver: a.driver, tier: a.tierLabel, mrr: a.mrr, link: a.link })),
+      })),
     });
+  }
+
+  // Test send: deliver ONE real AM digest to a single chosen recipient (yours),
+  // without touching the actual AMs. ?test=<email>&am=<name|email>. Defaults to
+  // the first AM with at-risk accounts.
+  if (testTo) {
+    const amq = (sp.get("am") || "").toLowerCase();
+    const picked = (amq ? digests.find((d) => d.email.toLowerCase() === amq || d.amName.toLowerCase().includes(amq)) : null) || digests[0];
+    if (!picked) return NextResponse.json({ ok: false, reason: "no digest available (no at-risk accounts on any book)" });
+    const out: Record<string, unknown> = { ok: true, test: true, previewOf: picked.amName, accounts: picked.accounts.length, sentTo: testTo };
+    if (email) { const { subject, html } = renderDigestEmail(picked); const r = await sendEmail({ to: testTo, subject, html }); out.email = { ok: r.ok, error: r.error }; }
+    if (slack) {
+      const uid = await slackUserId(testTo);
+      if (!uid) out.slack = { ok: false, error: `no Slack user found for ${testTo}` };
+      else { const { text, blocks } = renderDigestBlocks(picked); const r = await slackDM(uid, text, blocks); out.slack = { ok: r.ok, error: r.error }; }
+    }
+    return NextResponse.json(out);
   }
 
   const results: Array<{ email: string; emailOk?: boolean; slackOk?: boolean; slackError?: string; accounts: number }> = [];
