@@ -79,14 +79,14 @@ export async function getImpact(days = 30): Promise<ImpactReadout> {
             count(DISTINCT email) FILTER (WHERE event='alfred_asked')::int askers,
             count(DISTINCT (detail->>'account')) FILTER (WHERE event='alfred_asked' AND detail->>'account' IS NOT NULL)::int accounts
           FROM cave_activity_log WHERE ts > NOW() - make_interval(days => ${d})`,
-      sql`SELECT COALESCE(name, email) label, email, max(role) role, max(am_name) am_name,
+      sql`SELECT COALESCE(max(name), email) label, email, max(role) role, max(am_name) am_name,
             count(*)::int events,
             count(*) FILTER (WHERE event='account_opened')::int opens,
             count(DISTINCT entity_id) FILTER (WHERE event='account_opened')::int accounts,
             count(*) FILTER (WHERE event='alfred_asked')::int alfred,
             max(ts) last_seen
           FROM cave_activity_log WHERE ts > NOW() - make_interval(days => ${d})
-          GROUP BY 1, 2 ORDER BY events DESC LIMIT 200`,
+          GROUP BY email ORDER BY events DESC LIMIT 200`,
       sql`SELECT event, count(*)::int n FROM cave_activity_log
           WHERE ts > NOW() - make_interval(days => ${d}) GROUP BY 1 ORDER BY n DESC`,
       sql`SELECT to_char(date_trunc('day', ts), 'YYYY-MM-DD') d, count(*)::int events, count(DISTINCT email)::int users
