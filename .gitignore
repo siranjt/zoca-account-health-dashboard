@@ -39,3 +39,4 @@ next-env.d.ts
 
 # Local-only build doc (kept out of the repo by request)
 CAVE_OS.md
+ACCOUNT_HEALTH_PLATFORM.md
