@@ -40,12 +40,17 @@ export function trackedLink(email: string, entityId: string): string {
   return `${appBaseUrl()}/api/digest/click?${qs.toString()}`;
 }
 
-// The one-line reason this account needs attention — real fields only, mirroring
-// the Alfred route's primaryDriver so the digest and the assistant agree.
+// The one-line reason this account needs attention — real fields only. Leads with
+// the live, actionable signal (currently overdue) and reframes billing so a
+// customer-facing nudge stays credible: failedPayments is a LIFETIME failure
+// count, so "343 failed payments" is true but reads as a bug — say what to do
+// about it instead.
 export function attentionDriver(a: AccountRow): string {
   const fp = a.failedPayments || 0;
-  if (fp >= 2) return `Billing risk — ${fp} failed payments`;
-  if ((a.daysOverdue ?? 0) > 0) return `Payment overdue — ${a.daysOverdue} days`;
+  const od = a.daysOverdue ?? 0;
+  if (od > 0) return `Payment ${od} day${od === 1 ? "" : "s"} overdue`;
+  if (fp >= 10) return "Billing failing — card likely needs updating";
+  if (fp >= 2) return "Billing risk — repeated failed charges";
   if ((a.profileClicks || 0) === 0 && (a.keywordImpressions || 0) === 0) return "GBP not surfacing — 0 profile clicks & impressions";
   if ((a.reviewsReceived || 0) === 0) return "No reviews collected in window";
   if ((a.keywordsTop3Pct ?? 100) < 5) return "Weak search visibility — under 5% of keywords in top 3";
@@ -53,10 +58,16 @@ export function attentionDriver(a: AccountRow): string {
   return a.health?.reason || "Below-par engagement";
 }
 
-// Worse-first ranking: tier, then failed payments, then overdue, then composite.
+// Worse-first ranking geared to "worth the AM's time THIS WEEK": tier dominates,
+// then a live overdue balance, then composite health. The lifetime failed-payment
+// count is CAPPED so one billing-broken account can't monopolise the top 3 — that
+// billing is failing matters; its raw magnitude (343 vs 6) does not.
 function attentionScore(a: AccountRow): number {
   const tier = a.health?.tier === "critical" ? 3 : a.health?.tier === "at_risk" ? 2 : a.health?.tier === "monitor" ? 1 : 0;
-  return tier * 1e9 + (a.failedPayments || 0) * 1e6 + Math.max(0, a.daysOverdue || 0) * 1e3 + (100 - (a.health?.composite ?? 100));
+  const od = Math.max(0, a.daysOverdue || 0);
+  const fpCapped = Math.min(a.failedPayments || 0, 6);
+  const comp = a.health?.composite ?? 100;
+  return tier * 1_000_000 + (od > 0 ? 200_000 : 0) + fpCapped * 10_000 + Math.min(od, 60) * 1_000 + (100 - comp) * 100;
 }
 
 export interface DigestAccount { name: string; entityId: string; tierLabel: string; color: string; driver: string; mrr: number | null; link: string; }
