@@ -25,7 +25,7 @@ export async function GET(req: Request) {
   const email = mailerConfigured();
   const slack = slackConfigured();
   const channel = process.env.DIGEST_SLACK_CHANNEL || null;
-  const digests = await buildAmDigests(3);
+  const digests = await buildAmDigests();
 
   if (dry) {
     return NextResponse.json({

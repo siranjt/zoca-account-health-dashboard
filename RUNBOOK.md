@@ -88,6 +88,7 @@ feature). Absent *auth* vars **fail closed** (see §7).
 | `RESEND_API_KEY` / `DIGEST_FROM` | Optional | AM digest **email** (Resend). `DIGEST_FROM` must be a Resend-verified sender, e.g. `Account Health <alerts@yourdomain>` |
 | `SLACK_BOT_TOKEN` | Optional | AM digest **Slack** (DM per AM). Bot scopes: `chat:write`, `users:read.email`, `im:write`. Resolves email→id automatically |
 | `DIGEST_SLACK_CHANNEL` | Optional | Channel id for the manager roll-up post (bot must be invited). Requires `SLACK_BOT_TOKEN` |
+| `DIGEST_TOP_N` | Optional | Accounts per AM digest (default 10). Tune against click-through; fewer usually converts better |
 | `APP_BASE_URL` | Optional | Absolute base for digest links (defaults to the prod URL) |
 | `DIGEST_SECRET` | Optional | HMAC key for digest click links (falls back to `AUTH_SECRET`) |
 | `DATA_SOURCE` / `METRICS_WINDOW_DAYS` | Optional | Data-source toggle + default window |

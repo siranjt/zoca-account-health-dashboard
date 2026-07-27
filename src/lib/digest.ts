@@ -73,8 +73,13 @@ function attentionScore(a: AccountRow): number {
 export interface DigestAccount { name: string; entityId: string; tierLabel: string; color: string; driver: string; mrr: number | null; link: string; }
 export interface AmDigest { email: string; amName: string; accounts: DigestAccount[]; totalAtRisk: number }
 
-/** Build a digest for every AM on the roster who has at-risk accounts. */
-export async function buildAmDigests(topN = 3): Promise<AmDigest[]> {
+/** Build a digest for every AM on the roster who has at-risk accounts.
+ *  Count is DIGEST_TOP_N (env, default 10) unless an explicit topN is passed —
+ *  a live knob so the cadence can be tuned against click-through without a code
+ *  change. (Fewer is usually better: a short list gets tapped, a long one gets
+ *  skimmed and closed.) */
+export async function buildAmDigests(topN?: number): Promise<AmDigest[]> {
+  const n = topN && topN > 0 ? topN : Number(process.env.DIGEST_TOP_N) || 10;
   const roster = listRoster();
   if (!roster.ams.length) return [];
   const payload = await getAccountsPayload();
@@ -87,7 +92,7 @@ export async function buildAmDigests(topN = 3): Promise<AmDigest[]> {
       email: am.email,
       amName: am.name,
       totalAtRisk: attention.length,
-      accounts: attention.slice(0, topN).map((a): DigestAccount => ({
+      accounts: attention.slice(0, n).map((a): DigestAccount => ({
         name: a.name,
         entityId: a.entityId,
         tierLabel: a.health?.tierLabel || a.health?.tier || "At risk",
