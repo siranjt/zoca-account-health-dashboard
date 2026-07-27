@@ -36,3 +36,6 @@ next-env.d.ts
 
 # private engineering references — never commit (public repo)
 .reference/
+
+# Local-only build doc (kept out of the repo by request)
+CAVE_OS.md
