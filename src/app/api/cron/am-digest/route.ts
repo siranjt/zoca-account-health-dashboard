@@ -12,7 +12,7 @@ import { logActivity } from "@/lib/activity";
 // ?dry=1 builds + renders but sends nothing (verify targeting first).
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -65,19 +65,18 @@ export async function GET(req: Request) {
     return NextResponse.json(out);
   }
 
-  const results: Array<{ email: string; emailOk?: boolean; slackOk?: boolean; slackError?: string; accounts: number }> = [];
-  let emailSent = 0, dmSent = 0;
-
-  for (const d of digests) {
-    const row: (typeof results)[number] = { email: d.email, accounts: d.shown };
-
+  // Send to every AM IN PARALLEL — a sequential loop (lookup→open→post per AM)
+  // blew past the function timeout at the first real cron run. Each AM's send is
+  // independent, so fan them out.
+  type Row = { email: string; emailOk?: boolean; slackOk?: boolean; slackError?: string; accounts: number };
+  const results: Row[] = await Promise.all(digests.map(async (d): Promise<Row> => {
+    const row: Row = { email: d.email, accounts: d.shown };
     if (email) {
       const { subject, html } = renderDigestEmail(d);
       const r = await sendEmail({ to: d.email, subject, html });
       row.emailOk = r.ok;
-      if (r.ok) { emailSent++; await logDigestSent(d.email, d.amName, d.shown, d.totalAtRisk, "email"); }
+      if (r.ok) await logDigestSent(d.email, d.amName, d.shown, d.totalAtRisk, "email");
     }
-
     if (slack) {
       const look = await slackLookup(d.email);
       if (!look.id) { row.slackOk = false; row.slackError = look.error || "no_slack_user"; }
@@ -85,12 +84,13 @@ export async function GET(req: Request) {
         const { text, blocks } = renderDigestBlocks(d);
         const r = await slackDM(look.id, text, blocks);
         row.slackOk = r.ok; row.slackError = r.error;
-        if (r.ok) { dmSent++; await logDigestSent(d.email, d.amName, d.shown, d.totalAtRisk, "slack_dm"); }
+        if (r.ok) await logDigestSent(d.email, d.amName, d.shown, d.totalAtRisk, "slack_dm");
       }
     }
-
-    results.push(row);
-  }
+    return row;
+  }));
+  const emailSent = results.filter((r) => r.emailOk).length;
+  const dmSent = results.filter((r) => r.slackOk).length;
 
   // Manager-visible roll-up to a channel.
   let channelPosted: boolean | undefined;
