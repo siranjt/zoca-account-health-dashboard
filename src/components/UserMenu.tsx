@@ -28,7 +28,7 @@ export default function UserMenu() {
     u.role === "manager" ? "Manager" :
     u.role === "am" ? `AM · ${u.amName || "—"}` :
     "no role — check ACCESS_CONTROL";
-  const NAME_OVERRIDES: Record<string, string> = { "siranjith.t@zoca.com": "Siranj", "siranjith.t@gmail.com": "Siranj" };
+  const NAME_OVERRIDES: Record<string, string> = {}; // per-email greeting overrides (none — use the SSO name)
   const first = NAME_OVERRIDES[(u.email || "").toLowerCase()] || (u.name || u.email || "").split(" ")[0];
 
   return (

@@ -9,7 +9,7 @@ import Papa from "papaparse";
 // health is computed here (see CLAUDE.md rule #4). Cached like tickets.ts.
 // ===========================================================================
 
-const CSV_URL = "https://metabase.zoca.ai/public/question/96e1066a-32cc-4ef9-a919-090ce6755a07.csv";
+const CSV_URL = process.env.HEALTH_HISTORY_CSV_URL || "https://metabase.zoca.ai/public/question/96e1066a-32cc-4ef9-a919-090ce6755a07.csv";
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 min — the data only changes weekly
 const TIMEOUT_MS = 45_000;
 

@@ -8,11 +8,8 @@ import { BAT_PATH, WayneShield } from "./WayneMark";
 // Reads the session, derives the person's first name (Google display name →
 // their AM/roster name → email), decodes it in over the bat emblem, then fades
 // out. Shown once per browser session per user so it doesn't repeat on nav.
-// Preferred greeting names that don't fall out of the email/display name.
-const NAME_OVERRIDES: Record<string, string> = {
-  "siranjith.t@zoca.com": "Siranj",
-  "siranjith.t@gmail.com": "Siranj",
-};
+// Optional per-email greeting overrides (none by default — use the SSO name).
+const NAME_OVERRIDES: Record<string, string> = {};
 
 function firstName(u: { name?: string; amName?: string; email?: string }): string {
   const override = NAME_OVERRIDES[(u.email || "").toLowerCase()];
