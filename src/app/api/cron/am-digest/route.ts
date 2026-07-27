@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildAmDigests, renderDigestEmail } from "@/lib/digest";
 import { sendEmail, mailerConfigured } from "@/lib/mailer";
-import { slackConfigured, slackUserId, slackDM, slackPost, renderDigestBlocks, renderChannelSummary } from "@/lib/slack";
+import { slackConfigured, slackLookup, slackAuthTest, slackDM, slackPost, renderDigestBlocks, renderChannelSummary } from "@/lib/slack";
 import { logActivity } from "@/lib/activity";
 
 // Scheduled per-AM "your book needs attention" digest. CRON_SECRET-gated.
@@ -51,9 +51,9 @@ export async function GET(req: Request) {
     const out: Record<string, unknown> = { ok: true, test: true, previewOf: picked.amName, accounts: picked.shown, sentTo: testTo };
     if (email) { const { subject, html } = renderDigestEmail(picked); const r = await sendEmail({ to: testTo, subject, html }); out.email = { ok: r.ok, error: r.error }; }
     if (slack) {
-      const uid = await slackUserId(testTo);
-      if (!uid) out.slack = { ok: false, error: `no Slack user found for ${testTo}` };
-      else { const { text, blocks } = renderDigestBlocks(picked); const r = await slackDM(uid, text, blocks); out.slack = { ok: r.ok, error: r.error }; }
+      const look = await slackLookup(testTo);
+      if (look.id) { const { text, blocks } = renderDigestBlocks(picked); const r = await slackDM(look.id, text, blocks); out.slack = { ok: r.ok, error: r.error }; }
+      else out.slack = { ok: false, lookupError: look.error, auth: await slackAuthTest() };
     }
     return NextResponse.json(out);
   }
@@ -72,11 +72,11 @@ export async function GET(req: Request) {
     }
 
     if (slack) {
-      const uid = await slackUserId(d.email);
-      if (!uid) { row.slackOk = false; row.slackError = "no_slack_user"; }
+      const look = await slackLookup(d.email);
+      if (!look.id) { row.slackOk = false; row.slackError = look.error || "no_slack_user"; }
       else {
         const { text, blocks } = renderDigestBlocks(d);
-        const r = await slackDM(uid, text, blocks);
+        const r = await slackDM(look.id, text, blocks);
         row.slackOk = r.ok; row.slackError = r.error;
         if (r.ok) { dmSent++; await logDigestSent(d.email, d.amName, d.shown, d.totalAtRisk, "slack_dm"); }
       }

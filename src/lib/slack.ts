@@ -34,13 +34,22 @@ async function slackCall(method: string, params: Record<string, unknown>, form =
 }
 
 const _idCache = new Map<string, string | null>();
+export async function slackLookup(email: string): Promise<{ ok: boolean; id: string | null; error?: string }> {
+  const res = await slackCall("users.lookupByEmail", { email: email.toLowerCase() }, true);
+  return { ok: !!res.ok, id: res.ok ? (res.user?.id as string) : null, error: res.error as string | undefined };
+}
 export async function slackUserId(email: string): Promise<string | null> {
   const key = email.toLowerCase();
   if (_idCache.has(key)) return _idCache.get(key)!;
-  const res = await slackCall("users.lookupByEmail", { email: key }, true);
-  const id = res.ok ? (res.user?.id as string) : null;
+  const { id } = await slackLookup(key);
   _idCache.set(key, id ?? null);
   return id ?? null;
+}
+// Token/identity check — confirms the bot token is valid and which workspace it's
+// in (distinguishes a bad/missing-scope token from a genuinely-absent user).
+export async function slackAuthTest(): Promise<Record<string, unknown>> {
+  const r = await slackCall("auth.test", {});
+  return { ok: !!r.ok, error: r.error, team: r.team, url: r.url, botId: r.bot_id, user: r.user };
 }
 
 export async function slackDM(userId: string, text: string, blocks: unknown[]): Promise<{ ok: boolean; error?: string }> {
