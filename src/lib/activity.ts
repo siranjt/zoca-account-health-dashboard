@@ -27,7 +27,7 @@ export interface ActivityInput {
 
 // Events recorded in the DB but NEVER posted to Slack. (Currently none — Alfred
 // asks DO ping Slack, but only "who + which account", never the conversation.)
-const SILENT = new Set<string>([]);
+const SILENT = new Set<string>(["digest_sent", "digest_click"]);
 
 let ensured = false;
 async function ensureTable(): Promise<void> {

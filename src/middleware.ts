@@ -16,7 +16,7 @@ export default auth((req) => {
   if (/\.[a-zA-Z0-9]+$/.test(p)) return NextResponse.next();
 
   if (ssoConfigured()) {
-    if (p.startsWith("/api/auth") || p.startsWith("/api/cron") || p === "/signin") return NextResponse.next();
+    if (p.startsWith("/api/auth") || p.startsWith("/api/cron") || p.startsWith("/api/digest/click") || p === "/signin") return NextResponse.next();
     if (!req.auth?.user) {
       const url = new URL("/signin", req.nextUrl.origin);
       url.searchParams.set("callbackUrl", p + (req.nextUrl.search || ""));
