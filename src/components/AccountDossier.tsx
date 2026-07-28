@@ -23,6 +23,7 @@ import {
   commsSeries,
 } from "./Charts";
 import WebsiteLiveCard from "./WebsiteLiveCard";
+import HealthTrajectoryCard from "./HealthTrajectoryCard";
 import { formatNumber, formatDuration, formatTenure } from "@/lib/format";
 import RetoolAllData from "./RetoolAllData";
 import CommunicationTab from "./CommunicationTab";
@@ -351,6 +352,8 @@ export default function AccountDossier({
                 </div>
               )}
             </ChartCard>
+
+            <HealthTrajectoryCard entityId={account.entityId} />
 
             <ChartCard title="Profile Clicks" subtitle={`${gran} · ${winN} (GBP)`}>
               {detail ? (
