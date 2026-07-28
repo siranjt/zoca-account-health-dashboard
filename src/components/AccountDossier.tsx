@@ -233,6 +233,25 @@ export default function AccountDossier({
                   <span className="text-xs text-slate-400">No active products</span>
                 )}
               </div>
+              {/* quick links — customer's landing page + their Google Maps listing */}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {account.websiteUrl && (
+                  <a
+                    href={/^https?:\/\//i.test(account.websiteUrl) ? account.websiteUrl : `https://${account.websiteUrl}`}
+                    target="_blank" rel="noopener noreferrer"
+                    title="Open the customer's landing page"
+                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium no-underline"
+                    style={{ borderColor: "var(--cave-line2)", color: "var(--cave-cy)" }}
+                  >🌐 Landing page ↗</a>
+                )}
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([account.name, account.city, account.state].filter(Boolean).join(" "))}`}
+                  target="_blank" rel="noopener noreferrer"
+                  title="Open in Google Maps"
+                  className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium no-underline"
+                  style={{ borderColor: "var(--cave-line2)", color: "var(--cave-cy)" }}
+                >📍 Map ↗</a>
+              </div>
             </div>
           </div>
 
