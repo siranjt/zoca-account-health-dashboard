@@ -10,6 +10,7 @@ type Ctx = {
   contact: { owners: string | null; phones: string[]; emails: string[]; address: string | null; category: string | null; domain: string | null };
   retention: { reason: string | null; freeText: string | null; at: string | null } | null;
   adoption: { onboardingState: string | null; bookingLinkAdded: boolean | null; leadPredictionViewed: boolean | null; integrations: string[]; billingState: string | null };
+  keeper: { available: boolean; facts: { topic: string; field: string; value: string }[] };
 };
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -119,6 +120,25 @@ export default function AccountContextCards({ account }: { account: AccountRow }
           </div>
         )}
       </Card>
+
+      {/* What we know (Keeper / Bat Cave Memory) */}
+      {(ctx?.keeper?.facts?.length ?? 0) > 0 && (
+        <Card title="What we know">
+          <div className="max-h-[280px] space-y-2 overflow-auto text-xs">
+            {Array.from(
+              ctx!.keeper.facts.slice(0, 24).reduce((m, f) => { (m.get(f.topic) ?? m.set(f.topic, []).get(f.topic)!).push(f); return m; }, new Map<string, { field: string; value: string }[]>())
+            ).map(([topic, items]) => (
+              <div key={topic}>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{humanize(topic)}</div>
+                {items.map((f, i) => (
+                  <div key={i} className="text-slate-600"><span className="text-slate-400">{humanize(f.field)}:</span> {f.value}</div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="mt-1.5 text-[10px] text-slate-400">Curated history from the Bat Cave Memory · ask Alfred for more.</div>
+        </Card>
+      )}
     </>
   );
 }

@@ -1,5 +1,6 @@
 import "server-only";
 import { queryAurora } from "@/lib/metabase";
+import { getFactsByEntityId } from "@/lib/keeper";
 
 // ===========================================================================
 // Extra AM context for the account dossier (Tier 1): who to contact, why the
@@ -18,16 +19,19 @@ const dedupPhones = (arr: string[]): string[] => {
   return out;
 };
 
+export interface KeeperFactLite { topic: string; field: string; value: string }
 export interface AccountContext {
   contact: { owners: string | null; phones: string[]; emails: string[]; address: string | null; category: string | null; domain: string | null };
   retention: { reason: string | null; freeText: string | null; at: string | null } | null;
   adoption: { onboardingState: string | null; bookingLinkAdded: boolean | null; leadPredictionViewed: boolean | null; integrations: string[]; billingState: string | null };
+  keeper: { available: boolean; facts: KeeperFactLite[] };
 }
 
 const EMPTY: AccountContext = {
   contact: { owners: null, phones: [], emails: [], address: null, category: null, domain: null },
   retention: null,
   adoption: { onboardingState: null, bookingLinkAdded: null, leadPredictionViewed: null, integrations: [], billingState: null },
+  keeper: { available: false, facts: [] },
 };
 
 export async function getAccountContext(entityId: string): Promise<AccountContext> {
@@ -53,12 +57,16 @@ export async function getAccountContext(entityId: string): Promise<AccountContex
     FROM entities.cancellation_reason_responses crr JOIN entities.cancellation_reasons cr ON cr.id=crr.reason_id
     WHERE crr.location_entity_id='${id}'::uuid ORDER BY crr.created_at DESC LIMIT 1`;
 
-  const [c, a, r] = await Promise.all([
+  const [c, a, r, k] = await Promise.all([
     queryAurora(contactSql).catch(() => [] as Record<string, unknown>[]),
     queryAurora(adoptionSql).catch(() => [] as Record<string, unknown>[]),
     queryAurora(retentionSql).catch(() => [] as Record<string, unknown>[]),
+    getFactsByEntityId(id).catch(() => ({ available: false as const, reason: "err" })),
   ]);
   const cr = c[0] || {}, ar = a[0] || {}, rr = r[0];
+  const keeper = "facts" in k
+    ? { available: true, facts: k.facts.map((f) => ({ topic: f.topic, field: f.field, value: f.value })).filter((f) => f.value) }
+    : { available: false, facts: [] };
 
   return {
     contact: { owners: str(cr.owners), phones: dedupPhones(split(cr.phones)), emails: split(cr.emails), address: str(cr.address), category: str(cr.category), domain: str(cr.domain) },
@@ -67,5 +75,6 @@ export async function getAccountContext(entityId: string): Promise<AccountContex
       onboardingState: str(ar.onboarding_state), bookingLinkAdded: bool(ar.booking_link), leadPredictionViewed: bool(ar.lead_pred),
       integrations: split(ar.integrations), billingState: str(ar.billing_state),
     },
+    keeper,
   };
 }
