@@ -12,6 +12,7 @@ type Ctx = {
   adoption: { onboardingState: string | null; bookingLinkAdded: boolean | null; leadPredictionViewed: boolean | null; integrations: string[]; billingState: string | null };
   keeper: { available: boolean; facts: { topic: string; field: string; value: string }[] };
   business: { staff: number; services: number; bookings30d: number; bookings90d: number; offers: string[] };
+  competitors: { name: string; rating: number | null; reviews: number | null; appearances: number }[];
 };
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -136,6 +137,21 @@ export default function AccountContextCards({ account }: { account: AccountRow }
               )) : <span className="text-slate-400">none running</span>}
             </div>
           </div>
+        </Card>
+      )}
+
+      {/* Local competitors — only ~4% of accounts have this; self-hides otherwise */}
+      {(ctx?.competitors?.length ?? 0) > 0 && (
+        <Card title="Local competitors">
+          <div className="space-y-1.5 text-xs">
+            {ctx!.competitors.map((cmp) => (
+              <div key={cmp.name} className="flex items-center justify-between gap-2">
+                <span className="truncate text-slate-700">{cmp.name}</span>
+                <span className="shrink-0 tabular-nums text-slate-500">{cmp.rating != null ? `${cmp.rating}★` : "—"}{cmp.reviews != null ? ` (${cmp.reviews.toLocaleString()})` : ""}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-1.5 text-[10px] text-slate-400">Top businesses ranking for this account&apos;s keywords in the local pack.</div>
         </Card>
       )}
 

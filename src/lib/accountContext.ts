@@ -27,6 +27,7 @@ export interface AccountContext {
   adoption: { onboardingState: string | null; bookingLinkAdded: boolean | null; leadPredictionViewed: boolean | null; integrations: string[]; billingState: string | null };
   keeper: { available: boolean; facts: KeeperFactLite[] };
   business: { staff: number; services: number; bookings30d: number; bookings90d: number; offers: string[] };
+  competitors: { name: string; rating: number | null; reviews: number | null; appearances: number }[];
 }
 
 const EMPTY: AccountContext = {
@@ -35,6 +36,7 @@ const EMPTY: AccountContext = {
   adoption: { onboardingState: null, bookingLinkAdded: null, leadPredictionViewed: null, integrations: [], billingState: null },
   keeper: { available: false, facts: [] },
   business: { staff: 0, services: 0, bookings30d: 0, bookings90d: 0, offers: [] },
+  competitors: [],
 };
 
 export async function getAccountContext(entityId: string): Promise<AccountContext> {
@@ -67,12 +69,26 @@ export async function getAccountContext(entityId: string): Promise<AccountContex
     (SELECT count(*) FROM scheduling.bookings WHERE entity_id='${id}'::uuid AND created_at >= now()-interval '90 days') bookings_90d,
     (SELECT string_agg(o.title,'|') FROM offers.offer_entities oe JOIN offers.offers o ON o.id=oe.offer_id WHERE oe.entity_id='${id}'::uuid AND oe.is_active=true AND o.is_active=true AND coalesce(o.is_draft,false)=false) offers`;
 
-  const [c, a, r, k, b] = await Promise.all([
+  // Local competitors: the account's GBP place_id → competition_data's subject
+  // place → the businesses ranking for its keywords (name, rating, reviews). Only
+  // ~4% of the book has this; the card self-hides otherwise.
+  const competitorsSql = `WITH acct AS (SELECT DISTINCT place_id FROM local_seo.competitors WHERE entity_id='${id}'::uuid AND place_id IS NOT NULL)
+    SELECT cd.competitor_name name,
+      max(NULLIF(regexp_replace(cd.rating::text,'[^0-9.]','','g'),'')::numeric) rating,
+      max(NULLIF(regexp_replace(cd.reviews::text,'[^0-9]','','g'),'')::int) reviews,
+      count(*) appearances
+    FROM local_seo.competition_data cd JOIN acct ON cd.sp_place_id=acct.place_id
+    WHERE cd.competitor_name IS NOT NULL AND cd.competitor_name<>''
+      AND cd.competitor_name NOT IN (SELECT DISTINCT biz_name FROM local_seo.competitors WHERE entity_id='${id}'::uuid)
+    GROUP BY cd.competitor_name ORDER BY appearances DESC, reviews DESC NULLS LAST LIMIT 8`;
+
+  const [c, a, r, k, b, cp] = await Promise.all([
     queryAurora(contactSql).catch(() => [] as Record<string, unknown>[]),
     queryAurora(adoptionSql).catch(() => [] as Record<string, unknown>[]),
     queryAurora(retentionSql).catch(() => [] as Record<string, unknown>[]),
     getFactsByEntityId(id).catch(() => ({ available: false as const, reason: "err" })),
     queryAurora(businessSql).catch(() => [] as Record<string, unknown>[]),
+    queryAurora(competitorsSql).catch(() => [] as Record<string, unknown>[]),
   ]);
   const cr = c[0] || {}, ar = a[0] || {}, rr = r[0], br = b[0] || {};
   const keeper = "facts" in k
@@ -88,5 +104,9 @@ export async function getAccountContext(entityId: string): Promise<AccountContex
     },
     keeper,
     business: { staff: n0(br.staff), services: n0(br.services), bookings30d: n0(br.bookings_30d), bookings90d: n0(br.bookings_90d), offers: split(br.offers) },
+    competitors: (cp || []).map((row) => ({
+      name: str(row.name) || "", rating: row.rating != null ? Number(row.rating) : null,
+      reviews: row.reviews != null ? n0(row.reviews) : null, appearances: n0(row.appearances),
+    })).filter((x) => x.name),
   };
 }
