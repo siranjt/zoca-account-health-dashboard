@@ -11,6 +11,7 @@ type Ctx = {
   retention: { reason: string | null; freeText: string | null; at: string | null } | null;
   adoption: { onboardingState: string | null; bookingLinkAdded: boolean | null; leadPredictionViewed: boolean | null; integrations: string[]; billingState: string | null };
   keeper: { available: boolean; facts: { topic: string; field: string; value: string }[] };
+  business: { staff: number; services: number; bookings30d: number; bookings90d: number; offers: string[] };
 };
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -120,6 +121,23 @@ export default function AccountContextCards({ account }: { account: AccountRow }
           </div>
         )}
       </Card>
+
+      {/* Business snapshot — activity + live offers */}
+      {ctx?.business && (ctx.business.services > 0 || ctx.business.bookings90d > 0 || ctx.business.staff > 0 || ctx.business.offers.length > 0) && (
+        <Card title="Business snapshot">
+          <div className="space-y-1.5 text-xs">
+            <div className="flex justify-between"><span className="text-slate-400">Bookings · 30d / 90d</span><span className="tabular-nums font-medium text-slate-700">{ctx.business.bookings30d.toLocaleString()} / {ctx.business.bookings90d.toLocaleString()}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Services offered</span><span className="tabular-nums text-slate-600">{ctx.business.services.toLocaleString()}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Active staff</span><span className="tabular-nums text-slate-600">{ctx.business.staff || "—"}</span></div>
+            <div className="pt-1">
+              <span className="text-slate-400">Live offers: </span>
+              {ctx.business.offers.length ? ctx.business.offers.slice(0, 4).map((o) => (
+                <span key={o} className="mr-1 inline-block rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">{o}</span>
+              )) : <span className="text-slate-400">none running</span>}
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* What we know (Keeper / Bat Cave Memory) */}
       {(ctx?.keeper?.facts?.length ?? 0) > 0 && (

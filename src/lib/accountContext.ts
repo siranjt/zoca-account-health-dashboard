@@ -10,6 +10,7 @@ import { getFactsByEntityId } from "@/lib/keeper";
 
 const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const str = (v: unknown): string | null => (v == null || v === "" ? null : String(v));
+const n0 = (v: unknown): number => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
 const bool = (v: unknown): boolean | null => (v === true || v === "true" ? true : v === false || v === "false" ? false : null);
 const split = (v: unknown): string[] => (str(v) ? String(v).split("|").map((s) => s.trim()).filter(Boolean) : []);
 // dedupe phones that appear in multiple formats (e.g. 7247592222 vs (724) 759-2222)
@@ -25,6 +26,7 @@ export interface AccountContext {
   retention: { reason: string | null; freeText: string | null; at: string | null } | null;
   adoption: { onboardingState: string | null; bookingLinkAdded: boolean | null; leadPredictionViewed: boolean | null; integrations: string[]; billingState: string | null };
   keeper: { available: boolean; facts: KeeperFactLite[] };
+  business: { staff: number; services: number; bookings30d: number; bookings90d: number; offers: string[] };
 }
 
 const EMPTY: AccountContext = {
@@ -32,6 +34,7 @@ const EMPTY: AccountContext = {
   retention: null,
   adoption: { onboardingState: null, bookingLinkAdded: null, leadPredictionViewed: null, integrations: [], billingState: null },
   keeper: { available: false, facts: [] },
+  business: { staff: 0, services: 0, bookings30d: 0, bookings90d: 0, offers: [] },
 };
 
 export async function getAccountContext(entityId: string): Promise<AccountContext> {
@@ -57,13 +60,21 @@ export async function getAccountContext(entityId: string): Promise<AccountContex
     FROM entities.cancellation_reason_responses crr JOIN entities.cancellation_reasons cr ON cr.id=crr.reason_id
     WHERE crr.location_entity_id='${id}'::uuid ORDER BY crr.created_at DESC LIMIT 1`;
 
-  const [c, a, r, k] = await Promise.all([
+  const businessSql = `SELECT
+    (SELECT count(*) FROM entities.employees WHERE entity_id='${id}'::uuid AND is_active=true) staff,
+    (SELECT count(*) FROM services.services_entities WHERE entity_id='${id}'::uuid AND is_deleted=false) services,
+    (SELECT count(*) FROM scheduling.bookings WHERE entity_id='${id}'::uuid AND created_at >= now()-interval '30 days') bookings_30d,
+    (SELECT count(*) FROM scheduling.bookings WHERE entity_id='${id}'::uuid AND created_at >= now()-interval '90 days') bookings_90d,
+    (SELECT string_agg(o.title,'|') FROM offers.offer_entities oe JOIN offers.offers o ON o.id=oe.offer_id WHERE oe.entity_id='${id}'::uuid AND oe.is_active=true AND o.is_active=true AND coalesce(o.is_draft,false)=false) offers`;
+
+  const [c, a, r, k, b] = await Promise.all([
     queryAurora(contactSql).catch(() => [] as Record<string, unknown>[]),
     queryAurora(adoptionSql).catch(() => [] as Record<string, unknown>[]),
     queryAurora(retentionSql).catch(() => [] as Record<string, unknown>[]),
     getFactsByEntityId(id).catch(() => ({ available: false as const, reason: "err" })),
+    queryAurora(businessSql).catch(() => [] as Record<string, unknown>[]),
   ]);
-  const cr = c[0] || {}, ar = a[0] || {}, rr = r[0];
+  const cr = c[0] || {}, ar = a[0] || {}, rr = r[0], br = b[0] || {};
   const keeper = "facts" in k
     ? { available: true, facts: k.facts.map((f) => ({ topic: f.topic, field: f.field, value: f.value })).filter((f) => f.value) }
     : { available: false, facts: [] };
@@ -76,5 +87,6 @@ export async function getAccountContext(entityId: string): Promise<AccountContex
       integrations: split(ar.integrations), billingState: str(ar.billing_state),
     },
     keeper,
+    business: { staff: n0(br.staff), services: n0(br.services), bookings30d: n0(br.bookings_30d), bookings90d: n0(br.bookings_90d), offers: split(br.offers) },
   };
 }
