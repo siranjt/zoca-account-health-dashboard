@@ -24,6 +24,7 @@ import {
 } from "./Charts";
 import WebsiteLiveCard from "./WebsiteLiveCard";
 import HealthTrajectoryCard from "./HealthTrajectoryCard";
+import AccountContextCards from "./AccountContextCards";
 import { formatNumber, formatDuration, formatTenure } from "@/lib/format";
 import RetoolAllData from "./RetoolAllData";
 import CommunicationTab from "./CommunicationTab";
@@ -360,6 +361,7 @@ export default function AccountDossier({
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {tab === "Profile & GBP" && (
           <>
+            <AccountContextCards account={account} />
             <ChartCard title="Health breakdown" subtitle="engagement · value · product (cx.health_score)">
               <HealthBars
                 engagement={h.engagement} value={h.value} product={h.product}
