@@ -596,7 +596,7 @@ export default function AccountDossier({
 
             <div className="md:col-span-2 xl:col-span-3">
               <ChartCard title="One Time Invoices" subtitle="newest first · Chargebee">
-                {detail ? <InvoiceTable invoices={detail.payments?.invoices ?? []} /> : skel}
+                {detail ? <InvoiceTable invoices={detail.payments?.invoices ?? []} entityId={account.entityId} /> : skel}
               </ChartCard>
             </div>
           </>
@@ -772,7 +772,7 @@ function ddmmyy(iso: string | null): string {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)}`;
 }
 
-function InvoiceTable({ invoices }: { invoices: PaymentInvoice[] }) {
+function InvoiceTable({ invoices, entityId }: { invoices: PaymentInvoice[]; entityId: string }) {
   const rows = useMemo(
     () =>
       [...invoices].sort((a, b) => {
@@ -795,6 +795,15 @@ function InvoiceTable({ invoices }: { invoices: PaymentInvoice[] }) {
         { key: "amount_due_usd", label: "Due amt", num: true, render: (v) => (Number(v) > 0 ? <span className="font-semibold text-red-600">${formatNumber(Math.round(Number(v)))}</span> : "—") },
         { key: "days_late", label: "Late", num: true, render: (v, row) => (v != null && Number(v) > 0 ? <span className="font-semibold text-amber-600">{Number(v)}d</span> : row.paid ? "on time" : "—") },
         { key: "status", label: "Status", render: (v, row) => <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${row.paid ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>{v ? String(v) : row.paid ? "paid" : "unpaid"}</span> },
+        { key: "id", label: "PDF", render: (v) => (v ? (
+          <a
+            href={`/api/account/${entityId}/invoice/${encodeURIComponent(String(v))}/pdf`}
+            target="_blank" rel="noopener noreferrer"
+            title="Download invoice PDF"
+            className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-medium no-underline"
+            style={{ borderColor: "var(--cave-line2)", color: "var(--cave-cy)" }}
+          >⬇ PDF</a>
+        ) : <span className="text-slate-400">—</span>) },
       ]}
     />
   );

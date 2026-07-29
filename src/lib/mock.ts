@@ -196,6 +196,7 @@ export function getMockAccountDetail(id: string): AccountDetail {
     const unpaid = isLast && s.mrr === 0;
     const paidAt = unpaid ? null : new Date(due.getTime() + late * 86400000);
     return {
+      id: null, // mock has no downloadable Chargebee PDF
       date: inv.toISOString().slice(0, 10),
       due_date: due.toISOString().slice(0, 10),
       paid_at: paidAt ? paidAt.toISOString().slice(0, 10) : null,

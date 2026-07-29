@@ -160,6 +160,7 @@ export interface AccountDetail {
 }
 
 export interface PaymentInvoice {
+  id: string | null; // Chargebee invoice id (for the per-invoice PDF download)
   date: string | null;
   due_date: string | null;
   paid_at: string | null;

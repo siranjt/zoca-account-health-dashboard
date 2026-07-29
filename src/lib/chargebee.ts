@@ -31,6 +31,46 @@ async function cbGet<T = Record<string, unknown>>(path: string, params: Record<s
   }
 }
 
+async function cbPost<T = Record<string, unknown>>(path: string, body: Record<string, string> = {}): Promise<T> {
+  if (!KEY) throw new Error("CHARGEBEE_API_KEY not set");
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      method: "POST",
+      headers: { ...authHeader(), "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(body).toString(),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new Error(`Chargebee ${res.status}: ${(await res.text().catch(() => "")).slice(0, 160)}`);
+    return (await res.json()) as T;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+type CBInvoice = {
+  id?: string; status: string; total?: number; amount_paid?: number; amount_due?: number;
+  date?: number; due_date?: number; paid_at?: number;
+};
+
+// Fetch EVERY invoice for a scope, oldest-first. Chargebee lists are cursor-paged
+// via `offset`/`next_offset`; loop until exhausted, capped at 20 pages (2000 invoices)
+// so a pathological account can never hang the request.
+async function listAllInvoices(scope: Record<string, string>): Promise<CBInvoice[]> {
+  const out: CBInvoice[] = [];
+  let offset: string | undefined;
+  for (let page = 0; page < 20; page++) {
+    const params: Record<string, string> = { ...scope, limit: "100", "sort_by[asc]": "date" };
+    if (offset) params.offset = offset;
+    const res = await cbGet<{ list: Array<{ invoice: CBInvoice }>; next_offset?: string }>("/invoices", params);
+    for (const row of res.list || []) out.push(row.invoice);
+    if (!res.next_offset) break;
+    offset = res.next_offset;
+  }
+  return out;
+}
+
 const dollars = (c: number | null | undefined) => (c && Number.isFinite(c) ? Math.round(c) / 100 : 0);
 const isoDate = (t: number | null | undefined) => (t && Number.isFinite(t) ? new Date(t * 1000).toISOString().slice(0, 10) : null);
 
@@ -144,13 +184,15 @@ export async function getPaymentDetail(entityId: string): Promise<PaymentDetail>
 
   const subIds = entitySubs.map((s) => s.id).filter(Boolean);
   const scope: Record<string, string> = subIds.length ? { "subscription_id[in]": JSON.stringify(subIds) } : { "customer_id[is]": cid };
-  const [invRes, txnRes] = await Promise.all([
-    cbGet<{ list: Array<{ invoice: { status: string; total?: number; amount_paid?: number; amount_due?: number; date?: number; due_date?: number; paid_at?: number } }> }>("/invoices", { ...scope, limit: "12", "sort_by[asc]": "date" }),
+  // ALL invoices (full billing history), oldest-first for the charts; the table
+  // re-sorts newest-first. Aggregates below are then lifetime-accurate, not last-12.
+  const [invList, txnRes] = await Promise.all([
+    listAllInvoices(scope),
     cbGet<{ list: Array<{ transaction: { status: string } }> }>("/transactions", { ...scope, limit: "24", "sort_by[desc]": "date" }),
   ]);
 
   const DAY = 86400000;
-  const invoices: PaymentInvoice[] = (invRes.list || []).map(({ invoice: i }) => {
+  const invoices: PaymentInvoice[] = invList.map((i) => {
     const paid = i.status === "paid";
     const dueMs = i.due_date ? i.due_date * 1000 : null;
     let daysLate: number | null = null;
@@ -158,6 +200,7 @@ export async function getPaymentDetail(entityId: string): Promise<PaymentDetail>
     else if (paid && i.paid_at && dueMs) daysLate = Math.round((i.paid_at * 1000 - dueMs) / DAY);
     else if (!paid && dueMs && (i.amount_due || 0) > 0) daysLate = Math.max(0, Math.floor((Date.now() - dueMs) / DAY));
     return {
+      id: i.id ?? null,
       date: isoDate(i.date), due_date: isoDate(i.due_date), paid_at: isoDate(i.paid_at),
       total_usd: dollars(i.total), amount_paid_usd: dollars(i.amount_paid), amount_due_usd: dollars(i.amount_due),
       status: i.status, paid, days_late: daysLate,
@@ -181,4 +224,25 @@ export async function getPaymentDetail(entityId: string): Promise<PaymentDetail>
     avg_days_late: paidInvoices.length ? Math.round((paidInvoices.reduce((s, i) => s + (i.days_late as number), 0) / paidInvoices.length) * 10) / 10 : null,
     invoices,
   };
+}
+
+// ---- Per-invoice PDF download (short-lived signed URL from Chargebee) ---------
+// Entity-scoped: we resolve the account's Chargebee customer and refuse to hand
+// back a PDF for any invoice that doesn't belong to it — so a valid session can't
+// pull another customer's invoice by guessing an id. Returns null on any failure.
+export async function getInvoicePdfUrl(entityId: string, invoiceId: string): Promise<string | null> {
+  if (!KEY) return null;
+  const eid = (entityId || "").trim();
+  const iid = (invoiceId || "").trim();
+  if (!eid || !iid) return null;
+
+  const cid = await getEntityCustomerId(eid);
+  if (!cid) return null;
+
+  // Authorization: the invoice's customer must match this account's customer.
+  const inv = await cbGet<{ invoice: { customer_id?: string } }>(`/invoices/${encodeURIComponent(iid)}`).catch(() => null);
+  if (!inv?.invoice || inv.invoice.customer_id !== cid) return null;
+
+  const pdf = await cbPost<{ download?: { download_url?: string } }>(`/invoices/${encodeURIComponent(iid)}/pdf`).catch(() => null);
+  return pdf?.download?.download_url || null;
 }
