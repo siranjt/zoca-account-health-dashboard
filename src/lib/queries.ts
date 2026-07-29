@@ -442,25 +442,35 @@ export function detailReviewsListSql(id: string, windowDays: number): string {
     LIMIT 300`;
 }
 
-/** Individual lead rows (booking enquiries) within the selected window, with the
- *  full Retool-parity column set: contact (phone/name from attributes JSONB),
- *  customer type, status, service, the derived utm bucket, the raw utm fields +
- *  referrer, price, and per-lead opened (Mixpanel) / contacted (comms) timestamps.
+/** Individual lead rows (booking enquiries) within the selected window — full
+ *  Retool-parity column set. Column logic mirrors the Retool "Customer Dashboard"
+ *  lead query exactly: contact (phone/name/customer-type from attributes JSONB,
+ *  first name falling back to `name`), the utm_source-only bucket taxonomy, the
+ *  latest status-change reason (most recent status_details[].reason), and per-lead
+ *  opened (Mixpanel Leads-View-Chat) / contacted (communication_logs SMS/CALL).
  *  opened/contacted are entity-scoped via IN (SELECT id FROM be) so the big
- *  Mixpanel/comms tables aren't full-scanned. "Latest reason" has no verified
- *  source (status_details holds only {status, createdAt}), so it isn't selected. */
+ *  Mixpanel/comms tables aren't full-scanned. */
 export function detailLeadsListSql(id: string, windowDays: number): string {
   return `WITH be AS (
-      SELECT id, created_at, status, price, currency, referrer, utm_source, utm_medium, utm_campaign,
-        COALESCE(service, service_variation_name) AS service,
-        COALESCE(attributes->>'phoneNumber', attributes->>'phone_number') AS phone,
-        attributes->>'country_code' AS country_code,
-        COALESCE(attributes->>'firstName', attributes->>'first_name') AS first_name,
-        COALESCE(attributes->>'lastName', attributes->>'last_name') AS last_name,
-        COALESCE(attributes->>'customerType', attributes->>'customer_type') AS customer_type
-      FROM website.booking_enquiries
-      WHERE entity_id='${id}'::uuid AND is_test_lead=false
-        AND created_at >= now() - interval '${windowDays} days'),
+      SELECT x.id, x.created_at, x.status, x.price, x.currency, x.referrer,
+        x.utm_source, x.utm_medium, x.utm_campaign,
+        COALESCE(x.service, x.service_variation_name) AS service,
+        COALESCE(x.attributes->>'phoneNumber', x.attributes->>'phone_number') AS phone,
+        x.attributes->>'country_code' AS country_code,
+        COALESCE(x.attributes->>'firstName', x.attributes->>'first_name', x.attributes->>'name') AS first_name,
+        COALESCE(x.attributes->>'lastName', x.attributes->>'last_name') AS last_name,
+        COALESCE(x.attributes->>'customerType', x.attributes->>'customer_type') AS customer_type,
+        sd.latest_reason
+      FROM website.booking_enquiries x
+      LEFT JOIN LATERAL (
+        SELECT e->>'reason' AS latest_reason
+        FROM jsonb_array_elements(COALESCE(x.status_details::jsonb, '[]'::jsonb)) AS e
+        WHERE COALESCE(e->>'reason','') <> ''
+        ORDER BY (e->>'createdAt')::timestamptz DESC NULLS LAST
+        LIMIT 1
+      ) sd ON TRUE
+      WHERE x.entity_id='${id}'::uuid AND x.is_test_lead=false
+        AND x.created_at >= now() - interval '${windowDays} days'),
     opened AS (SELECT lead_id, MIN(time) t FROM mixpanelzocaappdata.export
       WHERE event='Leads-View-Chat' AND lead_id::text IN (SELECT id::text FROM be) GROUP BY 1),
     contacted AS (SELECT enquiry_id, MIN(created_at) t FROM clients.communication_logs
@@ -468,17 +478,29 @@ export function detailLeadsListSql(id: string, windowDays: number): string {
     SELECT be.created_at, be.phone, be.country_code, be.first_name, be.last_name, be.customer_type,
       be.status, be.service,
       CASE
-        WHEN be.utm_source ILIKE 'googlemaps' OR be.utm_medium ILIKE '%maps%' OR be.referrer ILIKE '%/maps%' THEN 'Google Maps GBP'
-        WHEN be.utm_source ILIKE 'applemaps' THEN 'Apple Maps'
-        WHEN be.utm_source ~* 'instagram|^ig$' OR be.referrer ILIKE '%instagram%' THEN 'Instagram'
-        WHEN be.utm_source ILIKE 'facebook' OR be.referrer ILIKE '%facebook%' THEN 'Facebook'
-        WHEN be.utm_source ~* 'ads' OR be.utm_medium IN ('cpc','paid') THEN 'Paid Ads'
-        WHEN be.referrer ~* 'bing|yahoo|duckduckgo|google\\.' THEN 'Search'
-        WHEN be.referrer='$direct' OR be.referrer IS NULL OR be.referrer='' THEN 'Direct'
-        ELSE COALESCE(NULLIF(be.utm_source,''), 'Other')
+        WHEN lower(be.utm_source) ILIKE '%googlemaps%' OR lower(be.utm_source) ILIKE '%google-gmb%'
+          OR lower(be.utm_source) IN ('googleposts','googlesite','gbp','holidaygoogleoffers','omg-gbp')
+          OR be.utm_source IS NULL OR be.utm_source='' THEN 'Google Maps / GBP'
+        WHEN lower(be.utm_source) IN ('ig','instagram') THEN 'Instagram'
+        WHEN lower(be.utm_source) ILIKE '%googleads%' OR lower(be.utm_source) ILIKE '%google_ad%'
+          OR lower(be.utm_source) IN ('ad_leads_conversion','google') THEN 'Google Ads'
+        WHEN lower(be.utm_source) ILIKE '%sms%' THEN 'SMS Campaigns'
+        WHEN lower(be.utm_source) ILIKE '%chatgpt%'
+          OR lower(be.utm_source) IN ('perplexity','copilot.com','claude','gemini','bard') THEN 'AI Search'
+        WHEN lower(be.utm_source) ILIKE '%email%' THEN 'Email Campaigns'
+        WHEN lower(be.utm_source) = 'applemaps' THEN 'Apple Maps'
+        WHEN lower(be.utm_source) IN ('fb','fbads','facebook','facebooks','facebook_lead_ads','facebook_ads_leads')
+          OR lower(be.utm_source) ILIKE '%fb_ads%' THEN 'Facebook / Meta Ads'
+        WHEN lower(be.utm_source) IN ('attentive','activecampaign','sqmktg_email','newsletter','ctct','klarna','trustindex')
+          OR lower(be.utm_source) ILIKE '%activecampaign%' THEN 'Other Marketing Tools'
+        WHEN lower(be.utm_source) = 'yelp' THEN 'Yelp'
+        WHEN lower(be.utm_source) = 'snapchat' THEN 'Snapchat'
+        WHEN lower(be.utm_source) ILIKE '%bing%' THEN 'Bing'
+        WHEN lower(be.utm_source) = 'direct' THEN 'Direct'
+        ELSE 'Unknown / Other'
       END AS utm_bucket,
       be.utm_campaign, be.utm_medium, be.referrer, be.utm_source, be.price, be.currency,
-      o.t AS opened_at, c.t AS contacted_at, be.id AS enquiry_id
+      be.latest_reason, o.t AS opened_at, c.t AS contacted_at, be.id AS enquiry_id
     FROM be
     LEFT JOIN opened o ON o.lead_id::text = be.id::text
     LEFT JOIN contacted c ON c.enquiry_id::text = be.id::text

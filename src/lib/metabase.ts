@@ -464,7 +464,7 @@ export async function getAccountDetailFromMetabase(
         utmCampaign: clean(r.utm_campaign),
         utmMedium: clean(r.utm_medium),
         referrer: clean(r.referrer),
-        latestReason: null, // no verified source (see detailLeadsListSql)
+        latestReason: clean(r.latest_reason),
         price: num(r.price),
         currency: (r.currency as string) || null,
         openedAt,
