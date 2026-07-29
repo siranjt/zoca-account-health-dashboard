@@ -131,6 +131,8 @@ function toRow(s: Seed): AccountRow {
     gbpVerified: s.leads % 5 !== 0,
     websiteLive: s.leads % 9 !== 0,
     websiteUrl: `https://${s.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.zoca.com/`,
+    leadsMasked: s.leads % 11 === 0,
+    maskedAt: null,
     lastConnected: daysAgoISO(s.leads % 40),
     timezone: STATE_TZ[s.state] ?? "America/New_York",
     leadsDelta: { cur: s.leads, prev: Math.round(s.leads * 0.8) },

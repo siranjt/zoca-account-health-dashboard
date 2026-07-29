@@ -252,6 +252,13 @@ export default function AccountDossier({
                   className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium no-underline"
                   style={{ borderColor: "var(--cave-line2)", color: "var(--cave-cy)" }}
                 >📍 Map ↗</a>
+                <span
+                  title={account.leadsMasked ? `Leads are currently withheld${account.maskedAt ? ` (since ${account.maskedAt.slice(0, 10)})` : ""}` : "Leads are being delivered normally"}
+                  className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium"
+                  style={account.leadsMasked
+                    ? { borderColor: "#dc2626", color: "#dc2626", background: "rgba(220,38,38,.10)" }
+                    : { borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}
+                >{account.leadsMasked ? "🔒" : "🔓"} Lead masking status: {account.leadsMasked ? "True" : "False"}</span>
               </div>
             </div>
           </div>

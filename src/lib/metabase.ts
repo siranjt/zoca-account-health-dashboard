@@ -274,6 +274,8 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
       gbpVerified: r.gbp_verified === true, // null (no GBP) or false → Unverified
       websiteLive: r.website_live === true, // GBP lists a website URL (Google's own data)
       websiteUrl: (r.website_url as string) || null,
+      leadsMasked: r.leads_masked === true,
+      maskedAt: (r.masked_at as string) || null,
       lastConnected: newerTouch((r.last_connected as string) || null, lastTouch.get(id) || null),
       timezone: tzFromLatLng(num(r.lat), num(r.lng)),
       leadsDelta: tr ? { cur: int0(tr.cur_leads), prev: int0(tr.prev_leads) } : undefined,
