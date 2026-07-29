@@ -934,18 +934,71 @@ function AccountCombo({ picker, current, tab }: { picker: PickerItem[]; current:
   );
 }
 
+// --- lead-table cell helpers (Retool-parity styling) -------------------------
+type PillTone = "red" | "green" | "amber" | "sky" | "indigo" | "emerald" | "slate";
+const PILL_TONE: Record<PillTone, string> = {
+  red: "bg-red-50 text-red-600",
+  green: "bg-emerald-100 text-emerald-700",
+  amber: "bg-amber-50 text-amber-700",
+  sky: "bg-sky-50 text-sky-700",
+  indigo: "bg-indigo-50 text-indigo-600",
+  emerald: "bg-emerald-50 text-emerald-700",
+  slate: "bg-slate-100 text-slate-500",
+};
+function pill(text: string, tone: PillTone) {
+  return <span className={`inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-medium ${PILL_TONE[tone]}`}>{text}</span>;
+}
+const STATUS_TONE: Record<string, PillTone> = {
+  BOOKED: "green", ACTIVE: "green",
+  UNRESPONSIVE: "red", NOT_BOOKED: "red", CANCELLED: "red",
+  UNMARKED: "slate", DUPLICATE: "slate",
+};
+// Title-case a raw utm/referrer token: "www.google.com" -> "Www Google Com",
+// "googlemaps" -> "Googlemaps". "$direct" is normalised to "Direct".
+function pretty(v: string): string {
+  if (/^\$?direct$/i.test(v)) return "Direct";
+  return v.replace(/[._\-]+/g, " ").trim().split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+function fmtDT(v: unknown): React.ReactNode {
+  if (!v) return "—";
+  const d = new Date(String(v));
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).replace(",", "").replace(/, (?=\d+:\d)/, " ");
+}
+function fmtPhone(v: unknown, cc: unknown): string {
+  const raw = String(v ?? "").replace(/[^\d]/g, "");
+  if (!raw) return "—";
+  const c = String(cc ?? "").replace(/[^\d]/g, "") || "1";
+  if (raw.length === 10) return `+${c} ${raw.slice(0, 3)} ${raw.slice(3, 6)} ${raw.slice(6)}`;
+  return `+${raw}`;
+}
+const chk = () => <span className="text-sky-600" title="Yes">✓</span>;
+
 function LeadsTable({ leads }: { leads: NonNullable<AccountDetail["leadsList"]> }) {
   return (
     <DataTable
       name="leads"
       rows={leads as unknown as Record<string, unknown>[]}
       cols={[
-        { key: "date", label: "Date", date: true },
-        { key: "source", label: "Source", filter: true },
+        { key: "createdAt", label: "Created at", render: (v) => fmtDT(v) },
+        { key: "phone", label: "Phone number", render: (v, row) => fmtPhone(v, row.countryCode) },
+        { key: "firstName", label: "First name" },
+        { key: "lastName", label: "Last name" },
+        { key: "customerType", label: "Customer type", filter: true, render: (v) => (v ? pill(pretty(String(v)), "red") : "—") },
+        { key: "status", label: "Status", filter: true, render: (v) => (v ? pill(String(v).replace(/_/g, " "), STATUS_TONE[String(v)] ?? "slate") : "—") },
         { key: "service", label: "Service", wide: true },
-        { key: "status", label: "Status", filter: true, render: (v) => <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{v ? String(v) : "—"}</span> },
+        { key: "utmBucket", label: "Utm bucket", filter: true, render: (v) => (v ? pill(String(v), "indigo") : "—") },
+        { key: "utmCampaign", label: "Utm campaign", filter: true, render: (v) => (v ? pill(pretty(String(v)), "amber") : "—") },
+        { key: "utmMedium", label: "Utm medium", filter: true, render: (v) => (v ? pill(pretty(String(v)), "sky") : "—") },
+        { key: "referrer", label: "Referrer", filter: true, render: (v) => (v ? pill(pretty(String(v)), /direct/i.test(String(v)) ? "slate" : "emerald") : "—") },
+        { key: "latestReason", label: "Latest reason" },
         { key: "price", label: "Price", num: true, render: (v, row) => (v != null ? `${!row.currency || row.currency === "USD" ? "$" : ""}${formatNumber(Number(v))}` : "—") },
-        { key: "utm", label: "UTM", filter: true },
+        { key: "openedAt", label: "Lead opened at", render: (v) => fmtDT(v) },
+        { key: "opened", label: "Lead opened", render: (v) => (v ? chk() : "") },
+        { key: "contactedAt", label: "Lead contacted at", render: (v) => fmtDT(v) },
+        { key: "contacted", label: "Lead contacted", render: (v) => (v ? chk() : "") },
+        { key: "enquiryId", label: "Enquiry ID" },
+        { key: "utmSource", label: "Utm source", filter: true, render: (v) => (v ? pill(pretty(String(v)), "amber") : "—") },
       ]}
     />
   );

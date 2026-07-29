@@ -280,18 +280,39 @@ export function getMockAccountDetail(id: string): AccountDetail {
     })(),
     leadsList: (() => {
       const svcs = ["Full Body Massage", "Box Braids", "Lash Extensions", "Haircut & Style", null, "Facial"];
-      const srcs = ["WEBSITE", "ZOCA_EMBED", "WEBSITE", "GBP"];
-      const stats = ["UNMARKED", "BOOKED", "CONTACTED", "UNMARKED"];
+      const first = ["Selvin", "Sharon", "Brock", "Ginah", "Xavier", "Aine", "Johnnie", "Natasha"];
+      const last = ["Molina", "Jenkins", "Ballenger", "B", "Du Sell", "Mucyo", "Worley", "Jones"];
+      const stats = ["UNMARKED", "BOOKED", "UNRESPONSIVE", "NOT_BOOKED"];
+      const ctypes = ["New", "Returning"];
       const n = Math.min(12, Math.max(4, s.leads));
-      return Array.from({ length: n }, (_, i) => ({
-        date: new Date(2026, 6, 17 - i).toISOString().slice(0, 10),
-        source: srcs[i % srcs.length],
-        service: svcs[i % svcs.length],
-        status: stats[i % stats.length],
-        price: i % 3 === 0 ? 249 : null,
-        currency: i % 3 === 0 ? "USD" : null,
-        utm: i % 4 === 0 ? "instagram" : null,
-      }));
+      return Array.from({ length: n }, (_, i) => {
+        const opened = i % 3 === 0;
+        const contacted = i % 2 === 0;
+        const created = new Date(2026, 6, 17 - i, 9 + (i % 8), (i * 7) % 60).toISOString();
+        return {
+          createdAt: created,
+          phone: `98${String(1000000 + i * 13337).slice(0, 8)}`,
+          countryCode: "1",
+          firstName: first[i % first.length],
+          lastName: last[i % last.length],
+          customerType: ctypes[i % ctypes.length],
+          status: stats[i % stats.length],
+          service: svcs[i % svcs.length],
+          utmBucket: i % 4 === 0 ? "Instagram" : "Google Maps GBP",
+          utmCampaign: i % 4 === 0 ? null : "googlemaps",
+          utmMedium: i % 4 === 0 ? null : "googlemapsprofile",
+          referrer: i % 4 === 0 ? "$direct" : "www.google.com",
+          latestReason: null,
+          price: i % 3 === 0 ? 249 : null,
+          currency: i % 3 === 0 ? "USD" : null,
+          openedAt: opened ? new Date(2026, 6, 17 - i, 12).toISOString() : null,
+          opened,
+          contactedAt: contacted ? new Date(2026, 6, 17 - i, 14).toISOString() : null,
+          contacted,
+          enquiryId: `mock-${s.entityId}-lead-${i}`,
+          utmSource: i % 4 === 0 ? "instagram" : "googlemaps",
+        };
+      });
     })(),
     posts: (() => {
       const summaries = ["Book your summer glow-up now! ✨", "New lash styles just dropped", "20% off first visit this week", "Meet our newest stylist", "Holiday hours update"];

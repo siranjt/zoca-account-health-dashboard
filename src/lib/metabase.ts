@@ -447,15 +447,34 @@ export async function getAccountDetailFromMetabase(
       text: (r.review_text as string) || null,
       date: (r.d as string) || null,
     })),
-    leadsList: ll.map((r) => ({
-      date: (r.d as string) || null,
-      source: (r.source as string) || null,
-      service: (r.service as string) || null,
-      status: (r.status as string) || null,
-      price: num(r.price),
-      currency: (r.currency as string) || null,
-      utm: (r.utm_source as string) || null,
-    })),
+    leadsList: ll.map((r) => {
+      const openedAt = (r.opened_at as string) || null;
+      const contactedAt = (r.contacted_at as string) || null;
+      const clean = (v: unknown) => ((v as string) || "").trim() || null;
+      return {
+        createdAt: (r.created_at as string) || null,
+        phone: clean(r.phone),
+        countryCode: clean(r.country_code),
+        firstName: clean(r.first_name),
+        lastName: clean(r.last_name),
+        customerType: clean(r.customer_type),
+        status: (r.status as string) || null,
+        service: clean(r.service),
+        utmBucket: (r.utm_bucket as string) || null,
+        utmCampaign: clean(r.utm_campaign),
+        utmMedium: clean(r.utm_medium),
+        referrer: clean(r.referrer),
+        latestReason: null, // no verified source (see detailLeadsListSql)
+        price: num(r.price),
+        currency: (r.currency as string) || null,
+        openedAt,
+        opened: openedAt != null,
+        contactedAt,
+        contacted: contactedAt != null,
+        enquiryId: (r.enquiry_id as string) || null,
+        utmSource: clean(r.utm_source),
+      };
+    }),
     posts: ps.map((r) => ({
       date: (r.d as string) || null,
       summary: (r.summary as string) || null,

@@ -142,7 +142,29 @@ export interface AccountDetail {
   forecast?: { predicted: number | null; actual: number } | null;
   // Row-level records (Retool "Reviews List" / "Lead Table")
   reviewsList?: { reviewer: string | null; rating: number | null; platform: string | null; text: string | null; date: string | null }[];
-  leadsList?: { date: string | null; source: string | null; service: string | null; status: string | null; price: number | null; currency: string | null; utm: string | null }[];
+  leadsList?: {
+    createdAt: string | null;    // ISO datetime
+    phone: string | null;
+    countryCode: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    customerType: string | null; // New / Returning (from attributes)
+    status: string | null;       // UNMARKED / BOOKED / UNRESPONSIVE / NOT_BOOKED / ...
+    service: string | null;
+    utmBucket: string | null;    // derived from utm_source / utm_medium / referrer
+    utmCampaign: string | null;
+    utmMedium: string | null;
+    referrer: string | null;
+    latestReason: string | null; // no verified source yet — always null (see queries.ts)
+    price: number | null;
+    currency: string | null;
+    openedAt: string | null;     // ISO — Mixpanel Leads-View-Chat first view
+    opened: boolean;
+    contactedAt: string | null;  // ISO — first SMS/CALL in communication_logs
+    contacted: boolean;
+    enquiryId: string | null;
+    utmSource: string | null;
+  }[];
   // Native-tab widgets promoted from the Retool export
   posts?: { date: string | null; summary: string | null; event: string | null; offer: string | null; cta: string | null; topic: string | null; state: string | null }[];
   postsWeekly?: { wk: string; posts: number; cumsum: number }[];
