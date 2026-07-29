@@ -476,9 +476,18 @@ async function anthropic(messages: unknown[], opts: { withTools?: boolean; final
 
 const textOf = (resp: any) => (resp?.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
 
-// First name to address the user by (session name → AM name → email prefix).
+// Preferred greeting names by email (a nickname that doesn't fall out of the
+// display name/email). Add entries as people ask.
+const PREFERRED_NAMES: Record<string, string> = {
+  "siranjith.t@zoca.com": "Siranj",
+  "siranjiththangavel@gmail.com": "Siranj",
+};
+
+// First name to address the user by: preferred override → session name → AM name → email.
 function firstNameOf(v: { name?: string | null; amName?: string | null; email?: string | null }): string {
-  const raw = (v.name || v.amName || (v.email || "").split("@")[0] || "").trim();
+  const email = (v.email || "").toLowerCase();
+  if (PREFERRED_NAMES[email]) return PREFERRED_NAMES[email];
+  const raw = (v.name || v.amName || email.split("@")[0] || "").trim();
   const first = raw.split(/[ ._-]+/)[0] || "";
   return first ? first.charAt(0).toUpperCase() + first.slice(1) : "";
 }
