@@ -143,6 +143,43 @@ async function getLastTouchMap(cfg: MetabaseConfig): Promise<Map<string, string>
   return lastTouchInflight;
 }
 
+// entity_id -> HubSpot "Locations" custom-object record id (hubspot_stitch.locations.id).
+// Needed to fetch per-location fields that were never synced to the warehouse (e.g.
+// the "Check in meeting URL") straight from the HubSpot API. Small, current-state
+// map; cache it and share across detail views. One entity can have >1 location row —
+// keep the most recently updated. Degrades to an empty map on any failure.
+const HS_RECID_TTL_MS = 1_800_000; // 30 min
+let hsRecIdCache: { at: number; map: Map<string, string> } | null = null;
+let hsRecIdInflight: Promise<Map<string, string>> | null = null;
+export async function getHubspotRecordIdMap(): Promise<Map<string, string>> {
+  if (hsRecIdCache && Date.now() - hsRecIdCache.at < HS_RECID_TTL_MS) return hsRecIdCache.map;
+  if (hsRecIdInflight) return hsRecIdInflight;
+  const cfg = readMetabaseConfig();
+  if (!cfg) return new Map();
+  hsRecIdInflight = (async () => {
+    const sql = `SELECT DISTINCT ON (property_location_entity_id)
+        property_location_entity_id AS entity_id, id
+      FROM hubspot_stitch.locations
+      WHERE property_location_entity_id IS NOT NULL AND id IS NOT NULL
+      ORDER BY property_location_entity_id, "updatedAt" DESC NULLS LAST`;
+    const rows = await runDataset(cfg, sql).catch((err) => {
+      console.error("[data] hubspot record-id map failed:", err);
+      return [] as Row[];
+    });
+    const m = new Map<string, string>();
+    for (const r of rows) if (r.entity_id && r.id) m.set(String(r.entity_id), String(r.id));
+    if (rows.length) hsRecIdCache = { at: Date.now(), map: m }; // never pin an empty (failed) result
+    return m;
+  })().finally(() => { hsRecIdInflight = null; });
+  return hsRecIdInflight;
+}
+
+/** The HubSpot Locations record id for one account entity, or null. */
+export async function getHubspotRecordId(entityId: string): Promise<string | null> {
+  const m = await getHubspotRecordIdMap();
+  return m.get(entityId) ?? null;
+}
+
 const num = (v: unknown): number | null => {
   if (v == null || v === "") return null;
   const n = Number(v);
