@@ -7,6 +7,7 @@ export interface Viewer {
   role: "admin" | "manager" | "am" | null;
   amName: string | null;
   email: string | null;
+  name: string | null; // display name (for addressing the user by first name)
 }
 
 export async function getViewer(): Promise<Viewer> {
@@ -17,9 +18,10 @@ export async function getViewer(): Promise<Viewer> {
       role: (u?.role as Viewer["role"]) ?? null,
       amName: (u?.amName as string | null) ?? null,
       email: (u?.email as string | null) ?? null,
+      name: (u?.name as string | null) ?? null,
     };
   } catch {
-    return { role: null, amName: null, email: null };
+    return { role: null, amName: null, email: null, name: null };
   }
 }
 

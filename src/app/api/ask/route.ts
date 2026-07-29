@@ -50,7 +50,7 @@ ACCURACY (non-negotiable)
 - If a name matches several accounts or managers, the tool returns an 'ambiguous' list — ask which one before analysing.
 
 STYLE
-- Address the user as "sir". Be concise and scale depth to the question: a lookup earns a sentence, an analysis earns a tight brief.
+- Address the user by their FIRST NAME (given to you at the start of each request) — warm but not overfamiliar; use it sparingly, not in every sentence. If no name is given, address them directly with no honorific (never "sir" or "ma'am"). Be concise and scale depth to the question: a lookup earns a sentence, an analysis earns a tight brief.
 - Answer the question directly. Do NOT narrate which tools you called. NEVER remark that "both names/queries resolve to the same account", that a name "looks like two accounts", or anything about duplicates — many account names contain "and" or several words (e.g. "Glow Esthetics Skincare and Wellness By Dhin" is ONE account); treat the full name as a single account and just answer.
 - Lead with the claim, then the specific figures that support it.
 - Dates as DD/MM/YY, money in USD; when listing invoices or items, newest first.
@@ -63,7 +63,7 @@ TOOLS
 
 DRAFTS — you draft, a human sends
 - On request you can DRAFT outward artifacts: an account-manager outreach message, a QBR / health brief, a churn-save playbook, or an escalation note. Pull real context first (gather_360 gives the full picture), address the real account and account manager, and be specific and grounded — no invented details.
-- Always label it clearly as a draft. You NEVER send, email, post, create, schedule, or modify anything — you produce text for a human to review and send. If asked to actually send or create something, say you can only prepare the draft, sir.`;
+- Always label it clearly as a draft. You NEVER send, email, post, create, schedule, or modify anything — you produce text for a human to review and send. If asked to actually send or create something, say you can only prepare the draft.`;
 
 // ---- small utils: compression keeps tool payloads (and tokens) tight ----
 function norm(s: string) {
@@ -476,12 +476,20 @@ async function anthropic(messages: unknown[], opts: { withTools?: boolean; final
 
 const textOf = (resp: any) => (resp?.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("").trim();
 
+// First name to address the user by (session name → AM name → email prefix).
+function firstNameOf(v: { name?: string | null; amName?: string | null; email?: string | null }): string {
+  const raw = (v.name || v.amName || (v.email || "").split("@")[0] || "").trim();
+  const first = raw.split(/[ ._-]+/)[0] || "";
+  return first ? first.charAt(0).toUpperCase() + first.slice(1) : "";
+}
+
 export async function POST(req: Request) {
   let q = "", history: { role: string; text: string }[] = [];
   let asker: { email: string | null; amName: string | null; role: string | null } = { email: null, amName: null, role: null };
+  let firstName = "";
   try { const b = await req.json(); q = String(b.q || "").slice(0, 800).trim(); if (Array.isArray(b.history)) history = b.history; } catch {}
   if (!q) return NextResponse.json({ error: "empty question" }, { status: 400 });
-  if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ reply: "My reasoning engine has no API key configured, sir — set ANTHROPIC_API_KEY in the Vercel project." });
+  if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ reply: "My reasoning engine has no API key configured — set ANTHROPIC_API_KEY in the Vercel project." });
 
   // Fetch the book ONCE per request; every tool call reuses this snapshot.
   let ctx: Ctx;
@@ -491,8 +499,9 @@ export async function POST(req: Request) {
     const scoped = scopeAccounts(payload.accounts, viewer);
     ctx = { list: scoped, payload: { ...payload, accounts: scoped }, asOf: ddmmyy(payload.generatedAt) };
     asker = { email: viewer.email ?? null, amName: viewer.amName ?? null, role: viewer.role ?? null };
+    firstName = firstNameOf(viewer);
   } catch (e) {
-    return NextResponse.json({ reply: "I couldn't reach the account data just now, sir — please try again in a moment." });
+    return NextResponse.json({ reply: "I couldn't reach the account data just now — please try again in a moment." });
   }
 
   const focus = await getFocus();
@@ -510,7 +519,8 @@ export async function POST(req: Request) {
     ? `Pinned focus this session: ${focus.entityName}. Resolve bare references ("they", "them", "this account", "how are they doing") to ${focus.entityName} unless the user names a different account. If the user asks to change or clear the focus, use pin_focus.\n\n`
     : "";
   const recent = history.slice(-6).map((m) => (m.role === "user" ? "User: " : "Alfred: ") + m.text).join("\n");
-  const messages: unknown[] = [{ role: "user", content: focusNote + (recent ? "Conversation so far:\n" + recent + "\n\n" : "") + "Question: " + q }];
+  const nameNote = firstName ? `You are assisting ${firstName}. Address them by their first name.\n\n` : "";
+  const messages: unknown[] = [{ role: "user", content: nameNote + focusNote + (recent ? "Conversation so far:\n" + recent + "\n\n" : "") + "Question: " + q }];
 
   const t0 = Date.now();
   const toolsUsed: string[] = [];
@@ -524,7 +534,7 @@ export async function POST(req: Request) {
     if (m) {
       try {
         action = JSON.parse(m[1]);
-        reply = rawReply.slice(0, m.index).trim() || "Done, sir.";
+        reply = rawReply.slice(0, m.index).trim() || "Done.";
       } catch {
         /* leave reply untouched if the directive is malformed */
       }
@@ -581,7 +591,7 @@ export async function POST(req: Request) {
           const t = textOf(fb);
           if (t) return finish(t, "recovered");
         }
-        return finish("My reasoning stalled just now, sir — please ask again in a moment.", "api_error");
+        return finish("My reasoning stalled just now — please ask again in a moment.", "api_error");
       }
       if (!mustAnswer && resp.stop_reason === "tool_use") {
         messages.push({ role: "assistant", content: resp.content });
@@ -608,10 +618,10 @@ export async function POST(req: Request) {
       // Model returned no text (e.g. it still tried to use a tool on the forced
       // pass). Do one explicit no-tools synthesis so we never return empty.
       const fb: any = await anthropic(messages, { withTools: false, finalize: true });
-      return finish(textOf(fb) || "Here's the best I can give from what I gathered, sir — please narrow the question for more detail.", "forced2");
+      return finish(textOf(fb) || "Here's the best I can give from what I gathered — please narrow the question for more detail.", "forced2");
     }
-    return finish("I dug into that but couldn't converge, sir — please narrow the question.", "no_converge");
+    return finish("I dug into that but couldn't converge — please narrow the question.", "no_converge");
   } catch (e) {
-    return finish("My reasoning engine is unreachable just now, sir.", "exception");
+    return finish("My reasoning engine is unreachable just now.", "exception");
   }
 }

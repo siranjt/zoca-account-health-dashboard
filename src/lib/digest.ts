@@ -98,7 +98,7 @@ export async function buildAmDigests(topN?: number): Promise<AmDigest[]> {
   const out: AmDigest[] = [];
 
   for (const am of roster.ams) {
-    const mine = scopeAccounts(payload.accounts, { role: "am", amName: am.name, email: am.email });
+    const mine = scopeAccounts(payload.accounts, { role: "am", amName: am.name, email: am.email, name: am.name });
     const attention = mine.filter((a) => a.health?.color !== "green");
     if (!attention.length) continue; // nothing to nudge about — don't send noise
 

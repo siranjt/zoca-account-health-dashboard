@@ -210,10 +210,10 @@ export default function AlfredChat() {
     try {
       const r = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ q, history }) });
       const d = await r.json();
-      setMsgs((m) => [...m, { role: "alfred", text: clean(d.reply || "(no answer, sir)") }]);
+      setMsgs((m) => [...m, { role: "alfred", text: clean(d.reply || "(no answer)") }]);
       if (d.action) runAction(d.action);
     } catch {
-      setMsgs((m) => [...m, { role: "alfred", text: "Comms failed, sir — please try again." }]);
+      setMsgs((m) => [...m, { role: "alfred", text: "Comms failed — please try again." }]);
     } finally {
       setBusy(false);
     }
@@ -238,7 +238,7 @@ export default function AlfredChat() {
         </div>
         <div className="cave-log" ref={logRef}>
           {msgs.length === 0 && (
-            <div className="cave-msg alf"><div className="cave-who">Alfred</div>Good evening, sir. Ask me about any account&apos;s health, who needs attention, or how the book is doing — I reason over the live data.</div>
+            <div className="cave-msg alf"><div className="cave-who">Alfred</div>Good evening. Ask me about any account&apos;s health, who needs attention, or how the book is doing — I reason over the live data.</div>
           )}
           {msgs.map((m, i) => (
             <div key={i} className={"cave-msg " + (m.role === "user" ? "user" : "alf")}>
