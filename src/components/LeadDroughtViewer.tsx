@@ -56,6 +56,25 @@ export default function LeadDroughtViewer() {
   const [days, setDays] = useState(3);
   const [am, setAm] = useState("");
   const [health, setHealth] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendMsg, setSendMsg] = useState<string | null>(null);
+
+  async function sendAlerts() {
+    if (sending) return;
+    const prev = await fetch("/api/admin/send-drought-digest?dry=1").then((r) => r.json()).catch(() => null);
+    const n = prev?.candidates ?? 0;
+    const total = prev?.totalAccounts ?? 0;
+    if (!n) { setSendMsg("No AM has an account dry ≥3 days — nothing to send."); return; }
+    if (!confirm(`Send lead-drought alerts to ${n} account manager${n === 1 ? "" : "s"} (covering ${total} quiet accounts) via Slack DM? This messages real AMs.`)) return;
+    setSending(true);
+    setSendMsg("Sending…");
+    try {
+      const d = await fetch("/api/admin/send-drought-digest", { method: "POST" }).then((r) => r.json());
+      if (d.ok) setSendMsg(`✓ Sent — ${d.dmSent ?? 0} DM${d.dmSent === 1 ? "" : "s"} of ${d.candidates ?? 0}${d.channelPosted ? " · channel roll-up posted" : ""}`);
+      else setSendMsg(d.configured === false ? "Slack not configured (SLACK_BOT_TOKEN missing)." : "Send failed.");
+    } catch { setSendMsg("Send failed."); }
+    finally { setSending(false); }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -98,6 +117,20 @@ export default function LeadDroughtViewer() {
 
   return (
     <div>
+      {/* send AM alerts */}
+      <div className="mb-3 flex items-center gap-3">
+        <button
+          onClick={sendAlerts}
+          disabled={sending}
+          className="rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+          style={{ borderColor: "#22d3ee", color: "#22d3ee", background: "rgba(34,211,238,.08)" }}
+          title="DM each AM their quiet accounts via Slack"
+        >
+          {sending ? "Sending…" : "📣 Send AM alerts"}
+        </button>
+        {sendMsg && <span className="text-xs text-slate-500">{sendMsg}</span>}
+      </div>
+
       {/* threshold toggle */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span className="text-[11px] uppercase tracking-[0.14em] text-slate-400">No leads for</span>
