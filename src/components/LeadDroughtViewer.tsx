@@ -165,7 +165,7 @@ export default function LeadDroughtViewer() {
                 <th className="px-2 py-2 font-semibold">Last lead</th>
                 <th className="px-2 py-2 text-right font-semibold">MRR</th>
                 <th className="px-2 py-2 font-semibold">Health</th>
-                <th className="px-2 py-2 font-semibold">Leads</th>
+                <th className="px-2 py-2 font-semibold">Lead masking</th>
               </tr>
             </thead>
             <tbody>
