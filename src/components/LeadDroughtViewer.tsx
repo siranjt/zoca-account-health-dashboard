@@ -59,6 +59,20 @@ export default function LeadDroughtViewer() {
   const [sending, setSending] = useState(false);
   const [sendMsg, setSendMsg] = useState<string | null>(null);
 
+  async function testToMe() {
+    if (sending) return;
+    const to = prompt("Send a sample drought digest to which Slack email? (your Slack address)");
+    if (!to) return;
+    setSending(true);
+    setSendMsg("Sending test…");
+    try {
+      const d = await fetch(`/api/admin/send-drought-digest?test=1&to=${encodeURIComponent(to.trim())}`, { method: "POST" }).then((r) => r.json());
+      if (d.ok) setSendMsg(`✓ Test DM sent to ${d.sentTo} (sample of ${d.sampleOf}'s ${d.accounts} accounts)`);
+      else setSendMsg(`Test failed: ${d.reason || d.lookupError || d.error || "unknown"}`);
+    } catch { setSendMsg("Test failed."); }
+    finally { setSending(false); }
+  }
+
   async function sendAlerts() {
     if (sending) return;
     const prev = await fetch("/api/admin/send-drought-digest?dry=1").then((r) => r.json()).catch(() => null);
@@ -127,6 +141,15 @@ export default function LeadDroughtViewer() {
           title="DM each AM their quiet accounts via Slack"
         >
           {sending ? "Sending…" : "📣 Send AM alerts"}
+        </button>
+        <button
+          onClick={testToMe}
+          disabled={sending}
+          className="rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+          style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}
+          title="DM one sample digest to your own Slack (no AM is touched)"
+        >
+          🧪 Test to me
         </button>
         {sendMsg && <span className="text-xs text-slate-500">{sendMsg}</span>}
       </div>
