@@ -71,6 +71,18 @@ export async function buildAmDroughtDigests(cap?: number): Promise<AmDroughtDige
 
 const mEsc = (s: string) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+// A business-type emoji from the account name, so each line is scannable.
+function bizEmoji(name: string | null): string {
+  const n = (name || "").toLowerCase();
+  const has = (...w: string[]) => w.some((x) => n.includes(x));
+  if (has("spa", "massage", "wellness", "relax", "sculpt")) return "💆";
+  if (has("nail", "lash", "brow", "aesthet", "skin", "beauty", "glow", "esthe", "makeup")) return "💅";
+  if (has("salon", "hair", "braid", "barber", "cut", "style", "wig")) return "💇";
+  if (has("fit", "pilates", "yoga", "gym")) return "🏋️";
+  if (has("clinic", "medical", "laser", "pet", "vet", "dental", "health", "cryo")) return "🏥";
+  return "🏢";
+}
+
 /** Per-AM drought digest as Slack Block Kit. */
 export function renderDroughtBlocks(d: AmDroughtDigest): { text: string; blocks: unknown[] } {
   const first = mEsc((d.amName || "there").split(/\s+/)[0]);
@@ -78,9 +90,10 @@ export function renderDroughtBlocks(d: AmDroughtDigest): { text: string; blocks:
     const dry = a.neverHadLead ? "never received a lead" : `*${a.droughtDays}* days dry`;
     const meta = [a.location, a.mrr != null ? `$${a.mrr.toLocaleString()} MRR` : null, a.masked ? "🔒 leads masked" : null]
       .filter(Boolean).join(" · ");
+    // The business name itself links straight to its CAVE//OS account page.
     return {
       type: "section",
-      text: { type: "mrkdwn", text: `*${mEsc(a.name)}*\n${dry}${meta ? ` · ${mEsc(meta)}` : ""}` },
+      text: { type: "mrkdwn", text: `${bizEmoji(a.name)} <${a.link}|*${mEsc(a.name)}*>\n${dry}${meta ? ` · ${mEsc(meta)}` : ""}` },
       accessory: { type: "button", text: { type: "plain_text", text: "Open →", emoji: true }, url: a.link },
     };
   };
