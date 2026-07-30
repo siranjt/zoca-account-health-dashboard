@@ -21,7 +21,20 @@ export async function GET(req: Request) {
     const days = Math.max(1, Number(searchParams.get("days")) || 3);
     const idx = THRESHOLDS.indexOf(days);
     const upper = idx >= 0 && idx < THRESHOLDS.length - 1 ? THRESHOLDS[idx + 1] : Infinity;
-    const dry = rows.filter((r) => r.droughtDays >= days && r.droughtDays < upper);
+    const am = searchParams.get("am") || "";
+    const health = searchParams.get("health") || "";
+    const tierGroup = (tier: string | null) => {
+      const t = (tier || "").toUpperCase();
+      if (t.includes("CRITICAL")) return "Critical";
+      if (t.includes("RISK")) return "At-risk";
+      if (t.includes("MONITOR")) return "Monitor";
+      if (t.includes("HEALTHY")) return "Healthy";
+      return "Other";
+    };
+    const dry = rows.filter((r) =>
+      r.droughtDays >= days && r.droughtDays < upper &&
+      (am === "" || r.amName === am) &&
+      (health === "" || tierGroup(r.healthTier) === health));
     const esc = (v: unknown) => {
       const x = v == null ? "" : String(v);
       return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x;

@@ -40,10 +40,22 @@ function tierBadge(tier: string | null) {
   return <span className="rounded px-1.5 py-0.5 text-[10px] font-medium" style={{ color, background: `${color}1a` }}>{label || "—"}</span>;
 }
 
+const TIER_ORDER = ["Critical", "At-risk", "Monitor", "Healthy", "Other"];
+function tierGroup(tier: string | null): string {
+  const t = (tier || "").toUpperCase();
+  if (t.includes("CRITICAL")) return "Critical";
+  if (t.includes("RISK")) return "At-risk";
+  if (t.includes("MONITOR")) return "Monitor";
+  if (t.includes("HEALTHY")) return "Healthy";
+  return "Other";
+}
+
 export default function LeadDroughtViewer() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(3);
+  const [am, setAm] = useState("");
+  const [health, setHealth] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -54,16 +66,32 @@ export default function LeadDroughtViewer() {
     return () => { alive = false; };
   }, []);
 
+  const amOptions = useMemo(
+    () => Array.from(new Set((rows ?? []).map((r) => r.amName).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b)),
+    [rows],
+  );
+  const healthOptions = useMemo(() => {
+    const present = new Set((rows ?? []).map((r) => tierGroup(r.healthTier)));
+    return TIER_ORDER.filter((g) => present.has(g));
+  }, [rows]);
+
+  // AM + health filters apply before the day-band split, so the band counts and
+  // the table both reflect the current AM/health selection.
+  const base = useMemo(
+    () => (rows ?? []).filter((r) => (am === "" || r.amName === am) && (health === "" || tierGroup(r.healthTier) === health)),
+    [rows, am, health],
+  );
+
   const counts = useMemo(() => {
     const m: Record<number, number> = {};
-    for (const t of THRESHOLDS) { const u = upperOf(t); m[t] = (rows ?? []).filter((r) => r.droughtDays >= t && r.droughtDays < u).length; }
+    for (const t of THRESHOLDS) { const u = upperOf(t); m[t] = base.filter((r) => r.droughtDays >= t && r.droughtDays < u).length; }
     return m;
-  }, [rows]);
+  }, [base]);
 
   const view = useMemo(() => {
     const u = upperOf(days);
-    return (rows ?? []).filter((r) => r.droughtDays >= days && r.droughtDays < u);
-  }, [rows, days]);
+    return base.filter((r) => r.droughtDays >= days && r.droughtDays < u);
+  }, [base, days]);
   const maskedInView = view.filter((r) => r.leadsMasked).length;
 
   if (loading) return <div className="py-12 text-center text-sm text-slate-400">Loading lead droughts…</div>;
@@ -88,8 +116,31 @@ export default function LeadDroughtViewer() {
             </button>
           );
         })}
+        <select
+          value={am}
+          onChange={(e) => setAm(e.target.value)}
+          title="Filter by account manager"
+          className="ml-1 max-w-[180px] rounded-md border bg-white px-2 py-1.5 text-xs outline-none"
+          style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}
+        >
+          <option value="">All AMs ({amOptions.length})</option>
+          {amOptions.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <select
+          value={health}
+          onChange={(e) => setHealth(e.target.value)}
+          title="Filter by health"
+          className="rounded-md border bg-white px-2 py-1.5 text-xs outline-none"
+          style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}
+        >
+          <option value="">All health</option>
+          {healthOptions.map((h) => <option key={h} value={h}>{h}</option>)}
+        </select>
+        {(am || health) && (
+          <button onClick={() => { setAm(""); setHealth(""); }} className="text-[11px] text-slate-400 hover:text-slate-600" title="Clear filters">clear</button>
+        )}
         <a
-          href={`/api/admin/lead-droughts?format=csv&days=${days}`}
+          href={`/api/admin/lead-droughts?format=csv&days=${days}${am ? `&am=${encodeURIComponent(am)}` : ""}${health ? `&health=${encodeURIComponent(health)}` : ""}`}
           className="ml-auto rounded border px-2 py-1.5 text-[11px] font-medium no-underline"
           style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}
         >⭳ CSV</a>
