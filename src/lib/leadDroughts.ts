@@ -2,13 +2,18 @@ import "server-only";
 import { queryAurora } from "@/lib/metabase";
 
 // ===========================================================================
-// Lead-drought readout (admin): accounts with no incoming website leads for a
-// continuous stretch. "Drought" = days since the last lead (website.booking_
-// enquiries, WEBSITE, non-test), or — for accounts that never received one —
-// days since onboarding, so a brand-new account is never mislabelled as a long
-// drought. Scoped to the book (cx.health_score = active, non-churned). The
-// leads-masked flag marks accounts that are dry BY DESIGN (leads withheld), not
-// organically, so they aren't misread as a servicing problem.
+// Lead-drought readout (admin): accounts with no incoming leads for a continuous
+// stretch. "Drought" = days since the last lead, or — for accounts that never
+// received one — days since onboarding, so a brand-new account is never
+// mislabelled as a long drought. Scoped to the book (cx.health_score = active,
+// non-churned). The leads-masked flag marks accounts that are dry BY DESIGN
+// (leads withheld), not organically, so they aren't misread as a servicing gap.
+//
+// A "lead" here is ANY non-test booking enquiry regardless of source (WEBSITE,
+// ZOCA_EMBED, MINDBODY_WIDGET, INCOMING_VOICE_CALL, …). This is deliberately
+// broader than the app's WEBSITE-only `leadsReceived` metric: an account that
+// gets embed or phone leads but no website-form lead is NOT in a drought, and
+// counting website-only here falsely flagged such accounts as dry.
 // ===========================================================================
 
 export interface DroughtRow {
@@ -26,7 +31,7 @@ export interface DroughtRow {
 
 const SQL = `WITH ll AS (
     SELECT entity_id, MAX(created_at) last_lead
-    FROM website.booking_enquiries WHERE source='WEBSITE' AND is_test_lead=false GROUP BY 1),
+    FROM website.booking_enquiries WHERE is_test_lead=false GROUP BY 1),
   lm AS (SELECT entity_id, (lead_masking->>'status')='true' AS leads_masked FROM entities.locations WHERE lead_masking IS NOT NULL),
   loc AS (SELECT entity_id, storefront_address->>'administrativeArea' AS state FROM gbp.locations)
   SELECT hs.entity_id::text AS entity_id, hs.gbp_title AS name, hs.am_name, loc.state,
@@ -34,7 +39,7 @@ const SQL = `WITH ll AS (
     to_char(ll.last_lead,'YYYY-MM-DD') AS last_lead,
     (ll.last_lead IS NULL) AS never_had_lead,
     COALESCE(lm.leads_masked,false) AS leads_masked,
-    GREATEST(0, (EXTRACT(EPOCH FROM (now() - COALESCE(ll.last_lead, hs.onboarding_date::timestamp))) / 86400))::int AS drought_days
+    FLOOR(GREATEST(0, EXTRACT(EPOCH FROM (now() - COALESCE(ll.last_lead, hs.onboarding_date::timestamp))) / 86400))::int AS drought_days
   FROM cx.health_score hs
   LEFT JOIN ll  ON ll.entity_id  = hs.entity_id
   LEFT JOIN lm  ON lm.entity_id  = hs.entity_id
