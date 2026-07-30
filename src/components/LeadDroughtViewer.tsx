@@ -6,7 +6,7 @@ type Row = {
   entityId: string;
   name: string | null;
   amName: string | null;
-  state: string | null;
+  location: string | null;
   mrr: number | null;
   healthTier: string | null;
   lastLead: string | null;
@@ -109,7 +109,7 @@ export default function LeadDroughtViewer() {
               <tr>
                 <th className="px-2 py-2 font-semibold">Account</th>
                 <th className="px-2 py-2 font-semibold">Account manager</th>
-                <th className="px-2 py-2 font-semibold">State</th>
+                <th className="px-2 py-2 font-semibold">Location</th>
                 <th className="px-2 py-2 text-right font-semibold">Days dry</th>
                 <th className="px-2 py-2 font-semibold">Last lead</th>
                 <th className="px-2 py-2 text-right font-semibold">MRR</th>
@@ -122,7 +122,7 @@ export default function LeadDroughtViewer() {
                 <tr key={r.entityId} className="border-t border-slate-100">
                   <td className="max-w-[280px] truncate px-2 py-1.5 text-slate-700">{r.name || "(unnamed)"}</td>
                   <td className="px-2 py-1.5 text-slate-600">{r.amName || "—"}</td>
-                  <td className="px-2 py-1.5 text-slate-500">{r.state || "—"}</td>
+                  <td className="px-2 py-1.5 text-slate-500">{r.location || "—"}</td>
                   <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-slate-700">
                     {r.droughtDays}{r.neverHadLead && <span className="ml-1 text-[10px] font-normal text-slate-400">(never)</span>}
                   </td>

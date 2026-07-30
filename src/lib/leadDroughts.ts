@@ -20,7 +20,7 @@ export interface DroughtRow {
   entityId: string;
   name: string | null;
   amName: string | null;
-  state: string | null;
+  location: string | null; // "City, ST" from the GBP storefront address
   mrr: number | null;
   healthTier: string | null;
   lastLead: string | null; // YYYY-MM-DD, or null when never had a lead
@@ -33,8 +33,12 @@ const SQL = `WITH ll AS (
     SELECT entity_id, MAX(created_at) last_lead
     FROM website.booking_enquiries WHERE is_test_lead=false GROUP BY 1),
   lm AS (SELECT entity_id, (lead_masking->>'status')='true' AS leads_masked FROM entities.locations WHERE lead_masking IS NOT NULL),
-  loc AS (SELECT entity_id, storefront_address->>'administrativeArea' AS state FROM gbp.locations)
-  SELECT hs.entity_id::text AS entity_id, hs.gbp_title AS name, hs.am_name, loc.state,
+  loc AS (SELECT entity_id,
+    NULLIF(TRIM(BOTH ', ' FROM CONCAT_WS(', ',
+      storefront_address->>'locality',
+      COALESCE(storefront_address->>'administrative_area', storefront_address->>'administrativeArea'))), '') AS location
+    FROM gbp.locations)
+  SELECT hs.entity_id::text AS entity_id, hs.gbp_title AS name, hs.am_name, loc.location,
     hs.total_mrr AS mrr, hs.health_tier,
     to_char(ll.last_lead,'YYYY-MM-DD') AS last_lead,
     (ll.last_lead IS NULL) AS never_had_lead,
@@ -60,7 +64,7 @@ export async function getLeadDroughts(): Promise<DroughtRow[]> {
       entityId: String(r.entity_id),
       name: (r.name as string) || null,
       amName: (r.am_name as string) || null,
-      state: (r.state as string) || null,
+      location: (r.location as string) || null,
       mrr: r.mrr != null && r.mrr !== "" ? Number(r.mrr) : null,
       healthTier: (r.health_tier as string) || null,
       lastLead: (r.last_lead as string) || null,

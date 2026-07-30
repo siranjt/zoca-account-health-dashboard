@@ -26,8 +26,8 @@ export async function GET(req: Request) {
       const x = v == null ? "" : String(v);
       return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x;
     };
-    const header = ["Account", "AM", "State", "Days since last lead", "Last lead", "MRR", "Health", "Leads masked"];
-    const body = dry.map((r) => [r.name ?? "", r.amName ?? "", r.state ?? "", r.droughtDays, r.neverHadLead ? "never" : r.lastLead ?? "", r.mrr ?? "", r.healthTier ?? "", r.leadsMasked ? "yes" : "no"]);
+    const header = ["Account", "AM", "Location", "Days since last lead", "Last lead", "MRR", "Health", "Leads masked"];
+    const body = dry.map((r) => [r.name ?? "", r.amName ?? "", r.location ?? "", r.droughtDays, r.neverHadLead ? "never" : r.lastLead ?? "", r.mrr ?? "", r.healthTier ?? "", r.leadsMasked ? "yes" : "no"]);
     const csv = [header, ...body].map((r) => r.map(esc).join(",")).join("\n");
     return new NextResponse(csv, {
       headers: {
