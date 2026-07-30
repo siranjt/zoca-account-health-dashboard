@@ -16,6 +16,15 @@ type Row = {
 };
 
 const THRESHOLDS = [3, 7, 14, 30];
+// Exclusive bands: each threshold covers [t, nextThreshold) — the last is open-ended.
+const upperOf = (t: number) => {
+  const i = THRESHOLDS.indexOf(t);
+  return i >= 0 && i < THRESHOLDS.length - 1 ? THRESHOLDS[i + 1] : Infinity;
+};
+const bandLabel = (t: number) => {
+  const u = upperOf(t);
+  return u === Infinity ? `${t}+ days` : `${t}–${u - 1} days`;
+};
 
 function ddmmyy(iso: string | null): string {
   if (!iso) return "—";
@@ -47,11 +56,14 @@ export default function LeadDroughtViewer() {
 
   const counts = useMemo(() => {
     const m: Record<number, number> = {};
-    for (const t of THRESHOLDS) m[t] = (rows ?? []).filter((r) => r.droughtDays >= t).length;
+    for (const t of THRESHOLDS) { const u = upperOf(t); m[t] = (rows ?? []).filter((r) => r.droughtDays >= t && r.droughtDays < u).length; }
     return m;
   }, [rows]);
 
-  const view = useMemo(() => (rows ?? []).filter((r) => r.droughtDays >= days), [rows, days]);
+  const view = useMemo(() => {
+    const u = upperOf(days);
+    return (rows ?? []).filter((r) => r.droughtDays >= days && r.droughtDays < u);
+  }, [rows, days]);
   const maskedInView = view.filter((r) => r.leadsMasked).length;
 
   if (loading) return <div className="py-12 text-center text-sm text-slate-400">Loading lead droughts…</div>;
@@ -72,7 +84,7 @@ export default function LeadDroughtViewer() {
                 ? { borderColor: "#22d3ee", color: "#22d3ee", background: "rgba(34,211,238,.10)" }
                 : { borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}
             >
-              ≥ {t} days <span className="ml-1 opacity-70">({counts[t] ?? 0})</span>
+              {bandLabel(t)} <span className="ml-1 opacity-70">({counts[t] ?? 0})</span>
             </button>
           );
         })}
@@ -84,12 +96,12 @@ export default function LeadDroughtViewer() {
       </div>
 
       <div className="mb-2 text-sm text-slate-400">
-        <b className="text-slate-700">{view.length}</b> account{view.length === 1 ? "" : "s"} with no incoming leads for {days}+ days
+        <b className="text-slate-700">{view.length}</b> account{view.length === 1 ? "" : "s"} with no incoming leads for {bandLabel(days)}
         {maskedInView > 0 && <span className="ml-2 text-amber-600">· {maskedInView} have leads masked (dry by design)</span>}
       </div>
 
       {view.length === 0 ? (
-        <div className="py-10 text-center text-sm text-slate-400">No accounts dry for {days}+ days.</div>
+        <div className="py-10 text-center text-sm text-slate-400">No accounts dry {bandLabel(days)}.</div>
       ) : (
         <div className="table-scroll -mx-1 max-h-[70vh] overflow-auto rounded-lg border" style={{ borderColor: "var(--cave-line)" }}>
           <table className="w-full border-collapse text-xs">

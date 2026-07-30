@@ -16,8 +16,12 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
 
   if (searchParams.get("format") === "csv") {
+    // Exclusive band: [days, next threshold). Matches the on-screen toggle.
+    const THRESHOLDS = [3, 7, 14, 30];
     const days = Math.max(1, Number(searchParams.get("days")) || 3);
-    const dry = rows.filter((r) => r.droughtDays >= days);
+    const idx = THRESHOLDS.indexOf(days);
+    const upper = idx >= 0 && idx < THRESHOLDS.length - 1 ? THRESHOLDS[idx + 1] : Infinity;
+    const dry = rows.filter((r) => r.droughtDays >= days && r.droughtDays < upper);
     const esc = (v: unknown) => {
       const x = v == null ? "" : String(v);
       return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x;
