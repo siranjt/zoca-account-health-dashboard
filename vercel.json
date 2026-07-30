@@ -2,6 +2,7 @@
   "crons": [
     { "path": "/api/snapshot", "schedule": "0 6 * * *" },
     { "path": "/api/cron/activity-digest", "schedule": "0 * * * *" },
-    { "path": "/api/cron/am-digest", "schedule": "0 13 * * 1" }
+    { "path": "/api/cron/am-digest", "schedule": "0 13 * * 1" },
+    { "path": "/api/cron/lead-drought-digest", "schedule": "0 13 * * 1-5" }
   ]
 }
