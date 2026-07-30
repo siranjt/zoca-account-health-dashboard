@@ -62,6 +62,14 @@ export default function UserMenu() {
           >
             🤖 Alfred
           </a>
+          <a
+            href="/admin/lead-droughts"
+            title="Lead droughts (admin)"
+            className="rounded-md border px-2 py-1.5 text-[10px] uppercase tracking-[0.12em] no-underline"
+            style={{ borderColor: "var(--cave-line)", color: "var(--cave-dim)" }}
+          >
+            🏜️ Droughts
+          </a>
         </>
       )}
       <button
