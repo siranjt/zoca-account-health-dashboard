@@ -96,6 +96,21 @@ export async function fetchAllTickets(): Promise<LinearTicket[]> {
 }
 
 /** entity_id → {active, closedInWindow} counts, for the account model. */
+// Newest ACTIVE (Todo/In Progress/In Review, non-writeoff/refund) Linear ticket
+// per entity — for the Void ticket badge. Mirrors the Miss Payment Beacon's
+// indexTicketsByEntity "newest per entity" semantics.
+export async function getLatestActiveTicketByEntity(): Promise<Map<string, LinearTicket>> {
+  const out = new Map<string, LinearTicket>();
+  let rows: LinearTicket[];
+  try { rows = await fetchAllTickets(); } catch { return out; }
+  for (const t of rows) {
+    if (!isActive(t) || !t.entityId) continue;
+    const cur = out.get(t.entityId);
+    if (!cur || (t.createdAt || "") > (cur.createdAt || "")) out.set(t.entityId, t);
+  }
+  return out;
+}
+
 export async function getTicketCountsByEntity(fromISO: string): Promise<Map<string, { active: number; closed: number }>> {
   const out = new Map<string, { active: number; closed: number }>();
   let rows: LinearTicket[];
