@@ -11,9 +11,10 @@ export async function GET(req: Request) {
   const viewer = await getViewer();
   if (viewer.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const rows = await getVoidInvoices();
+  const sp = new URL(req.url).searchParams;
+  const rows = await getVoidInvoices(sp.get("refresh") === "1");
 
-  if (new URL(req.url).searchParams.get("format") === "csv") {
+  if (sp.get("format") === "csv") {
     const esc = (v: unknown) => {
       const x = v == null ? "" : String(v);
       return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x;

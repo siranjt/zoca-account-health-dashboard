@@ -77,9 +77,9 @@ const TTL_MS = 5 * 60_000; // 5 min
 let cache: { at: number; rows: VoidInvoice[] } | null = null;
 let inflight: Promise<VoidInvoice[]> | null = null;
 
-export async function getVoidInvoices(): Promise<VoidInvoice[]> {
-  if (cache && Date.now() - cache.at < TTL_MS) return cache.rows;
-  if (inflight) return inflight;
+export async function getVoidInvoices(refresh = false): Promise<VoidInvoice[]> {
+  if (!refresh && cache && Date.now() - cache.at < TTL_MS) return cache.rows;
+  if (!refresh && inflight) return inflight;
   const num = (v: unknown) => (v == null || v === "" ? null : Number(v));
   inflight = (async () => {
     const [rows, ticketsByEntity] = await Promise.all([queryAurora(SQL), getLatestActiveTicketByEntity()]);

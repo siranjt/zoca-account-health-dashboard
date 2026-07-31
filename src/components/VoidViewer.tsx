@@ -17,6 +17,14 @@ type AnnMap = Record<string, Ann>;
 
 const HIGH_VALUE = 500;
 type Kpi = "outstanding" | "invoices" | "ach" | "multi" | "tickets" | "annotations";
+const KPI_STYLE: Record<Kpi, { value: string; pill: string; pillBg: string }> = {
+  outstanding: { value: "#0f172a", pill: "#0369a1", pillBg: "rgba(3,105,161,.1)" },
+  invoices: { value: "#dc2626", pill: "#dc2626", pillBg: "rgba(220,38,38,.1)" },
+  ach: { value: "#0f172a", pill: "#0369a1", pillBg: "rgba(3,105,161,.1)" },
+  multi: { value: "#d97706", pill: "#d97706", pillBg: "rgba(217,119,6,.12)" },
+  tickets: { value: "#dc2626", pill: "#dc2626", pillBg: "rgba(220,38,38,.1)" },
+  annotations: { value: "#16a34a", pill: "#16a34a", pillBg: "rgba(22,163,74,.1)" },
+};
 
 const usd = (n: number | null) => (n == null ? "—" : `$${Math.round(n).toLocaleString()}`);
 function ddmmyy(iso: string | null): string {
@@ -65,20 +73,49 @@ export default function VoidViewer() {
   const [auto, setAuto] = useState("");
   const [multiOnly, setMultiOnly] = useState(false);
   const [activeKpi, setActiveKpi] = useState<Kpi | null>(null);
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/admin/void", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (alive) { setRows(d?.rows ?? []); setLoading(false); } })
-      .catch(() => { if (alive) { setRows([]); setLoading(false); } });
-    fetch("/api/admin/void/annotations", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (alive && d?.annotations) setAnn(d.annotations); }).catch(() => {});
-    return () => { alive = false; };
-  }, []);
+  async function loadData(bust = false) {
+    setRefreshing(true);
+    try {
+      const [inv, anns] = await Promise.all([
+        fetch(`/api/admin/void${bust ? "?refresh=1" : ""}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)),
+        fetch("/api/admin/void/annotations", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)),
+      ]);
+      setRows(inv?.rows ?? []);
+      if (anns?.annotations) setAnn(anns.annotations);
+      setFetchedAt(new Date().toLocaleTimeString());
+    } catch { setRows((p) => p ?? []); }
+    finally { setLoading(false); setRefreshing(false); }
+  }
+  useEffect(() => { loadData(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   function saveAnnotation(invoiceId: string, patch: Ann) {
     setAnn((prev) => ({ ...prev, [invoiceId]: { ...(prev[invoiceId] || {}), ...patch } }));
     fetch("/api/admin/void/annotations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invoiceNumber: invoiceId, patch }) }).catch(() => {});
+  }
+
+  const XL_HEADERS = ["Customer Id", "Entity Id", "Biz name", "AM", "Sub status", "Cancelling at", "Invoice #", "ACH", "Auto debit", "AM Comment", "Date", "First Name", "Email", "Phone", "Company", "Amount Due", "Caller", "Connection", "Comments", "Old comments", "Tickets"];
+  async function exportExcel() {
+    const mod: any = await import("xlsx-js-style");
+    const XLSX = mod.default ?? mod;
+    const rowVals = (r: Row) => {
+      const a = ann[r.invoiceId] || {};
+      return [r.customerId || "", r.entityId || "", r.biz || "", r.amName || "", r.subStatus || "", r.cancellingAt || "", r.invoiceId, r.achInFlight ? "In Progress" : "", (r.autoCollection || "").toUpperCase(), a.amComment || "", r.invDate || "", r.firstName || "", r.email || "", r.phone || "", r.company || "", r.amountDue ?? "", a.caller || "", a.connectionStatus || "", a.comments || "", a.oldComments || "", r.ticket ? r.ticket.identifier : ""];
+    };
+    const wb = XLSX.utils.book_new();
+    const hdrStyle = { font: { bold: true, color: { rgb: "FFFFFFFF" }, sz: 11 }, fill: { fgColor: { rgb: "FF1F0843" } }, alignment: { horizontal: "center" } };
+    const addSheet = (list: Row[], name: string) => {
+      const ws = XLSX.utils.aoa_to_sheet([XL_HEADERS, ...list.map(rowVals)]);
+      XL_HEADERS.forEach((_, i) => { const c = XLSX.utils.encode_cell({ r: 0, c: i }); if (ws[c]) ws[c].s = hdrStyle; });
+      ws["!cols"] = XL_HEADERS.map((h) => ({ wch: Math.max(10, h.length + 2) }));
+      XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
+    };
+    addSheet(filtered, "Miss-payment");
+    for (const m of months) addSheet(all.filter((r) => r.invoiceMonth === m), m);
+    addSheet(all.filter((r) => r.multiMonth), "Multi-month");
+    XLSX.writeFile(wb, "void-unpaid-invoices.xlsx");
   }
 
   const all = rows ?? [];
@@ -151,14 +188,34 @@ export default function VoidViewer() {
 
   return (
     <div>
+      {/* filters row — top, single line */}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search business, AM, customer ID, invoice…" className="min-w-[240px] flex-1 rounded-md border bg-white px-3 py-2 text-xs outline-none" style={{ borderColor: "var(--cave-line2)" }} />
+        <select value={am} onChange={(e) => setAm(e.target.value)} className="max-w-[150px] rounded-md border bg-white px-2 py-2 text-xs" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}><option value="">All AMs</option>{amOptions.map((a) => <option key={a} value={a}>{a}</option>)}</select>
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-md border bg-white px-2 py-2 text-xs" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}><option value="">All statuses</option><option value="payment_due">payment due</option><option value="not_paid">not paid</option></select>
+        <select value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-md border bg-white px-2 py-2 text-xs" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}><option value="">All months</option>{months.map((m) => <option key={m} value={m}>{m}</option>)}</select>
+        <select value={ach} onChange={(e) => setAch(e.target.value)} className="rounded-md border bg-white px-2 py-2 text-xs" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}><option value="">ACH any</option><option value="yes">In flight</option><option value="no">None</option></select>
+        <select value={auto} onChange={(e) => setAuto(e.target.value)} className="rounded-md border bg-white px-2 py-2 text-xs" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}><option value="">Auto debit any</option><option value="on">On</option><option value="off">Off</option></select>
+        <label className="flex items-center gap-1 text-xs text-slate-500"><input type="checkbox" checked={multiOnly} onChange={(e) => setMultiOnly(e.target.checked)} /> Multi-month only</label>
+      </div>
+
+      {/* showing + refresh line */}
+      <div className="mb-3 flex flex-wrap items-center gap-3 text-[11px]">
+        <span className="uppercase tracking-wide text-slate-400">Showing <b className="text-slate-600">{filtered.length}</b> / {tabFiltered.length}{fetchedAt ? <> · last refresh <b className="text-slate-600">{fetchedAt}</b></> : null}</span>
+        <div className="ml-auto flex items-center gap-2">
+          <button onClick={exportExcel} className="rounded border px-3 py-1.5 font-medium" style={{ borderColor: "#22d3ee", color: "#22d3ee" }}>⭳ Export Excel</button>
+          <button onClick={() => loadData(true)} disabled={refreshing} className="rounded px-3 py-1.5 font-medium text-white disabled:opacity-60" style={{ background: "#b91c1c" }}>{refreshing ? "Refreshing…" : "↻ Refresh live data"}</button>
+        </div>
+      </div>
+
       {/* tabs */}
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
         {["All", ...months].map((t) => {
           const active = tab === t;
           return (
             <button key={t} onClick={() => setTab(t)}
-              className="rounded-md border px-2.5 py-1 text-xs font-medium"
-              style={active ? { borderColor: "#22d3ee", color: "#22d3ee", background: "rgba(34,211,238,.10)" } : { borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}>
+              className="rounded-full border px-3 py-1 text-xs font-medium"
+              style={active ? { borderColor: "#b91c1c", color: "#fff", background: "#b91c1c" } : { borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}>
               {t} <span className="ml-1 opacity-70">({tabCounts[t] ?? 0})</span>
             </button>
           );
@@ -166,36 +223,24 @@ export default function VoidViewer() {
       </div>
 
       {/* KPI cards — click to filter */}
-      <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+      <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
         {KPIS.map((k) => {
           const on = activeKpi === k.key;
+          const st = KPI_STYLE[k.key];
           return (
             <button key={k.key} onClick={() => setActiveKpi(on ? null : k.key)}
               className="rounded-xl border p-3 text-left transition-colors"
-              style={{ borderColor: on ? "#22d3ee" : "var(--cave-line)", background: on ? "rgba(34,211,238,.06)" : "var(--cave-panel)" }}>
-              <div className="text-[10px] uppercase tracking-[0.12em] text-slate-400">{k.label}</div>
-              <div className="mt-0.5 text-xl font-semibold tabular-nums text-slate-800">{k.value}</div>
+              style={{ borderColor: on ? st.pill : "var(--cave-line)", background: on ? st.pillBg : "var(--cave-panel)" }}>
+              <div className="flex items-start justify-between gap-1">
+                <div className="text-[10px] uppercase tracking-[0.1em] text-slate-400">{k.label}</div>
+                <span className="shrink-0 rounded px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide" style={{ color: st.pill, background: st.pillBg }}>{on ? "✓ filtering" : "click to filter"}</span>
+              </div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums" style={{ color: st.value }}>{k.value}</div>
               <div className="mt-0.5 text-[10px] text-slate-400">{k.sub}</div>
-              <div className="mt-1 text-[9px] uppercase tracking-wide" style={{ color: on ? "#0891b2" : "#94a3b8" }}>{on ? "✓ filtering" : "click to filter"}</div>
             </button>
           );
         })}
       </div>
-
-      {/* filters */}
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search biz / AM / invoice…" className="w-48 rounded-md border bg-white px-2 py-1.5 text-xs outline-none" style={{ borderColor: "var(--cave-line2)" }} />
-        <select value={am} onChange={(e) => setAm(e.target.value)} className="max-w-[170px] rounded-md border bg-white px-2 py-1.5 text-xs" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}><option value="">All AMs</option>{amOptions.map((a) => <option key={a} value={a}>{a}</option>)}</select>
-        <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-xs" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}><option value="">All statuses</option><option value="payment_due">payment due</option><option value="not_paid">not paid</option></select>
-        <select value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-xs" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}><option value="">All months</option>{months.map((m) => <option key={m} value={m}>{m}</option>)}</select>
-        <select value={ach} onChange={(e) => setAch(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-xs" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}><option value="">ACH: any</option><option value="yes">In flight</option><option value="no">None</option></select>
-        <select value={auto} onChange={(e) => setAuto(e.target.value)} className="rounded-md border bg-white px-2 py-1.5 text-xs" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}><option value="">Auto-debit: any</option><option value="on">On</option><option value="off">Off</option></select>
-        <label className="flex items-center gap-1 text-xs text-slate-500"><input type="checkbox" checked={multiOnly} onChange={(e) => setMultiOnly(e.target.checked)} /> Multi-month</label>
-        <span className="text-[11px] text-slate-400">Showing {filtered.length} / {tabFiltered.length}</span>
-        <a href="/api/admin/void?format=csv" className="ml-auto rounded border px-2 py-1.5 text-[11px] font-medium no-underline" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}>⭳ CSV</a>
-      </div>
-
-      <VoidCharts rows={userFiltered} />
 
       <div className="table-scroll -mx-1 max-h-[72vh] overflow-auto rounded-lg border" style={{ borderColor: "var(--cave-line)" }}>
         <table className="w-full border-collapse text-[11px]">
@@ -239,6 +284,10 @@ export default function VoidViewer() {
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-4">
+        <VoidCharts rows={userFiltered} />
       </div>
     </div>
   );
