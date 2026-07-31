@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Row = {
   entityId: string;
@@ -56,8 +56,27 @@ export default function LeadDroughtViewer() {
   const [days, setDays] = useState(3);
   const [am, setAm] = useState("");
   const [health, setHealth] = useState("");
+  const [q, setQ] = useState("");
+  const [maskedOnly, setMaskedOnly] = useState(false);
+  const [sortKey, setSortKey] = useState<keyof Row>("droughtDays");
+  const [sortDir, setSortDir] = useState<1 | -1>(-1);
   const [sending, setSending] = useState(false);
   const [sendMsg, setSendMsg] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  function clearAll() { setAm(""); setHealth(""); setQ(""); setMaskedOnly(false); }
+  function toggleSort(k: keyof Row) {
+    if (sortKey === k) setSortDir((d) => (d === 1 ? -1 : 1));
+    else { setSortKey(k); setSortDir(k === "name" || k === "amName" || k === "location" ? 1 : -1); }
+  }
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName || "").toUpperCase();
+      if (e.key === "/" && tag !== "INPUT" && tag !== "SELECT" && tag !== "TEXTAREA") { e.preventDefault(); searchRef.current?.focus(); }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
 
   async function testToMe() {
     if (sending) return;
@@ -110,10 +129,14 @@ export default function LeadDroughtViewer() {
 
   // AM + health filters apply before the day-band split, so the band counts and
   // the table both reflect the current AM/health selection.
-  const base = useMemo(
-    () => (rows ?? []).filter((r) => (am === "" || r.amName === am) && (health === "" || tierGroup(r.healthTier) === health)),
-    [rows, am, health],
-  );
+  const base = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return (rows ?? []).filter((r) =>
+      (am === "" || r.amName === am) &&
+      (health === "" || tierGroup(r.healthTier) === health) &&
+      (!maskedOnly || r.leadsMasked) &&
+      (term === "" || [r.name, r.amName, r.location].some((v) => (v || "").toLowerCase().includes(term))));
+  }, [rows, am, health, maskedOnly, q]);
 
   const counts = useMemo(() => {
     const m: Record<number, number> = {};
@@ -123,11 +146,24 @@ export default function LeadDroughtViewer() {
 
   const view = useMemo(() => {
     const u = upperOf(days);
-    return base.filter((r) => r.droughtDays >= days && r.droughtDays < u);
-  }, [base, days]);
+    const arr = base.filter((r) => r.droughtDays >= days && r.droughtDays < u);
+    arr.sort((a, b) => {
+      const av = a[sortKey], bv = b[sortKey];
+      if (typeof av === "number" || typeof bv === "number") return sortDir * ((Number(av) || 0) - (Number(bv) || 0));
+      return sortDir * String(av ?? "").localeCompare(String(bv ?? ""));
+    });
+    return arr;
+  }, [base, days, sortKey, sortDir]);
   const maskedInView = view.filter((r) => r.leadsMasked).length;
 
   if (loading) return <div className="py-12 text-center text-sm text-slate-400">Loading lead droughts…</div>;
+
+  const th = "px-2 py-2 font-semibold whitespace-nowrap";
+  const Sortable = ({ k, label, cls }: { k: keyof Row; label: string; cls?: string }) => (
+    <th className={`${th} ${cls || ""} cursor-pointer select-none hover:text-slate-600`} onClick={() => toggleSort(k)} title="Sort">
+      {label}{sortKey === k ? (sortDir === 1 ? " ▲" : " ▼") : ""}
+    </th>
+  );
 
   return (
     <div>
@@ -172,11 +208,19 @@ export default function LeadDroughtViewer() {
             </button>
           );
         })}
+        <input
+          ref={searchRef}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search account / AM / location  ( / )"
+          className="ml-1 w-56 rounded-md border bg-white px-2 py-1.5 text-xs outline-none"
+          style={{ borderColor: "var(--cave-line2)" }}
+        />
         <select
           value={am}
           onChange={(e) => setAm(e.target.value)}
           title="Filter by account manager"
-          className="ml-1 max-w-[180px] rounded-md border bg-white px-2 py-1.5 text-xs outline-none"
+          className="max-w-[180px] rounded-md border bg-white px-2 py-1.5 text-xs outline-none"
           style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}
         >
           <option value="">All AMs ({amOptions.length})</option>
@@ -192,8 +236,9 @@ export default function LeadDroughtViewer() {
           <option value="">All health</option>
           {healthOptions.map((h) => <option key={h} value={h}>{h}</option>)}
         </select>
-        {(am || health) && (
-          <button onClick={() => { setAm(""); setHealth(""); }} className="text-[11px] text-slate-400 hover:text-slate-600" title="Clear filters">clear</button>
+        <label className="flex items-center gap-1 text-xs text-slate-500"><input type="checkbox" checked={maskedOnly} onChange={(e) => setMaskedOnly(e.target.checked)} /> Masked only</label>
+        {(am || health || q || maskedOnly) && (
+          <button onClick={clearAll} className="text-[11px] text-slate-400 hover:text-slate-600" title="Clear filters">clear</button>
         )}
         <a
           href={`/api/admin/lead-droughts?format=csv&days=${days}${am ? `&am=${encodeURIComponent(am)}` : ""}${health ? `&health=${encodeURIComponent(health)}` : ""}`}
@@ -204,7 +249,7 @@ export default function LeadDroughtViewer() {
 
       <div className="mb-2 text-sm text-slate-400">
         <b className="text-slate-700">{view.length}</b> account{view.length === 1 ? "" : "s"} with no incoming leads for {bandLabel(days)}
-        {maskedInView > 0 && <span className="ml-2 text-amber-600">· {maskedInView} have leads masked (dry by design)</span>}
+        {maskedInView > 0 && <button onClick={() => setMaskedOnly((v) => !v)} className="ml-2 text-amber-600 hover:underline" title="Filter to masked accounts">· {maskedInView} have leads masked (dry by design){maskedOnly ? " ✓" : ""}</button>}
       </div>
 
       {view.length === 0 ? (
@@ -214,28 +259,30 @@ export default function LeadDroughtViewer() {
           <table className="w-full border-collapse text-xs">
             <thead className="sticky top-0 bg-slate-50 text-left uppercase tracking-wide text-slate-400">
               <tr>
-                <th className="px-2 py-2 font-semibold">Account</th>
-                <th className="px-2 py-2 font-semibold">Account manager</th>
-                <th className="px-2 py-2 font-semibold">Location</th>
-                <th className="px-2 py-2 text-right font-semibold">Days dry</th>
-                <th className="px-2 py-2 font-semibold">Last lead</th>
-                <th className="px-2 py-2 text-right font-semibold">MRR</th>
-                <th className="px-2 py-2 font-semibold">Health</th>
-                <th className="px-2 py-2 font-semibold">Lead masking</th>
+                <Sortable k="name" label="Account" />
+                <Sortable k="amName" label="Account manager" />
+                <Sortable k="location" label="Location" />
+                <Sortable k="droughtDays" label="Days dry" cls="text-right" />
+                <Sortable k="lastLead" label="Last lead" />
+                <Sortable k="mrr" label="MRR" cls="text-right" />
+                <Sortable k="healthTier" label="Health" />
+                <Sortable k="leadsMasked" label="Lead masking" />
               </tr>
             </thead>
             <tbody>
               {view.map((r) => (
                 <tr key={r.entityId} className="border-t border-slate-100">
-                  <td className="max-w-[280px] truncate px-2 py-1.5 text-slate-700">{r.name || "(unnamed)"}</td>
-                  <td className="px-2 py-1.5 text-slate-600">{r.amName || "—"}</td>
-                  <td className="px-2 py-1.5 text-slate-500">{r.location || "—"}</td>
+                  <td className="max-w-[280px] truncate px-2 py-1.5 text-slate-700">
+                    <a href={`/account/${r.entityId}`} className="text-slate-700 no-underline hover:text-cyan-600" title="Open account">{r.name || "(unnamed)"}</a>
+                  </td>
+                  <td className={`px-2 py-1.5 text-slate-600 ${r.amName ? "cursor-pointer hover:text-cyan-600" : ""}`} onClick={() => r.amName && setAm(r.amName)} title={r.amName ? "Filter by this AM" : undefined}>{r.amName || "—"}</td>
+                  <td className={`px-2 py-1.5 text-slate-500 ${r.location ? "cursor-pointer hover:text-cyan-600" : ""}`} onClick={() => r.location && setQ(r.location)} title={r.location ? "Search this location" : undefined}>{r.location || "—"}</td>
                   <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-slate-700">
                     {r.droughtDays}{r.neverHadLead && <span className="ml-1 text-[10px] font-normal text-slate-400">(never)</span>}
                   </td>
                   <td className="px-2 py-1.5 tabular-nums text-slate-500">{r.neverHadLead ? "never" : ddmmyy(r.lastLead)}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{r.mrr != null ? `$${Math.round(r.mrr).toLocaleString()}` : "—"}</td>
-                  <td className="px-2 py-1.5">{tierBadge(r.healthTier)}</td>
+                  <td className="px-2 py-1.5 cursor-pointer" onClick={() => setHealth(tierGroup(r.healthTier))} title="Filter by this health">{tierBadge(r.healthTier)}</td>
                   <td className="px-2 py-1.5">
                     {r.leadsMasked
                       ? <span className="rounded px-1.5 py-0.5 text-[10px] font-medium text-amber-700" style={{ background: "rgba(217,119,6,.12)" }}>🔒 masked</span>
