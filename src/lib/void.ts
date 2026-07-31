@@ -65,7 +65,7 @@ const SQL = `WITH sub AS (SELECT id, custom_fields::jsonb->>'cf_entity_id' AS ei
       ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (now() - i.due_date::timestamp))/86400))::int END AS days_overdue,
     i.customer_id, sub.eid AS entity_id, sub.sub_status, sub.cancelling_at,
     COALESCE(hs.gbp_title, en.ename, cust.company, NULLIF(TRIM(CONCAT_WS(' ', cust.first_name, cust.last_name)),'')) AS biz,
-    COALESCE(hs.am_name, hub.hub_am) AS am_name, hs.health_tier, loc.state,
+    hs.am_name, hub.hub_am, hs.health_tier, loc.state,
     cust.first_name, cust.company, cust.phone, cust.email, cust.auto_collection,
     (ach.invoice_id IS NOT NULL) AS ach_in_flight,
     (hs.entity_id IS NOT NULL) AS in_book
@@ -99,7 +99,9 @@ export async function getVoidInvoices(refresh = false): Promise<VoidInvoice[]> {
       // BaseSheet fills blanks only (never overrides an existing DB value).
       const bs = lookupBaseSheet(baseSheet, entityId, customerId);
       const biz = (r.biz as string) || bs?.bizname || null;
-      const amName = (r.am_name as string) || bs?.amName || "(unassigned)";
+      // AM: health-score → BaseSheet (both canonical, "Hubern C") → HubSpot
+      // (outlier full names like "Hubern Ralph Clements") → unassigned.
+      const amName = (r.am_name as string) || bs?.amName || (r.hub_am as string) || "(unassigned)";
       const phone = (r.phone as string) || bs?.phone || null;
       const email = (r.email as string) || bs?.email || null;
       return {

@@ -1,7 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import VoidCharts from "./VoidCharts";
+
+function copyToClipboard(v: string | null | undefined, label: string) {
+  if (!v) return;
+  navigator.clipboard?.writeText(String(v)).then(() => {
+    if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("cave-toast", { detail: { message: `Copied ${label}` } }));
+  }).catch(() => {});
+}
 
 type Ticket = { identifier: string; title: string; url: string; classification: string };
 type Row = {
@@ -18,9 +25,9 @@ type AnnMap = Record<string, Ann>;
 const HIGH_VALUE = 500;
 type Kpi = "outstanding" | "invoices" | "ach" | "multi" | "tickets" | "annotations";
 const KPI_STYLE: Record<Kpi, { value: string; pill: string; pillBg: string }> = {
-  outstanding: { value: "#0f172a", pill: "#0369a1", pillBg: "rgba(3,105,161,.1)" },
-  invoices: { value: "#dc2626", pill: "#dc2626", pillBg: "rgba(220,38,38,.1)" },
-  ach: { value: "#0f172a", pill: "#0369a1", pillBg: "rgba(3,105,161,.1)" },
+  outstanding: { value: "var(--cave-txt, #0f172a)", pill: "#0ea5e9", pillBg: "rgba(14,165,233,.14)" },
+  invoices: { value: "#ef4444", pill: "#ef4444", pillBg: "rgba(239,68,68,.14)" },
+  ach: { value: "var(--cave-txt, #0f172a)", pill: "#0ea5e9", pillBg: "rgba(14,165,233,.14)" },
   multi: { value: "#d97706", pill: "#d97706", pillBg: "rgba(217,119,6,.12)" },
   tickets: { value: "#dc2626", pill: "#dc2626", pillBg: "rgba(220,38,38,.1)" },
   annotations: { value: "#16a34a", pill: "#16a34a", pillBg: "rgba(22,163,74,.1)" },
@@ -73,8 +80,30 @@ export default function VoidViewer() {
   const [auto, setAuto] = useState("");
   const [multiOnly, setMultiOnly] = useState(false);
   const [activeKpi, setActiveKpi] = useState<Kpi | null>(null);
+  const [subStatus, setSubStatus] = useState("");
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [sortKey, setSortKey] = useState<keyof Row>("invDate");
+  const [sortDir, setSortDir] = useState<1 | -1>(-1);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  function clearAll() {
+    setQ(""); setAm(""); setStatus(""); setMonth(""); setAch(""); setAuto("");
+    setMultiOnly(false); setSubStatus(""); setOverdueOnly(false); setActiveKpi(null);
+  }
+  function toggleSort(k: keyof Row) {
+    if (sortKey === k) setSortDir((d) => (d === 1 ? -1 : 1));
+    else { setSortKey(k); setSortDir(k === "biz" || k === "amName" ? 1 : -1); }
+  }
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName || "").toUpperCase();
+      if (e.key === "/" && tag !== "INPUT" && tag !== "SELECT" && tag !== "TEXTAREA") { e.preventDefault(); searchRef.current?.focus(); }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
 
   async function loadData(bust = false) {
     setRefreshing(true);
@@ -149,8 +178,10 @@ export default function VoidViewer() {
       (month === "" || r.invoiceMonth === month) &&
       (ach === "" || (ach === "yes" ? r.achInFlight : !r.achInFlight)) &&
       (auto === "" || (r.autoCollection || "").toLowerCase() === auto) &&
+      (subStatus === "" || r.subStatus === subStatus) &&
+      (!overdueOnly || (r.daysOverdue ?? 0) > 0) &&
       (!multiOnly || r.multiMonth));
-  }, [tabFiltered, q, am, status, month, ach, auto, multiOnly]);
+  }, [tabFiltered, q, am, status, month, ach, auto, subStatus, overdueOnly, multiOnly]);
 
   const kpi = useMemo(() => {
     const out = userFiltered.reduce((s, r) => s + (r.amountDue ?? 0), 0);
@@ -175,6 +206,18 @@ export default function VoidViewer() {
     }
   }, [userFiltered, activeKpi, repeatSet, ann]);
 
+  const shown = useMemo(() => {
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      const av = a[sortKey], bv = b[sortKey];
+      if (typeof av === "number" || typeof bv === "number") return sortDir * ((Number(av) || 0) - (Number(bv) || 0));
+      return sortDir * String(av ?? "").localeCompare(String(bv ?? ""));
+    });
+    return arr;
+  }, [filtered, sortKey, sortDir]);
+
+  const anyFilter = !!(q || am || status || month || ach || auto || subStatus || overdueOnly || multiOnly || activeKpi);
+
   if (loading) return <div className="py-12 text-center text-sm text-slate-400">Loading unpaid book…</div>;
 
   const KPIS: { key: Kpi; label: string; value: React.ReactNode; sub: string }[] = [
@@ -188,12 +231,18 @@ export default function VoidViewer() {
 
   const th = "px-2 py-2 font-semibold whitespace-nowrap";
   const td = "px-2 py-1 align-top";
+  const Sortable = ({ k, label, cls }: { k: keyof Row; label: string; cls?: string }) => (
+    <th className={`${th} ${cls || ""} cursor-pointer select-none hover:text-slate-600`} onClick={() => toggleSort(k)} title="Sort">
+      {label}{sortKey === k ? (sortDir === 1 ? " ▲" : " ▼") : ""}
+    </th>
+  );
+  const clickCell = "cursor-pointer hover:text-cyan-600";
 
   return (
     <div>
       {/* filters row — top, single line */}
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search business, AM, customer ID, invoice…" className="min-w-[240px] flex-1 rounded-md border bg-white px-3 py-2 text-xs outline-none" style={{ borderColor: "var(--cave-line2)" }} />
+        <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search business, AM, customer ID, invoice…   ( / )" className="min-w-[240px] flex-1 rounded-md border bg-white px-3 py-2 text-xs outline-none" style={{ borderColor: "var(--cave-line2)" }} />
         <select value={am} onChange={(e) => setAm(e.target.value)} className="max-w-[150px] rounded-md border bg-white px-2 py-2 text-xs" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}><option value="">All AMs</option>{amOptions.map((a) => <option key={a} value={a}>{a}</option>)}</select>
         <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-md border bg-white px-2 py-2 text-xs" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}><option value="">All statuses</option><option value="payment_due">payment due</option><option value="not_paid">not paid</option></select>
         <select value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-md border bg-white px-2 py-2 text-xs" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}><option value="">All months</option>{months.map((m) => <option key={m} value={m}>{m}</option>)}</select>
@@ -205,6 +254,7 @@ export default function VoidViewer() {
       {/* showing + refresh line */}
       <div className="mb-3 flex flex-wrap items-center gap-3 text-[11px]">
         <span className="uppercase tracking-wide text-slate-400">Showing <b className="text-slate-600">{filtered.length}</b> / {tabFiltered.length}{fetchedAt ? <> · last refresh <b className="text-slate-600">{fetchedAt}</b></> : null}</span>
+        {anyFilter && <button onClick={clearAll} className="rounded border px-2 py-0.5 text-[11px] text-slate-500 hover:text-slate-700" style={{ borderColor: "var(--cave-line2)" }}>clear filters ✕</button>}
         <div className="ml-auto flex items-center gap-2">
           <button onClick={exportExcel} className="rounded border px-3 py-1.5 font-medium" style={{ borderColor: "#22d3ee", color: "#22d3ee" }}>⭳ Export Excel</button>
           <button onClick={() => loadData(true)} disabled={refreshing} className="rounded px-3 py-1.5 font-medium text-white disabled:opacity-60" style={{ background: "#0891b2" }}>{refreshing ? "Refreshing…" : "↻ Refresh live data"}</button>
@@ -245,38 +295,49 @@ export default function VoidViewer() {
         })}
       </div>
 
-      <div className="mb-4"><VoidCharts rows={userFiltered} /></div>
+      <div className="mb-4"><VoidCharts rows={userFiltered} onDrill={(kind, value) => {
+        if (kind === "am") setAm(value);
+        else if (kind === "month") setMonth(value);
+        else if (kind === "subStatus") setSubStatus(value);
+        else if (kind === "overdue") setOverdueOnly(true);
+        else if (kind === "manual") { setAuto("off"); setOverdueOnly(true); }
+        else if (kind === "stuck") { setAuto("off"); setOverdueOnly(true); setAch("no"); }
+      }} /></div>
 
       <div className="table-scroll -mx-1 max-h-[72vh] overflow-auto rounded-lg border" style={{ borderColor: "var(--cave-line)" }}>
         <table className="w-full border-collapse text-[11px]">
           <thead className="sticky top-0 bg-slate-50 text-left uppercase tracking-wide text-slate-400">
             <tr>
-              <th className={th}>Customer Id</th><th className={th}>Entity Id</th><th className={th}>Biz name</th><th className={th}>AM</th>
-              <th className={th}>Sub status</th><th className={th}>Cancelling at</th><th className={th}>Invoice #</th><th className={th}>ACH</th>
-              <th className={th}>Auto debit</th><th className={th}>AM Comment</th><th className={th}>Date</th><th className={th}>First Name</th>
-              <th className={th}>Email</th><th className={th}>Phone</th><th className={th}>Company</th><th className={`${th} text-right`}>Amount Due</th>
+              <th className={th}>Customer Id</th><th className={th}>Entity Id</th>
+              <Sortable k="biz" label="Biz name" /><Sortable k="amName" label="AM" />
+              <Sortable k="subStatus" label="Sub status" /><Sortable k="cancellingAt" label="Cancelling at" />
+              <Sortable k="invoiceId" label="Invoice #" /><th className={th}>ACH</th>
+              <Sortable k="autoCollection" label="Auto debit" /><th className={th}>AM Comment</th>
+              <Sortable k="invDate" label="Date" /><th className={th}>First Name</th>
+              <th className={th}>Email</th><th className={th}>Phone</th><th className={th}>Company</th>
+              <Sortable k="amountDue" label="Amount Due" cls="text-right" />
               <th className={th}>Caller</th><th className={th}>Connection</th><th className={th}>Comments</th><th className={th}>Old comments</th><th className={th}>Tickets</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r) => {
+            {shown.map((r) => {
               const a = ann[r.invoiceId] || {};
               return (
                 <tr key={r.invoiceId} className="border-t border-slate-100" style={r.multiMonth ? { background: "rgba(217,119,6,.05)" } : undefined}>
                   <td className={`${td} tabular-nums text-slate-400`}>{r.customerId || "—"}</td>
                   <td className={`${td} tabular-nums text-slate-400`} title={r.entityId || ""}>{r.entityId ? r.entityId.slice(0, 8) : "—"}</td>
                   <td className={`${td} max-w-[220px] truncate text-slate-700`}>{r.entityId ? <a href={`/account/${r.entityId}`} className="text-slate-700 no-underline hover:text-cyan-600">{r.biz || "(no name)"}</a> : (r.biz || "(no name)")}{!r.inBook && <span className="ml-1 text-[8px] uppercase text-slate-400">off-book</span>}</td>
-                  <td className={`${td} text-slate-600`}>{r.amName || "—"}</td>
-                  <td className={td}><span className="text-[10px] font-medium" style={{ color: r.subStatus === "active" ? "#16a34a" : r.subStatus === "cancelled" ? "#dc2626" : "#b45309" }}>{r.subStatus || "—"}</span></td>
+                  <td className={`${td} text-slate-600 ${r.amName ? clickCell : ""}`} onClick={() => r.amName && setAm(r.amName)} title={r.amName ? "Filter by this AM" : undefined}>{r.amName || "—"}</td>
+                  <td className={`${td} ${r.subStatus ? "cursor-pointer" : ""}`} onClick={() => r.subStatus && setSubStatus(r.subStatus)} title={r.subStatus ? "Filter by this status" : undefined}><span className="text-[10px] font-medium" style={{ color: r.subStatus === "active" ? "#16a34a" : r.subStatus === "cancelled" ? "#dc2626" : "#b45309" }}>{r.subStatus || "—"}</span></td>
                   <td className={`${td} tabular-nums text-slate-500`}>{fmtDate(r.cancellingAt)}</td>
-                  <td className={`${td} tabular-nums text-slate-500`}>{r.invoiceId}</td>
-                  <td className={td}>{r.achInFlight ? <span className="whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ color: "#0369a1", background: "rgba(3,105,161,.12)" }}>In Progress</span> : <span className="text-slate-300">—</span>}</td>
-                  <td className={td}><span className="text-[10px] font-medium" style={{ color: (r.autoCollection || "").toLowerCase() === "on" ? "#16a34a" : "#dc2626" }}>{(r.autoCollection || "—").toUpperCase()}</span></td>
+                  <td className={`${td} tabular-nums text-slate-500 ${clickCell}`} onClick={() => copyToClipboard(r.invoiceId, "invoice #")} title="Copy invoice #">{r.invoiceId}</td>
+                  <td className={`${td} cursor-pointer`} onClick={() => setAch(r.achInFlight ? "yes" : "no")} title="Filter by ACH">{r.achInFlight ? <span className="whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ color: "#0369a1", background: "rgba(3,105,161,.12)" }}>In Progress</span> : <span className="text-slate-300">—</span>}</td>
+                  <td className={`${td} cursor-pointer`} onClick={() => setAuto((r.autoCollection || "").toLowerCase() === "on" ? "on" : "off")} title="Filter by auto-debit"><span className="text-[10px] font-medium" style={{ color: (r.autoCollection || "").toLowerCase() === "on" ? "#16a34a" : "#dc2626" }}>{(r.autoCollection || "—").toUpperCase()}</span></td>
                   <td className={td}><EditableText value={a.amComment || ""} onSave={(v) => saveAnnotation(r.invoiceId, { amComment: v })} /></td>
                   <td className={`${td} tabular-nums text-slate-500`}>{fmtDate(r.invDate)}</td>
                   <td className={`${td} text-slate-600`}>{r.firstName || "—"}</td>
-                  <td className={`${td} max-w-[160px] truncate text-slate-500`} title={r.email || ""}>{r.email || "—"}</td>
-                  <td className={`${td} tabular-nums text-slate-500`}>{r.phone || "—"}</td>
+                  <td className={`${td} max-w-[160px] truncate text-slate-500 ${r.email ? clickCell : ""}`} title={r.email ? "Copy email" : ""} onClick={() => copyToClipboard(r.email, "email")}>{r.email || "—"}</td>
+                  <td className={`${td} tabular-nums text-slate-500 ${r.phone ? clickCell : ""}`} title={r.phone ? "Copy phone" : undefined} onClick={() => copyToClipboard(r.phone, "phone")}>{r.phone || "—"}</td>
                   <td className={`${td} max-w-[160px] truncate text-slate-500`}>{r.company || "—"}</td>
                   <td className={`${td} text-right font-semibold tabular-nums text-red-600`}>{usd(r.amountDue)}{r.currency && r.currency !== "USD" ? <span className="ml-1 text-[9px] text-slate-400">{r.currency}</span> : null}</td>
                   <td className={td}><EditableSelect value={a.caller || ""} options={["Shakthi", "Joshi"]} onSave={(v) => saveAnnotation(r.invoiceId, { caller: v })} styleFor={callerStyle} /></td>

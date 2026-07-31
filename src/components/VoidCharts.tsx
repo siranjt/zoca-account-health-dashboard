@@ -16,10 +16,10 @@ const usdK = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(n >= 10000 ? 1 :
 
 function Card({ title, caption, children }: { title: string; caption?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border p-4" style={{ borderColor: "var(--cave-line)", background: "var(--cave-panel)" }}>
-      <div className="mb-3">
-        <div className="text-sm font-semibold text-slate-700">{title}</div>
-        {caption && <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">{caption}</div>}
+    <div className="rounded-xl border p-3" style={{ borderColor: "var(--cave-line)", background: "var(--cave-panel)" }}>
+      <div className="mb-2">
+        <div className="text-[13px] font-semibold" style={{ color: "var(--cave-txt, #334155)" }}>{title}</div>
+        {caption && <div className="text-[9px] uppercase tracking-[0.14em] text-slate-400">{caption}</div>}
       </div>
       {children}
     </div>
@@ -27,7 +27,9 @@ function Card({ title, caption, children }: { title: string; caption?: string; c
 }
 function Empty() { return <div className="py-10 text-center text-[11px] text-slate-400">No data</div>; }
 
-export default function VoidCharts({ rows }: { rows: Row[] }) {
+export default function VoidCharts({ rows, onDrill }: { rows: Row[]; onDrill?: (kind: string, value: string) => void }) {
+  const drill = (kind: string, value = "") => (onDrill ? () => onDrill(kind, value) : undefined);
+  const clk = onDrill ? { cursor: "pointer" as const } : undefined;
   const total = rows.length;
   const totalDue = rows.reduce((s, r) => s + (r.amountDue || 0), 0);
 
@@ -66,10 +68,10 @@ export default function VoidCharts({ rows }: { rows: Row[] }) {
 
   // funnel geometry
   const fMax = Math.max(1, ...funnel.map((f) => f.sum));
-  const FW = 460, stageH = 40, gap = 8;
+  const FW = 460, stageH = 26, gap = 5;
 
   // area geometry
-  const AW = 460, AH = 150, aPad = { l: 40, r: 12, t: 12, b: 22 };
+  const AW = 460, AH = 118, aPad = { l: 40, r: 12, t: 10, b: 20 };
   const aMax = Math.max(1, ...byMonth.map(([, v]) => v));
   const ax = (i: number) => aPad.l + (byMonth.length <= 1 ? (AW - aPad.l - aPad.r) / 2 : (i / (byMonth.length - 1)) * (AW - aPad.l - aPad.r));
   const ay = (v: number) => AH - aPad.b - (v / aMax) * (AH - aPad.t - aPad.b);
@@ -102,8 +104,10 @@ export default function VoidCharts({ rows }: { rows: Row[] }) {
               const wTop = (f.sum / fMax) * (FW - 4);
               const wBot = ((funnel[i + 1]?.sum ?? f.sum) / fMax) * (FW - 4);
               const cx = FW / 2, tH = wTop / 2, bH = Math.max(wBot / 2, 2);
+              const kind = ["", "overdue", "manual", "stuck"][i];
               return (
-                <g key={i}>
+                <g key={i} onClick={kind ? drill(kind) : undefined} style={kind ? clk : undefined}>
+                  <title>{kind ? "Filter to this stage" : ""}</title>
                   <polygon points={`${cx - tH},${y} ${cx + tH},${y} ${cx + bH},${y + stageH} ${cx - bH},${y + stageH}`} fill={`url(#fg${i})`} rx={4} />
                   <text x={cx} y={y + stageH / 2 - 1} textAnchor="middle" fontSize={11} fontWeight={700} fill="#fff">{usdK(f.sum)}</text>
                   <text x={cx} y={y + stageH / 2 + 11} textAnchor="middle" fontSize={8} fill="rgba(255,255,255,.85)">{f.label} · {f.n}</text>
@@ -127,7 +131,7 @@ export default function VoidCharts({ rows }: { rows: Row[] }) {
             </svg>
             <div className="space-y-1.5">
               {byStatus.map((s) => (
-                <div key={s.k} className="flex items-center gap-2 text-xs">
+                <div key={s.k} className="flex items-center gap-2 text-xs hover:opacity-80" onClick={drill("subStatus", s.k)} style={clk} title="Filter by this status">
                   <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: s.c }} />
                   <span className="text-slate-500">{s.k}</span>
                   <span className="font-semibold tabular-nums text-slate-700">{s.v}</span>
@@ -145,7 +149,7 @@ export default function VoidCharts({ rows }: { rows: Row[] }) {
           <div className="space-y-2">
             <svg width="0" height="0"><defs><linearGradient id="amBar" x1="0" x2="1"><stop offset="0" stopColor="#6366f1" /><stop offset="1" stopColor="#ef4444" /></linearGradient></defs></svg>
             {byAm.map(([k, v]) => (
-              <div key={k} className="flex items-center gap-2">
+              <div key={k} className="flex items-center gap-2 hover:opacity-80" onClick={drill("am", k)} style={clk} title="Filter by this AM">
                 <span className="w-24 shrink-0 truncate text-[10px] text-slate-500" title={k}>{k}</span>
                 <div className="h-2.5 flex-1 overflow-hidden rounded-full" style={{ background: "var(--cave-line)" }}>
                   <div className="h-full rounded-full" style={{ width: `${(v / byAm[0][1]) * 100}%`, background: "linear-gradient(90deg,#6366f1,#ef4444)" }} />
@@ -166,7 +170,8 @@ export default function VoidCharts({ rows }: { rows: Row[] }) {
             <path d={`M${ax(0)},${AH - aPad.b} ${byMonth.map(([, v], i) => `L${ax(i)},${ay(v)}`).join(" ")} L${ax(byMonth.length - 1)},${AH - aPad.b} Z`} fill="url(#areaFill)" />
             <path d={`M${byMonth.map(([, v], i) => `${ax(i)},${ay(v)}`).join(" L")}`} fill="none" stroke="#ef4444" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
             {byMonth.map(([k, v], i) => (
-              <g key={k}>
+              <g key={k} onClick={drill("month", k)} style={clk}>
+                <circle cx={ax(i)} cy={ay(v)} r={6} fill="transparent" />
                 <circle cx={ax(i)} cy={ay(v)} r={3.5} fill="#fff" stroke="#ef4444" strokeWidth={2} />
                 <text x={ax(i)} y={AH - 6} textAnchor="middle" fontSize={8} fill="#64748b">{k.split(" ")[0]}</text>
               </g>
