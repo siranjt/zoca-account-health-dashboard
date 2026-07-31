@@ -51,7 +51,11 @@ const SQL = `WITH sub AS (SELECT id, custom_fields::jsonb->>'cf_entity_id' AS ei
   ach AS (SELECT DISTINCT li.invoice_id FROM chargebee.transactions t
     JOIN chargebee.transactions__linked_invoices li ON li._sdc_source_key_id = t.id
     WHERE t.status='in_progress'),
-  loc AS (SELECT entity_id, storefront_address->>'administrative_area' AS state FROM gbp.locations)
+  loc AS (SELECT entity_id, storefront_address->>'administrative_area' AS state FROM gbp.locations),
+  en AS (SELECT entity_id, name AS ename FROM entities.locations),
+  hub AS (SELECT DISTINCT ON (property_location_entity_id) property_location_entity_id AS eid, NULLIF(properties__am_name,'') AS hub_am
+    FROM hubspot_stitch.locations WHERE property_location_entity_id IS NOT NULL
+    ORDER BY property_location_entity_id, property_hs_lastmodifieddate DESC NULLS LAST)
   SELECT i.id AS invoice_id, i.status,
     round(i.amount_due/100.0, 2) AS amount_due, round(i.total/100.0, 2) AS total,
     i.currency_code, to_char(i.date,'YYYY-MM-DD') AS inv_date, to_char(i.date,'FMMonth YYYY') AS inv_month,
@@ -59,8 +63,8 @@ const SQL = `WITH sub AS (SELECT id, custom_fields::jsonb->>'cf_entity_id' AS ei
     CASE WHEN i.due_date IS NULL THEN NULL
       ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (now() - i.due_date::timestamp))/86400))::int END AS days_overdue,
     i.customer_id, sub.eid AS entity_id, sub.sub_status, sub.cancelling_at,
-    COALESCE(hs.gbp_title, cust.company, NULLIF(TRIM(CONCAT_WS(' ', cust.first_name, cust.last_name)),'')) AS biz,
-    hs.am_name, hs.health_tier, loc.state,
+    COALESCE(hs.gbp_title, en.ename, cust.company, NULLIF(TRIM(CONCAT_WS(' ', cust.first_name, cust.last_name)),'')) AS biz,
+    COALESCE(hs.am_name, hub.hub_am) AS am_name, hs.health_tier, loc.state,
     cust.first_name, cust.company, cust.phone, cust.email, cust.auto_collection,
     (ach.invoice_id IS NOT NULL) AS ach_in_flight,
     (hs.entity_id IS NOT NULL) AS in_book
@@ -69,6 +73,8 @@ const SQL = `WITH sub AS (SELECT id, custom_fields::jsonb->>'cf_entity_id' AS ei
   LEFT JOIN cx.health_score hs ON hs.entity_id::text = sub.eid
   LEFT JOIN chargebee.customers cust ON cust.id = i.customer_id
   LEFT JOIN loc  ON loc.entity_id::text = sub.eid
+  LEFT JOIN en   ON en.entity_id::text = sub.eid
+  LEFT JOIN hub  ON hub.eid = sub.eid
   LEFT JOIN ach  ON ach.invoice_id = i.id
   WHERE i.status IN ('payment_due','not_paid')
     AND i.date >= date_trunc('month', now()) - interval '4 months'
