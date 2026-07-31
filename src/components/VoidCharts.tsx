@@ -68,7 +68,8 @@ export default function VoidCharts({ rows, onDrill }: { rows: Row[]; onDrill?: (
 
   // funnel geometry
   const fMax = Math.max(1, ...funnel.map((f) => f.sum));
-  const FW = 460, stageH = 26, gap = 5;
+  const FW = 470, FH = 150;
+  const FSHORT = ["Outstanding", "Overdue", "Manual chase", "Nothing in motion"];
 
   // area geometry
   const AW = 460, AH = 118, aPad = { l: 40, r: 12, t: 10, b: 20 };
@@ -90,27 +91,30 @@ export default function VoidCharts({ rows, onDrill }: { rows: Row[]; onDrill?: (
       {/* Collection funnel */}
       <Card title="Collection funnel" caption="unpaid → what still needs a call">
         {total === 0 ? <Empty /> : (
-          <svg viewBox={`0 0 ${FW} ${funnel.length * (stageH + gap)}`} className="w-full" role="img">
+          <svg viewBox={`0 0 ${FW} ${FH}`} className="w-full" role="img">
             <defs>
               {funnel.map((f, i) => (
-                <linearGradient key={i} id={`fg${i}`} x1="0" x2="1">
+                <linearGradient key={i} id={`fg${i}`} x1="0" x2="0" y1="0" y2="1">
                   <stop offset="0" stopColor={f.color} stopOpacity="0.95" />
-                  <stop offset="1" stopColor={f.color} stopOpacity="0.6" />
+                  <stop offset="1" stopColor={f.color} stopOpacity="0.65" />
                 </linearGradient>
               ))}
             </defs>
             {funnel.map((f, i) => {
-              const y = i * (stageH + gap);
-              const wTop = (f.sum / fMax) * (FW - 4);
-              const wBot = ((funnel[i + 1]?.sum ?? f.sum) / fMax) * (FW - 4);
-              const cx = FW / 2, tH = wTop / 2, bH = Math.max(wBot / 2, 2);
+              const segW = (FW - 6) / funnel.length;
+              const x = 3 + i * segW;
+              const cy = (FH - 34) / 2 + 4;
+              const maxH = FH - 48;
+              const lH = (f.sum / fMax) * maxH;
+              const rH = ((funnel[i + 1]?.sum ?? f.sum) / fMax) * maxH;
               const kind = ["", "overdue", "manual", "stuck"][i];
               return (
                 <g key={i} onClick={kind ? drill(kind) : undefined} style={kind ? clk : undefined}>
-                  <title>{kind ? "Filter to this stage" : ""}</title>
-                  <polygon points={`${cx - tH},${y} ${cx + tH},${y} ${cx + bH},${y + stageH} ${cx - bH},${y + stageH}`} fill={`url(#fg${i})`} rx={4} />
-                  <text x={cx} y={y + stageH / 2 - 1} textAnchor="middle" fontSize={11} fontWeight={700} fill="#fff">{usdK(f.sum)}</text>
-                  <text x={cx} y={y + stageH / 2 + 11} textAnchor="middle" fontSize={8} fill="rgba(255,255,255,.85)">{f.label} · {f.n}</text>
+                  <title>{kind ? `Filter: ${FSHORT[i]}` : FSHORT[i]}</title>
+                  <polygon points={`${x},${cy - lH / 2} ${x + segW - 2},${cy - rH / 2} ${x + segW - 2},${cy + rH / 2} ${x},${cy + lH / 2}`} fill={`url(#fg${i})`} />
+                  <text x={x + segW / 2} y={cy + 3} textAnchor="middle" fontSize={11} fontWeight={700} fill="#fff">{usdK(f.sum)}</text>
+                  <text x={x + segW / 2} y={FH - 13} textAnchor="middle" fontSize={8} fill="#94a3b8">{FSHORT[i]}</text>
+                  <text x={x + segW / 2} y={FH - 3} textAnchor="middle" fontSize={8} fontWeight={600} fill="#64748b">{f.n} inv</text>
                 </g>
               );
             })}
@@ -126,7 +130,8 @@ export default function VoidCharts({ rows, onDrill }: { rows: Row[]; onDrill?: (
               <circle cx="60" cy="60" r={R} fill="none" stroke="var(--cave-line)" strokeWidth="12" />
               {donut.map((s) => (
                 <circle key={s.k} cx="60" cy="60" r={R} fill="none" stroke={s.c} strokeWidth="12" strokeLinecap="round"
-                  strokeDasharray={`${Math.max(0, s.len - 2)} ${C}`} strokeDashoffset={-s.off} />
+                  strokeDasharray={`${Math.max(0, s.len - 2)} ${C}`} strokeDashoffset={-s.off}
+                  onClick={drill("subStatus", s.k)} style={clk}><title>{`Filter: ${s.k}`}</title></circle>
               ))}
             </svg>
             <div className="space-y-1.5">
