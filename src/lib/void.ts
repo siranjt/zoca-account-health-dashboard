@@ -1,6 +1,7 @@
 import "server-only";
 import { queryAurora } from "@/lib/metabase";
 import { getLatestActiveTicketByEntity } from "@/lib/tickets";
+import { getBaseSheet, lookupBaseSheet } from "@/lib/basesheet";
 
 // ===========================================================================
 // Void — the unpaid-invoice book (admin), a faithful port of the Beacon "Miss
@@ -89,11 +90,18 @@ export async function getVoidInvoices(refresh = false): Promise<VoidInvoice[]> {
   if (!refresh && inflight) return inflight;
   const num = (v: unknown) => (v == null || v === "" ? null : Number(v));
   inflight = (async () => {
-    const [rows, ticketsByEntity] = await Promise.all([queryAurora(SQL), getLatestActiveTicketByEntity()]);
+    const [rows, ticketsByEntity, baseSheet] = await Promise.all([queryAurora(SQL), getLatestActiveTicketByEntity(), getBaseSheet()]);
 
     let out: VoidInvoice[] = rows.map((r) => {
       const entityId = (r.entity_id as string) || null;
+      const customerId = (r.customer_id as string) || null;
       const t = entityId ? ticketsByEntity.get(entityId.toLowerCase()) : undefined;
+      // BaseSheet fills blanks only (never overrides an existing DB value).
+      const bs = lookupBaseSheet(baseSheet, entityId, customerId);
+      const biz = (r.biz as string) || bs?.bizname || null;
+      const amName = (r.am_name as string) || bs?.amName || "(unassigned)";
+      const phone = (r.phone as string) || bs?.phone || null;
+      const email = (r.email as string) || bs?.email || null;
       return {
         invoiceId: String(r.invoice_id),
         status: (r.status as string) || "",
@@ -104,16 +112,16 @@ export async function getVoidInvoices(refresh = false): Promise<VoidInvoice[]> {
         invoiceMonth: (r.inv_month as string) || null,
         dueDate: (r.due_date as string) || null,
         daysOverdue: r.days_overdue == null ? null : Number(r.days_overdue),
-        customerId: (r.customer_id as string) || null,
+        customerId,
         entityId,
-        biz: (r.biz as string) || null,
-        amName: (r.am_name as string) || null,
+        biz,
+        amName,
         healthTier: (r.health_tier as string) || null,
         state: (r.state as string) || null,
         firstName: (r.first_name as string) || null,
         company: (r.company as string) || null,
-        phone: (r.phone as string) || null,
-        email: (r.email as string) || null,
+        phone,
+        email,
         autoCollection: (r.auto_collection as string) || null,
         subStatus: (r.sub_status as string) || null,
         cancellingAt: (r.cancelling_at as string) || null,
