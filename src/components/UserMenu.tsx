@@ -70,6 +70,14 @@ export default function UserMenu() {
           >
             🏜️ Droughts
           </a>
+          <a
+            href="/admin/void"
+            title="Unpaid-invoice book (admin)"
+            className="rounded-md border px-2 py-1.5 text-[10px] uppercase tracking-[0.12em] no-underline"
+            style={{ borderColor: "var(--cave-line)", color: "var(--cave-dim)" }}
+          >
+            🕳️ Void
+          </a>
         </>
       )}
       <button
