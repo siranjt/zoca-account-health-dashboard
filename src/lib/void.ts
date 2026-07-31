@@ -79,7 +79,7 @@ const SQL = `WITH sub AS (SELECT id, custom_fields::jsonb->>'cf_entity_id' AS ei
   LEFT JOIN ach  ON ach.invoice_id = i.id
   WHERE i.status IN ('payment_due','not_paid')
     AND i.date >= date_trunc('month', now()) - interval '4 months'
-  ORDER BY i.amount_due DESC NULLS LAST`;
+  ORDER BY i.date DESC NULLS LAST, i.amount_due DESC NULLS LAST`;
 
 const TTL_MS = 5 * 60_000; // 5 min
 let cache: { at: number; rows: VoidInvoice[] } | null = null;
