@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import VoidCharts from "./VoidCharts";
 
 type Ticket = { identifier: string; title: string; url: string };
 type Row = {
@@ -193,6 +194,8 @@ export default function VoidViewer() {
         <span className="text-[11px] text-slate-400">Showing {filtered.length} / {tabFiltered.length}</span>
         <a href="/api/admin/void?format=csv" className="ml-auto rounded border px-2 py-1.5 text-[11px] font-medium no-underline" style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}>⭳ CSV</a>
       </div>
+
+      <VoidCharts rows={userFiltered} />
 
       <div className="table-scroll -mx-1 max-h-[72vh] overflow-auto rounded-lg border" style={{ borderColor: "var(--cave-line)" }}>
         <table className="w-full border-collapse text-[11px]">
