@@ -204,7 +204,7 @@ export default function VoidViewer() {
         <span className="uppercase tracking-wide text-slate-400">Showing <b className="text-slate-600">{filtered.length}</b> / {tabFiltered.length}{fetchedAt ? <> · last refresh <b className="text-slate-600">{fetchedAt}</b></> : null}</span>
         <div className="ml-auto flex items-center gap-2">
           <button onClick={exportExcel} className="rounded border px-3 py-1.5 font-medium" style={{ borderColor: "#22d3ee", color: "#22d3ee" }}>⭳ Export Excel</button>
-          <button onClick={() => loadData(true)} disabled={refreshing} className="rounded px-3 py-1.5 font-medium text-white disabled:opacity-60" style={{ background: "#b91c1c" }}>{refreshing ? "Refreshing…" : "↻ Refresh live data"}</button>
+          <button onClick={() => loadData(true)} disabled={refreshing} className="rounded px-3 py-1.5 font-medium text-white disabled:opacity-60" style={{ background: "#0891b2" }}>{refreshing ? "Refreshing…" : "↻ Refresh live data"}</button>
         </div>
       </div>
 
@@ -215,7 +215,7 @@ export default function VoidViewer() {
           return (
             <button key={t} onClick={() => setTab(t)}
               className="rounded-full border px-3 py-1 text-xs font-medium"
-              style={active ? { borderColor: "#b91c1c", color: "#fff", background: "#b91c1c" } : { borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}>
+              style={active ? { borderColor: "#22d3ee", color: "#22d3ee", background: "rgba(34,211,238,.12)" } : { borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}>
               {t} <span className="ml-1 opacity-70">({tabCounts[t] ?? 0})</span>
             </button>
           );
