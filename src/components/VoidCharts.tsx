@@ -2,33 +2,24 @@
 
 import { useMemo } from "react";
 
-// Hand-built SVG charts for Void (no chart library — CAVE//OS convention),
-// matching the Miss Payment Beacon: Outstanding by AM (top-10 horizontal bars),
-// Outstanding by month (vertical bars), Aging buckets (vertical bars by COUNT),
-// Subscription status (horizontal bars by COUNT). All computed from the passed
-// rows (the current filtered slice), so they move with the filters.
+// Sleek hand-built SVG charts for Void (no chart library — CAVE//OS convention):
+// a collection funnel, gradient AM bars, a smooth by-month area trend, and a
+// rounded subscription-status donut. All computed from the passed rows (the
+// current filtered slice), so they move with the filters.
 
 type Row = {
   amName: string | null; amountDue: number | null; invoiceMonth: string | null;
-  daysOverdue: number | null; subStatus: string | null;
+  daysOverdue: number | null; subStatus: string | null; achInFlight: boolean; autoCollection: string | null;
 };
 
-const usdK = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `$${Math.round(n)}`);
-function niceMax(v: number): number {
-  if (v <= 0) return 1;
-  const mag = Math.pow(10, Math.floor(Math.log10(v)));
-  const n = v / mag;
-  const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
-  return step * mag;
-}
-const ticks = (max: number, n = 4) => Array.from({ length: n + 1 }, (_, i) => (max / n) * i);
+const usdK = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(n >= 10000 ? 1 : 1)}k` : `$${Math.round(n)}`);
 
-function Card({ title, pill, pillColor, children }: { title: string; pill: string; pillColor: string; children: React.ReactNode }) {
+function Card({ title, caption, children }: { title: string; caption?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border p-3" style={{ borderColor: "var(--cave-line)", background: "var(--cave-panel)" }}>
-      <div className="mb-2 flex items-center justify-between">
+    <div className="rounded-2xl border p-4" style={{ borderColor: "var(--cave-line)", background: "var(--cave-panel)" }}>
+      <div className="mb-3">
         <div className="text-sm font-semibold text-slate-700">{title}</div>
-        <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide" style={{ color: pillColor, background: `${pillColor}1a` }}>{pill}</span>
+        {caption && <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">{caption}</div>}
       </div>
       {children}
     </div>
@@ -37,73 +28,149 @@ function Card({ title, pill, pillColor, children }: { title: string; pill: strin
 function Empty() { return <div className="py-10 text-center text-[11px] text-slate-400">No data</div>; }
 
 export default function VoidCharts({ rows }: { rows: Row[] }) {
+  const total = rows.length;
+  const totalDue = rows.reduce((s, r) => s + (r.amountDue || 0), 0);
+
+  // ---- collection funnel: all → overdue → manual-chase → nothing in motion ----
+  const funnel = useMemo(() => {
+    const overdue = rows.filter((r) => (r.daysOverdue ?? 0) > 0);
+    const manual = overdue.filter((r) => (r.autoCollection || "").toLowerCase() === "off");
+    const stuck = manual.filter((r) => !r.achInFlight);
+    const mk = (label: string, list: Row[], color: string) => ({ label, n: list.length, sum: list.reduce((s, r) => s + (r.amountDue || 0), 0), color });
+    return [
+      mk("Outstanding", rows, "#f59e0b"),
+      mk("Overdue", overdue, "#f97316"),
+      mk("Manual chase (auto-debit off)", manual, "#ef4444"),
+      mk("Nothing in motion", stuck, "#b91c1c"),
+    ];
+  }, [rows]);
+
   const byAm = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of rows) { const k = r.amName || "(unassigned)"; m.set(k, (m.get(k) || 0) + (r.amountDue || 0)); }
-    return [...m.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    return [...m.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 8);
   }, [rows]);
+
   const byMonth = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of rows) if (r.invoiceMonth) m.set(r.invoiceMonth, (m.get(r.invoiceMonth) || 0) + (r.amountDue || 0));
     return [...m.entries()].sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime());
   }, [rows]);
-  const aging = useMemo(() => {
-    const defs = [{ k: "0-30d", lo: 0, hi: 30, c: "#4a7c59" }, { k: "31-60d", lo: 31, hi: 60, c: "#d9a441" }, { k: "61-90d", lo: 61, hi: 90, c: "#ea580c" }, { k: "90d+", lo: 91, hi: Infinity, c: "#c0392b" }];
-    return defs.map((b) => ({ k: b.k, c: b.c, n: rows.filter((r) => r.daysOverdue != null && r.daysOverdue >= b.lo && r.daysOverdue <= b.hi).length }));
-  }, [rows]);
+
   const byStatus = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of rows) { const k = r.subStatus || "unknown"; m.set(k, (m.get(k) || 0) + 1); }
-    const COLOR: Record<string, string> = { active: "#4a7c59", non_renewing: "#c0392b", cancelled: "#7a1f1f", paused: "#0369a1", unknown: "#94a3b8" };
+    const COLOR: Record<string, string> = { active: "#10b981", non_renewing: "#f59e0b", cancelled: "#ef4444", paused: "#38bdf8", unknown: "#94a3b8" };
     return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ k, v, c: COLOR[k] || "#94a3b8" }));
   }, [rows]);
 
-  // ---- geometry ----
-  const W = 480, H = 210;
-  const amMax = niceMax(Math.max(1, ...byAm.map(([, v]) => v)));
-  const monMax = niceMax(Math.max(1, ...byMonth.map(([, v]) => v)));
-  const ageMax = niceMax(Math.max(1, ...aging.map((a) => a.n)));
-  const statMax = niceMax(Math.max(1, ...byStatus.map((s) => s.v)));
+  // funnel geometry
+  const fMax = Math.max(1, ...funnel.map((f) => f.sum));
+  const FW = 460, stageH = 40, gap = 8;
+
+  // area geometry
+  const AW = 460, AH = 150, aPad = { l: 40, r: 12, t: 12, b: 22 };
+  const aMax = Math.max(1, ...byMonth.map(([, v]) => v));
+  const ax = (i: number) => aPad.l + (byMonth.length <= 1 ? (AW - aPad.l - aPad.r) / 2 : (i / (byMonth.length - 1)) * (AW - aPad.l - aPad.r));
+  const ay = (v: number) => AH - aPad.b - (v / aMax) * (AH - aPad.t - aPad.b);
+
+  // donut geometry (stroke-based, rounded caps)
+  const statTotal = byStatus.reduce((s, x) => s + x.v, 0) || 1;
+  const R = 42, C = 2 * Math.PI * R;
+  let acc = 0;
+  const donut = byStatus.map((s) => {
+    const len = (s.v / statTotal) * C, off = acc; acc += len;
+    return { ...s, len, off };
+  });
 
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-      {/* Outstanding by AM — horizontal bars */}
-      <Card title="Outstanding by AM" pill="Top 10" pillColor="#b45309">
-        {byAm.length === 0 ? <Empty /> : (
-          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img">
-            <defs><linearGradient id="amGrad" x1="0" x2="1"><stop offset="0" stopColor="#f59e0b" /><stop offset="1" stopColor="#dc2626" /></linearGradient></defs>
-            {ticks(amMax).map((t, i) => { const x = 96 + (t / amMax) * (W - 106); return (<g key={i}><line x1={x} x2={x} y1={6} y2={H - 18} stroke="var(--cave-line)" strokeDasharray="2 3" /><text x={x} y={H - 6} textAnchor="middle" fontSize={8} fill="#94a3b8">{usdK(t)}</text></g>); })}
-            {byAm.map(([k, v], i) => { const bh = (H - 30) / byAm.length, y = 6 + i * bh; return (<g key={k}><text x={92} y={y + bh / 2 + 3} textAnchor="end" fontSize={8} fill="#64748b">{k.length > 14 ? k.slice(0, 13) + "…" : k}</text><rect x={96} y={y + bh * 0.15} width={Math.max(1, (v / amMax) * (W - 106))} height={bh * 0.7} rx={2} fill="url(#amGrad)" /></g>); })}
+      {/* Collection funnel */}
+      <Card title="Collection funnel" caption="unpaid → what still needs a call">
+        {total === 0 ? <Empty /> : (
+          <svg viewBox={`0 0 ${FW} ${funnel.length * (stageH + gap)}`} className="w-full" role="img">
+            <defs>
+              {funnel.map((f, i) => (
+                <linearGradient key={i} id={`fg${i}`} x1="0" x2="1">
+                  <stop offset="0" stopColor={f.color} stopOpacity="0.95" />
+                  <stop offset="1" stopColor={f.color} stopOpacity="0.6" />
+                </linearGradient>
+              ))}
+            </defs>
+            {funnel.map((f, i) => {
+              const y = i * (stageH + gap);
+              const wTop = (f.sum / fMax) * (FW - 4);
+              const wBot = ((funnel[i + 1]?.sum ?? f.sum) / fMax) * (FW - 4);
+              const cx = FW / 2, tH = wTop / 2, bH = Math.max(wBot / 2, 2);
+              return (
+                <g key={i}>
+                  <polygon points={`${cx - tH},${y} ${cx + tH},${y} ${cx + bH},${y + stageH} ${cx - bH},${y + stageH}`} fill={`url(#fg${i})`} rx={4} />
+                  <text x={cx} y={y + stageH / 2 - 1} textAnchor="middle" fontSize={11} fontWeight={700} fill="#fff">{usdK(f.sum)}</text>
+                  <text x={cx} y={y + stageH / 2 + 11} textAnchor="middle" fontSize={8} fill="rgba(255,255,255,.85)">{f.label} · {f.n}</text>
+                </g>
+              );
+            })}
           </svg>
         )}
       </Card>
 
-      {/* Outstanding by month — vertical bars */}
-      <Card title="Outstanding by month" pill="Visible" pillColor="#0369a1">
-        {byMonth.length === 0 ? <Empty /> : (
-          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img">
-            {ticks(monMax).map((t, i) => { const y = (H - 26) - (t / monMax) * (H - 40); return (<g key={i}><line x1={38} x2={W - 8} y1={y} y2={y} stroke="var(--cave-line)" strokeDasharray="2 3" /><text x={34} y={y + 3} textAnchor="end" fontSize={8} fill="#94a3b8">{usdK(t)}</text></g>); })}
-            {byMonth.map(([k, v], i) => { const bw = (W - 46) / byMonth.length, x = 38 + i * bw, h = (v / monMax) * (H - 40); return (<g key={k}><rect x={x + bw * 0.2} y={(H - 26) - h} width={bw * 0.6} height={Math.max(1, h)} rx={2} fill="#c0392b" /><text x={x + bw / 2} y={H - 12} textAnchor="middle" fontSize={8} fill="#64748b">{k.split(" ")[0]}</text></g>); })}
-          </svg>
-        )}
-      </Card>
-
-      {/* Aging buckets — vertical bars by COUNT */}
-      <Card title="Aging buckets" pill="Days overdue" pillColor="#c0392b">
-        {aging.every((a) => a.n === 0) ? <Empty /> : (
-          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img">
-            {ticks(ageMax).map((t, i) => { const y = (H - 26) - (t / ageMax) * (H - 40); return (<g key={i}><line x1={30} x2={W - 8} y1={y} y2={y} stroke="var(--cave-line)" strokeDasharray="2 3" /><text x={26} y={y + 3} textAnchor="end" fontSize={8} fill="#94a3b8">{Math.round(t)}</text></g>); })}
-            {aging.map((a, i) => { const bw = (W - 38) / aging.length, x = 30 + i * bw, h = (a.n / ageMax) * (H - 40); return (<g key={a.k}><rect x={x + bw * 0.22} y={(H - 26) - h} width={bw * 0.56} height={Math.max(a.n > 0 ? 2 : 0, h)} rx={2} fill={a.c} /><text x={x + bw / 2} y={H - 12} textAnchor="middle" fontSize={8} fill="#64748b">{a.k}</text></g>); })}
-          </svg>
-        )}
-      </Card>
-
-      {/* Subscription status — horizontal bars by COUNT */}
-      <Card title="Subscription status" pill="Visible" pillColor="#0369a1">
+      {/* Subscription status donut */}
+      <Card title="Subscription status" caption={`${total} invoices · ${usdK(totalDue)} due`}>
         {byStatus.length === 0 ? <Empty /> : (
-          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img">
-            {ticks(statMax).map((t, i) => { const x = 96 + (t / statMax) * (W - 106); return (<g key={i}><line x1={x} x2={x} y1={6} y2={H - 18} stroke="var(--cave-line)" strokeDasharray="2 3" /><text x={x} y={H - 6} textAnchor="middle" fontSize={8} fill="#94a3b8">{Math.round(t)}</text></g>); })}
-            {byStatus.map((s, i) => { const bh = (H - 30) / byStatus.length, y = 6 + i * bh; return (<g key={s.k}><text x={92} y={y + bh / 2 + 3} textAnchor="end" fontSize={8} fill="#64748b">{s.k}</text><rect x={96} y={y + bh * 0.2} width={Math.max(1, (s.v / statMax) * (W - 106))} height={bh * 0.6} rx={2} fill={s.c} /></g>); })}
+          <div className="flex items-center gap-4">
+            <svg viewBox="0 0 120 120" width={128} height={128} role="img" style={{ transform: "rotate(-90deg)" }}>
+              <circle cx="60" cy="60" r={R} fill="none" stroke="var(--cave-line)" strokeWidth="12" />
+              {donut.map((s) => (
+                <circle key={s.k} cx="60" cy="60" r={R} fill="none" stroke={s.c} strokeWidth="12" strokeLinecap="round"
+                  strokeDasharray={`${Math.max(0, s.len - 2)} ${C}`} strokeDashoffset={-s.off} />
+              ))}
+            </svg>
+            <div className="space-y-1.5">
+              {byStatus.map((s) => (
+                <div key={s.k} className="flex items-center gap-2 text-xs">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: s.c }} />
+                  <span className="text-slate-500">{s.k}</span>
+                  <span className="font-semibold tabular-nums text-slate-700">{s.v}</span>
+                  <span className="text-[10px] text-slate-400">{Math.round((s.v / statTotal) * 100)}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Outstanding by AM — gradient bars */}
+      <Card title="Outstanding by AM" caption="top 8 by balance">
+        {byAm.length === 0 ? <Empty /> : (
+          <div className="space-y-2">
+            <svg width="0" height="0"><defs><linearGradient id="amBar" x1="0" x2="1"><stop offset="0" stopColor="#6366f1" /><stop offset="1" stopColor="#ef4444" /></linearGradient></defs></svg>
+            {byAm.map(([k, v]) => (
+              <div key={k} className="flex items-center gap-2">
+                <span className="w-24 shrink-0 truncate text-[10px] text-slate-500" title={k}>{k}</span>
+                <div className="h-2.5 flex-1 overflow-hidden rounded-full" style={{ background: "var(--cave-line)" }}>
+                  <div className="h-full rounded-full" style={{ width: `${(v / byAm[0][1]) * 100}%`, background: "linear-gradient(90deg,#6366f1,#ef4444)" }} />
+                </div>
+                <span className="w-12 shrink-0 text-right text-[10px] font-semibold tabular-nums text-slate-600">{usdK(v)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Outstanding by month — smooth area */}
+      <Card title="Outstanding by month" caption="balance trend">
+        {byMonth.length === 0 ? <Empty /> : (
+          <svg viewBox={`0 0 ${AW} ${AH}`} className="w-full" role="img">
+            <defs><linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#ef4444" stopOpacity="0.35" /><stop offset="1" stopColor="#ef4444" stopOpacity="0" /></linearGradient></defs>
+            {[0, 0.5, 1].map((f, i) => { const y = ay(aMax * f); return (<g key={i}><line x1={aPad.l} x2={AW - aPad.r} y1={y} y2={y} stroke="var(--cave-line)" strokeDasharray="2 4" /><text x={aPad.l - 5} y={y + 3} textAnchor="end" fontSize={8} fill="#94a3b8">{usdK(aMax * f)}</text></g>); })}
+            <path d={`M${ax(0)},${AH - aPad.b} ${byMonth.map(([, v], i) => `L${ax(i)},${ay(v)}`).join(" ")} L${ax(byMonth.length - 1)},${AH - aPad.b} Z`} fill="url(#areaFill)" />
+            <path d={`M${byMonth.map(([, v], i) => `${ax(i)},${ay(v)}`).join(" L")}`} fill="none" stroke="#ef4444" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+            {byMonth.map(([k, v], i) => (
+              <g key={k}>
+                <circle cx={ax(i)} cy={ay(v)} r={3.5} fill="#fff" stroke="#ef4444" strokeWidth={2} />
+                <text x={ax(i)} y={AH - 6} textAnchor="middle" fontSize={8} fill="#64748b">{k.split(" ")[0]}</text>
+              </g>
+            ))}
           </svg>
         )}
       </Card>
