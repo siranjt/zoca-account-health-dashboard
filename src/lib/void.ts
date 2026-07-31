@@ -15,7 +15,7 @@ import { getLatestActiveTicketByEntity } from "@/lib/tickets";
 // the multi-month flag are joined in JS, mirroring the Beacon's enrich.ts.
 // ===========================================================================
 
-export interface VoidTicket { identifier: string; title: string; url: string }
+export interface VoidTicket { identifier: string; title: string; url: string; classification: string }
 
 export interface VoidInvoice {
   invoiceId: string;
@@ -54,7 +54,7 @@ const SQL = `WITH sub AS (SELECT id, custom_fields::jsonb->>'cf_entity_id' AS ei
   loc AS (SELECT entity_id, storefront_address->>'administrative_area' AS state FROM gbp.locations)
   SELECT i.id AS invoice_id, i.status,
     round(i.amount_due/100.0, 2) AS amount_due, round(i.total/100.0, 2) AS total,
-    i.currency_code, to_char(i.date,'YYYY-MM-DD') AS inv_date, to_char(i.date,'Mon YYYY') AS inv_month,
+    i.currency_code, to_char(i.date,'YYYY-MM-DD') AS inv_date, to_char(i.date,'FMMonth YYYY') AS inv_month,
     to_char(i.due_date,'YYYY-MM-DD') AS due_date,
     CASE WHEN i.due_date IS NULL THEN NULL
       ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (now() - i.due_date::timestamp))/86400))::int END AS days_overdue,
@@ -71,6 +71,7 @@ const SQL = `WITH sub AS (SELECT id, custom_fields::jsonb->>'cf_entity_id' AS ei
   LEFT JOIN loc  ON loc.entity_id::text = sub.eid
   LEFT JOIN ach  ON ach.invoice_id = i.id
   WHERE i.status IN ('payment_due','not_paid')
+    AND i.date >= date_trunc('month', now()) - interval '4 months'
   ORDER BY i.amount_due DESC NULLS LAST`;
 
 const TTL_MS = 5 * 60_000; // 5 min
@@ -111,7 +112,7 @@ export async function getVoidInvoices(refresh = false): Promise<VoidInvoice[]> {
         subStatus: (r.sub_status as string) || null,
         cancellingAt: (r.cancelling_at as string) || null,
         achInFlight: r.ach_in_flight === true,
-        ticket: t ? { identifier: t.identifier, title: t.title, url: t.url } : null,
+        ticket: t ? { identifier: t.identifier, title: t.title, url: t.url, classification: t.classification || "" } : null,
         multiMonth: false, // filled below
         inBook: r.in_book === true,
       };

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import VoidCharts from "./VoidCharts";
 
-type Ticket = { identifier: string; title: string; url: string };
+type Ticket = { identifier: string; title: string; url: string; classification: string };
 type Row = {
   invoiceId: string; status: string; amountDue: number | null; total: number | null; currency: string | null;
   invDate: string | null; invoiceMonth: string | null; dueDate: string | null; daysOverdue: number | null;
@@ -27,11 +27,11 @@ const KPI_STYLE: Record<Kpi, { value: string; pill: string; pillBg: string }> = 
 };
 
 const usd = (n: number | null) => (n == null ? "—" : `$${Math.round(n).toLocaleString()}`);
-function ddmmyy(iso: string | null): string {
+function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso.slice(0, 10);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(-2)}`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 const annHasNotes = (a?: Ann) => !!a && ["caller", "connectionStatus", "amComment", "comments", "oldComments"].some((k) => (a as any)[k]);
 
@@ -123,7 +123,7 @@ export default function VoidViewer() {
   // book — currently Jul/Jun/May; auto-rolls forward). Older unpaid invoices are
   // not dropped — they still appear under the "All" tab.
   const months = useMemo(() => Array.from(new Set(all.map((r) => r.invoiceMonth).filter(Boolean) as string[]))
-    .sort((a, b) => new Date("01 " + b).getTime() - new Date("01 " + a).getTime()).slice(0, 3), [all]);
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime()), [all]);
   const amOptions = useMemo(() => Array.from(new Set(all.map((r) => r.amName).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b)), [all]);
 
   const tabFiltered = useMemo(() => (tab === "All" ? all : all.filter((r) => r.invoiceMonth === tab)), [all, tab]);
@@ -219,7 +219,7 @@ export default function VoidViewer() {
             <button key={t} onClick={() => setTab(t)}
               className="rounded-full border px-3 py-1 text-xs font-medium"
               style={active ? { borderColor: "#22d3ee", color: "#22d3ee", background: "rgba(34,211,238,.12)" } : { borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}>
-              {t} <span className="ml-1 opacity-70">({tabCounts[t] ?? 0})</span>
+              {t === "All" ? "All" : t.split(" ")[0]} <span className="ml-1 opacity-70">({tabCounts[t] ?? 0})</span>
             </button>
           );
         })}
@@ -245,6 +245,8 @@ export default function VoidViewer() {
         })}
       </div>
 
+      <div className="mb-4"><VoidCharts rows={userFiltered} /></div>
+
       <div className="table-scroll -mx-1 max-h-[72vh] overflow-auto rounded-lg border" style={{ borderColor: "var(--cave-line)" }}>
         <table className="w-full border-collapse text-[11px]">
           <thead className="sticky top-0 bg-slate-50 text-left uppercase tracking-wide text-slate-400">
@@ -266,12 +268,12 @@ export default function VoidViewer() {
                   <td className={`${td} max-w-[220px] truncate text-slate-700`}>{r.entityId ? <a href={`/account/${r.entityId}`} className="text-slate-700 no-underline hover:text-cyan-600">{r.biz || "(no name)"}</a> : (r.biz || "(no name)")}{!r.inBook && <span className="ml-1 text-[8px] uppercase text-slate-400">off-book</span>}</td>
                   <td className={`${td} text-slate-600`}>{r.amName || "—"}</td>
                   <td className={td}><span className="text-[10px] font-medium" style={{ color: r.subStatus === "active" ? "#16a34a" : r.subStatus === "cancelled" ? "#dc2626" : "#b45309" }}>{r.subStatus || "—"}</span></td>
-                  <td className={`${td} tabular-nums text-slate-500`}>{ddmmyy(r.cancellingAt)}</td>
+                  <td className={`${td} tabular-nums text-slate-500`}>{fmtDate(r.cancellingAt)}</td>
                   <td className={`${td} tabular-nums text-slate-500`}>{r.invoiceId}</td>
-                  <td className={td}>{r.achInFlight ? <span className="rounded px-1.5 py-0.5 text-[10px] font-medium" style={{ color: "#0369a1", background: "rgba(3,105,161,.1)" }}>in flight</span> : <span className="text-slate-300">—</span>}</td>
+                  <td className={td}>{r.achInFlight ? <span className="whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ color: "#0369a1", background: "rgba(3,105,161,.12)" }}>In Progress</span> : <span className="text-slate-300">—</span>}</td>
                   <td className={td}><span className="text-[10px] font-medium" style={{ color: (r.autoCollection || "").toLowerCase() === "on" ? "#16a34a" : "#dc2626" }}>{(r.autoCollection || "—").toUpperCase()}</span></td>
                   <td className={td}><EditableText value={a.amComment || ""} onSave={(v) => saveAnnotation(r.invoiceId, { amComment: v })} /></td>
-                  <td className={`${td} tabular-nums text-slate-500`}>{ddmmyy(r.invDate)}</td>
+                  <td className={`${td} tabular-nums text-slate-500`}>{fmtDate(r.invDate)}</td>
                   <td className={`${td} text-slate-600`}>{r.firstName || "—"}</td>
                   <td className={`${td} max-w-[160px] truncate text-slate-500`} title={r.email || ""}>{r.email || "—"}</td>
                   <td className={`${td} tabular-nums text-slate-500`}>{r.phone || "—"}</td>
@@ -281,16 +283,17 @@ export default function VoidViewer() {
                   <td className={td}><EditableSelect value={a.connectionStatus || ""} options={["Connected", "VM", "Not connected"]} onSave={(v) => saveAnnotation(r.invoiceId, { connectionStatus: v })} styleFor={connStyle} /></td>
                   <td className={td}><EditableText value={a.comments || ""} onSave={(v) => saveAnnotation(r.invoiceId, { comments: v })} /></td>
                   <td className={td}><EditableText value={a.oldComments || ""} onSave={(v) => saveAnnotation(r.invoiceId, { oldComments: v })} /></td>
-                  <td className={td}>{r.ticket ? <a href={r.ticket.url} target="_blank" rel="noopener noreferrer" className="no-underline" title={r.ticket.title}><span className="rounded px-1.5 py-0.5 text-[10px] font-medium" style={{ color: "#7c3aed", background: "rgba(124,58,237,.1)" }}>{r.ticket.identifier}</span></a> : <span className="text-slate-300">No tickets</span>}</td>
+                  <td className={td}>{r.ticket ? (
+                    <a href={r.ticket.url} target="_blank" rel="noopener noreferrer" className="block no-underline" title={r.ticket.title}>
+                      <span className="inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-medium" style={{ color: "#dc2626", background: "rgba(220,38,38,.1)" }}>{r.ticket.identifier} ↗</span>
+                      {r.ticket.classification && <div className="mt-0.5 max-w-[92px] truncate text-[8px] uppercase tracking-wide text-slate-400" title={r.ticket.classification}>{r.ticket.classification}</div>}
+                    </a>
+                  ) : <span className="text-slate-300">No tickets</span>}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-      </div>
-
-      <div className="mt-4">
-        <VoidCharts rows={userFiltered} />
       </div>
     </div>
   );

@@ -2,158 +2,111 @@
 
 import { useMemo } from "react";
 
-// Hand-built SVG charts for Void (no chart library — CAVE//OS convention).
-// All computed from the passed rows (the current filtered slice), so they move
-// with the filters. Four panels: outstanding by AM, by month, an aging funnel,
-// and a subscription-status donut.
+// Hand-built SVG charts for Void (no chart library — CAVE//OS convention),
+// matching the Miss Payment Beacon: Outstanding by AM (top-10 horizontal bars),
+// Outstanding by month (vertical bars), Aging buckets (vertical bars by COUNT),
+// Subscription status (horizontal bars by COUNT). All computed from the passed
+// rows (the current filtered slice), so they move with the filters.
 
 type Row = {
   amName: string | null; amountDue: number | null; invoiceMonth: string | null;
   daysOverdue: number | null; subStatus: string | null;
 };
 
-const usd = (n: number) => `$${Math.round(n).toLocaleString()}`;
 const usdK = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `$${Math.round(n)}`);
+function niceMax(v: number): number {
+  if (v <= 0) return 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(v)));
+  const n = v / mag;
+  const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+  return step * mag;
+}
+const ticks = (max: number, n = 4) => Array.from({ length: n + 1 }, (_, i) => (max / n) * i);
 
-function Card({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+function Card({ title, pill, pillColor, children }: { title: string; pill: string; pillColor: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border p-3" style={{ borderColor: "var(--cave-line)", background: "var(--cave-panel)" }}>
-      <div className="text-[11px] font-semibold text-slate-600">{title}</div>
-      {sub && <div className="mb-1 text-[10px] text-slate-400">{sub}</div>}
-      <div className="mt-1">{children}</div>
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-sm font-semibold text-slate-700">{title}</div>
+        <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide" style={{ color: pillColor, background: `${pillColor}1a` }}>{pill}</span>
+      </div>
+      {children}
     </div>
   );
 }
+function Empty() { return <div className="py-10 text-center text-[11px] text-slate-400">No data</div>; }
 
 export default function VoidCharts({ rows }: { rows: Row[] }) {
   const byAm = useMemo(() => {
     const m = new Map<string, number>();
-    for (const r of rows) { const k = r.amName || "(no AM)"; m.set(k, (m.get(k) || 0) + (r.amountDue || 0)); }
-    return [...m.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    for (const r of rows) { const k = r.amName || "(unassigned)"; m.set(k, (m.get(k) || 0) + (r.amountDue || 0)); }
+    return [...m.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 10);
   }, [rows]);
-
   const byMonth = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of rows) if (r.invoiceMonth) m.set(r.invoiceMonth, (m.get(r.invoiceMonth) || 0) + (r.amountDue || 0));
-    return [...m.entries()].sort((a, b) => new Date("01 " + a[0]).getTime() - new Date("01 " + b[0]).getTime());
+    return [...m.entries()].sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime());
   }, [rows]);
-
   const aging = useMemo(() => {
-    const defs = [{ k: "0–30d", lo: 0, hi: 30 }, { k: "31–60d", lo: 31, hi: 60 }, { k: "61–90d", lo: 61, hi: 90 }, { k: "90d+", lo: 91, hi: Infinity }];
-    return defs.map((b) => {
-      const inB = rows.filter((r) => r.daysOverdue != null && r.daysOverdue >= b.lo && r.daysOverdue <= b.hi);
-      return { k: b.k, n: inB.length, sum: inB.reduce((s, r) => s + (r.amountDue || 0), 0) };
-    });
+    const defs = [{ k: "0-30d", lo: 0, hi: 30, c: "#4a7c59" }, { k: "31-60d", lo: 31, hi: 60, c: "#d9a441" }, { k: "61-90d", lo: 61, hi: 90, c: "#ea580c" }, { k: "90d+", lo: 91, hi: Infinity, c: "#c0392b" }];
+    return defs.map((b) => ({ k: b.k, c: b.c, n: rows.filter((r) => r.daysOverdue != null && r.daysOverdue >= b.lo && r.daysOverdue <= b.hi).length }));
   }, [rows]);
-
   const byStatus = useMemo(() => {
     const m = new Map<string, number>();
-    for (const r of rows) { const k = r.subStatus || "unknown"; m.set(k, (m.get(k) || 0) + (r.amountDue || 0)); }
-    return [...m.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+    for (const r of rows) { const k = r.subStatus || "unknown"; m.set(k, (m.get(k) || 0) + 1); }
+    const COLOR: Record<string, string> = { active: "#4a7c59", non_renewing: "#c0392b", cancelled: "#7a1f1f", paused: "#0369a1", unknown: "#94a3b8" };
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ k, v, c: COLOR[k] || "#94a3b8" }));
   }, [rows]);
 
-  const maxAm = Math.max(1, ...byAm.map(([, v]) => v));
-  const maxMonth = Math.max(1, ...byMonth.map(([, v]) => v));
-  const maxAge = Math.max(1, ...aging.map((a) => a.sum));
-  const statusTotal = byStatus.reduce((s, [, v]) => s + v, 0) || 1;
-  const STATUS_COLOR: Record<string, string> = { active: "#16a34a", non_renewing: "#d97706", cancelled: "#dc2626", paused: "#0369a1", unknown: "#94a3b8" };
-
-  // donut arcs
-  let acc = -Math.PI / 2;
-  const arcs = byStatus.map(([k, v]) => {
-    const a0 = acc, a1 = acc + (v / statusTotal) * Math.PI * 2; acc = a1;
-    const R = 46, r = 27, cx = 55, cy = 55;
-    const p = (rad: number, a: number) => [cx + rad * Math.cos(a), cy + rad * Math.sin(a)];
-    const [x0, y0] = p(R, a0), [x1, y1] = p(R, a1), [x2, y2] = p(r, a1), [x3, y3] = p(r, a0);
-    const large = a1 - a0 > Math.PI ? 1 : 0;
-    return { k, v, d: `M${x0},${y0} A${R},${R} 0 ${large} 1 ${x1},${y1} L${x2},${y2} A${r},${r} 0 ${large} 0 ${x3},${y3} Z`, color: STATUS_COLOR[k] || "#94a3b8" };
-  });
+  // ---- geometry ----
+  const W = 480, H = 210;
+  const amMax = niceMax(Math.max(1, ...byAm.map(([, v]) => v)));
+  const monMax = niceMax(Math.max(1, ...byMonth.map(([, v]) => v)));
+  const ageMax = niceMax(Math.max(1, ...aging.map((a) => a.n)));
+  const statMax = niceMax(Math.max(1, ...byStatus.map((s) => s.v)));
 
   return (
-    <div className="mb-3 grid grid-cols-1 gap-2 lg:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
       {/* Outstanding by AM — horizontal bars */}
-      <Card title="Outstanding by AM" sub="top 8 by balance">
+      <Card title="Outstanding by AM" pill="Top 10" pillColor="#b45309">
         {byAm.length === 0 ? <Empty /> : (
-          <div className="space-y-1">
-            {byAm.map(([k, v]) => (
-              <div key={k} className="flex items-center gap-2">
-                <span className="w-24 shrink-0 truncate text-[10px] text-slate-500" title={k}>{k}</span>
-                <div className="h-3 flex-1 overflow-hidden rounded-sm" style={{ background: "var(--cave-line)" }}>
-                  <div className="h-full rounded-sm" style={{ width: `${(v / maxAm) * 100}%`, background: "#dc2626" }} />
-                </div>
-                <span className="w-12 shrink-0 text-right text-[10px] tabular-nums text-slate-600">{usdK(v)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {/* Outstanding by month — vertical bars */}
-      <Card title="Outstanding by month" sub="invoice month">
-        {byMonth.length === 0 ? <Empty /> : (
-          <svg viewBox="0 0 240 110" className="w-full" style={{ maxHeight: 120 }} role="img">
-            {byMonth.map(([k, v], i) => {
-              const bw = (240 - 20) / byMonth.length, x = 10 + i * bw, h = (v / maxMonth) * 76;
-              return (
-                <g key={k}>
-                  <rect x={x + bw * 0.15} y={92 - h} width={bw * 0.7} height={Math.max(1, h)} rx={2} fill="#b45309" />
-                  <text x={x + bw / 2} y={104} textAnchor="middle" fontSize={7} fill="#94a3b8">{k.split(" ")[0]}</text>
-                  <text x={x + bw / 2} y={90 - h} textAnchor="middle" fontSize={7} fill="#64748b">{usdK(v)}</text>
-                </g>
-              );
-            })}
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img">
+            <defs><linearGradient id="amGrad" x1="0" x2="1"><stop offset="0" stopColor="#f59e0b" /><stop offset="1" stopColor="#dc2626" /></linearGradient></defs>
+            {ticks(amMax).map((t, i) => { const x = 96 + (t / amMax) * (W - 106); return (<g key={i}><line x1={x} x2={x} y1={6} y2={H - 18} stroke="var(--cave-line)" strokeDasharray="2 3" /><text x={x} y={H - 6} textAnchor="middle" fontSize={8} fill="#94a3b8">{usdK(t)}</text></g>); })}
+            {byAm.map(([k, v], i) => { const bh = (H - 30) / byAm.length, y = 6 + i * bh; return (<g key={k}><text x={92} y={y + bh / 2 + 3} textAnchor="end" fontSize={8} fill="#64748b">{k.length > 14 ? k.slice(0, 13) + "…" : k}</text><rect x={96} y={y + bh * 0.15} width={Math.max(1, (v / amMax) * (W - 106))} height={bh * 0.7} rx={2} fill="url(#amGrad)" /></g>); })}
           </svg>
         )}
       </Card>
 
-      {/* Aging funnel — centered narrowing bars */}
-      <Card title="Aging funnel" sub="overdue balance by age">
-        {aging.every((a) => a.n === 0) ? <Empty /> : (
-          <div className="space-y-1.5 py-1">
-            {aging.map((a) => {
-              const w = Math.max(6, (a.sum / maxAge) * 100);
-              const shade = a.k === "90d+" ? "#dc2626" : a.k === "61–90d" ? "#ea580c" : a.k === "31–60d" ? "#d97706" : "#eab308";
-              return (
-                <div key={a.k} className="flex items-center gap-2">
-                  <span className="w-12 shrink-0 text-[10px] text-slate-500">{a.k}</span>
-                  <div className="flex flex-1 justify-center">
-                    <div className="flex h-4 items-center justify-center rounded-sm text-[9px] font-medium text-white" style={{ width: `${w}%`, background: shade, minWidth: 36 }}>
-                      {usdK(a.sum)}
-                    </div>
-                  </div>
-                  <span className="w-8 shrink-0 text-right text-[10px] tabular-nums text-slate-400">{a.n}</span>
-                </div>
-              );
-            })}
-          </div>
+      {/* Outstanding by month — vertical bars */}
+      <Card title="Outstanding by month" pill="Visible" pillColor="#0369a1">
+        {byMonth.length === 0 ? <Empty /> : (
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img">
+            {ticks(monMax).map((t, i) => { const y = (H - 26) - (t / monMax) * (H - 40); return (<g key={i}><line x1={38} x2={W - 8} y1={y} y2={y} stroke="var(--cave-line)" strokeDasharray="2 3" /><text x={34} y={y + 3} textAnchor="end" fontSize={8} fill="#94a3b8">{usdK(t)}</text></g>); })}
+            {byMonth.map(([k, v], i) => { const bw = (W - 46) / byMonth.length, x = 38 + i * bw, h = (v / monMax) * (H - 40); return (<g key={k}><rect x={x + bw * 0.2} y={(H - 26) - h} width={bw * 0.6} height={Math.max(1, h)} rx={2} fill="#c0392b" /><text x={x + bw / 2} y={H - 12} textAnchor="middle" fontSize={8} fill="#64748b">{k.split(" ")[0]}</text></g>); })}
+          </svg>
         )}
       </Card>
 
-      {/* Sub-status donut */}
-      <Card title="By subscription status" sub="balance share">
+      {/* Aging buckets — vertical bars by COUNT */}
+      <Card title="Aging buckets" pill="Days overdue" pillColor="#c0392b">
+        {aging.every((a) => a.n === 0) ? <Empty /> : (
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img">
+            {ticks(ageMax).map((t, i) => { const y = (H - 26) - (t / ageMax) * (H - 40); return (<g key={i}><line x1={30} x2={W - 8} y1={y} y2={y} stroke="var(--cave-line)" strokeDasharray="2 3" /><text x={26} y={y + 3} textAnchor="end" fontSize={8} fill="#94a3b8">{Math.round(t)}</text></g>); })}
+            {aging.map((a, i) => { const bw = (W - 38) / aging.length, x = 30 + i * bw, h = (a.n / ageMax) * (H - 40); return (<g key={a.k}><rect x={x + bw * 0.22} y={(H - 26) - h} width={bw * 0.56} height={Math.max(a.n > 0 ? 2 : 0, h)} rx={2} fill={a.c} /><text x={x + bw / 2} y={H - 12} textAnchor="middle" fontSize={8} fill="#64748b">{a.k}</text></g>); })}
+          </svg>
+        )}
+      </Card>
+
+      {/* Subscription status — horizontal bars by COUNT */}
+      <Card title="Subscription status" pill="Visible" pillColor="#0369a1">
         {byStatus.length === 0 ? <Empty /> : (
-          <div className="flex items-center gap-3">
-            <svg viewBox="0 0 110 110" width={96} height={96} role="img">
-              {arcs.map((a) => <path key={a.k} d={a.d} fill={a.color} />)}
-              <text x={55} y={52} textAnchor="middle" fontSize={9} fontWeight={700} fill="#334155">{usdK(statusTotal)}</text>
-              <text x={55} y={63} textAnchor="middle" fontSize={6} fill="#94a3b8">total</text>
-            </svg>
-            <div className="space-y-0.5">
-              {byStatus.map(([k, v]) => (
-                <div key={k} className="flex items-center gap-1.5 text-[10px]">
-                  <span className="inline-block h-2 w-2 rounded-sm" style={{ background: STATUS_COLOR[k] || "#94a3b8" }} />
-                  <span className="text-slate-500">{k}</span>
-                  <span className="tabular-nums text-slate-600">{usdK(v)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img">
+            {ticks(statMax).map((t, i) => { const x = 96 + (t / statMax) * (W - 106); return (<g key={i}><line x1={x} x2={x} y1={6} y2={H - 18} stroke="var(--cave-line)" strokeDasharray="2 3" /><text x={x} y={H - 6} textAnchor="middle" fontSize={8} fill="#94a3b8">{Math.round(t)}</text></g>); })}
+            {byStatus.map((s, i) => { const bh = (H - 30) / byStatus.length, y = 6 + i * bh; return (<g key={s.k}><text x={92} y={y + bh / 2 + 3} textAnchor="end" fontSize={8} fill="#64748b">{s.k}</text><rect x={96} y={y + bh * 0.2} width={Math.max(1, (s.v / statMax) * (W - 106))} height={bh * 0.6} rx={2} fill={s.c} /></g>); })}
+          </svg>
         )}
       </Card>
     </div>
   );
-}
-
-function Empty() {
-  return <div className="py-6 text-center text-[11px] text-slate-400">No data</div>;
 }
