@@ -119,8 +119,11 @@ export default function VoidViewer() {
   }
 
   const all = rows ?? [];
+  // Month tabs/filter show only the 3 most-recent months (the actively-collected
+  // book — currently Jul/Jun/May; auto-rolls forward). Older unpaid invoices are
+  // not dropped — they still appear under the "All" tab.
   const months = useMemo(() => Array.from(new Set(all.map((r) => r.invoiceMonth).filter(Boolean) as string[]))
-    .sort((a, b) => new Date("01 " + b).getTime() - new Date("01 " + a).getTime()), [all]);
+    .sort((a, b) => new Date("01 " + b).getTime() - new Date("01 " + a).getTime()).slice(0, 3), [all]);
   const amOptions = useMemo(() => Array.from(new Set(all.map((r) => r.amName).filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b)), [all]);
 
   const tabFiltered = useMemo(() => (tab === "All" ? all : all.filter((r) => r.invoiceMonth === tab)), [all, tab]);
