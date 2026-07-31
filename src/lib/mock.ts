@@ -112,7 +112,7 @@ const SEEDS: Seed[] = [
 
 function toRow(s: Seed): AccountRow {
   return {
-    entityId: s.entityId, name: s.name, city: s.city, state: s.state,
+    entityId: s.entityId, name: s.name, aka: null, city: s.city, state: s.state,
     lat: MOCK_COORDS[s.city]?.[0] ?? null, lng: MOCK_COORDS[s.city]?.[1] ?? null,
     accountManager: s.am,
     health: buildHealth(s.eng, s.val, s.prod), mrr: s.mrr,

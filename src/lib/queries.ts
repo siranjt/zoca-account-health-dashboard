@@ -27,6 +27,9 @@ loc AS (SELECT entity_id, storefront_address->>'locality' AS city, storefront_ad
 geo AS (SELECT entity_id, latitude::float AS lat, longitude::float AS lng FROM entities.locations WHERE latitude IS NOT NULL AND longitude IS NOT NULL),
 -- lead masking: leads are withheld (usually on missed payment) when status=true
 lm AS (SELECT entity_id, (lead_masking->>'status')='true' AS leads_masked, lead_masking->>'updated_at' AS masked_at FROM entities.locations WHERE lead_masking IS NOT NULL),
+-- entity's own name (often the Chargebee/Retool name), used as a search alias
+-- since gbp_title (the GBP profile name) can differ from it for the same account.
+en AS (SELECT entity_id, name AS aka FROM entities.locations),
 leads AS (SELECT entity_id, COUNT(*) AS leads FROM website.booking_enquiries WHERE source='WEBSITE' AND is_test_lead=false AND ${range("created_at", from, to)} GROUP BY 1),
 rev AS (SELECT entity_id, COUNT(*) AS reviews FROM reviews.reviews WHERE is_deleted=false AND ${range("review_time", from, to)} GROUP BY 1),
 -- photos = actually uploaded in the window (media.media_entities has a real created_at)
@@ -85,13 +88,15 @@ SELECT hs.entity_id, hs.gbp_title, loc.city, loc.state, geo.lat, geo.lng, hs.am_
        hub.last_connected,
        (gbpx.website_uri IS NOT NULL) AS website_live,
        COALESCE(gbpx.website_uri, hub.website_url) AS website_url,
-       COALESCE(lm.leads_masked, false) AS leads_masked, lm.masked_at
+       COALESCE(lm.leads_masked, false) AS leads_masked, lm.masked_at,
+       en.aka
 FROM hs
 LEFT JOIN loc USING(entity_id) LEFT JOIN geo USING(entity_id) LEFT JOIN leads USING(entity_id) LEFT JOIN rev USING(entity_id)
 LEFT JOIN pho USING(entity_id) LEFT JOIN met USING(entity_id) LEFT JOIN web USING(entity_id)
 LEFT JOIN rnk USING(entity_id) LEFT JOIN imp USING(entity_id)
 LEFT JOIN nb USING(entity_id) LEFT JOIN od USING(entity_id) LEFT JOIN ms USING(entity_id)
 LEFT JOIN gbpx USING(entity_id) LEFT JOIN hub USING(entity_id) LEFT JOIN lm USING(entity_id)
+LEFT JOIN en USING(entity_id)
 ORDER BY hs.gbp_title`;
 }
 

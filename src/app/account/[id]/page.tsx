@@ -13,6 +13,7 @@ export const maxDuration = 60;
 export interface PickerItem {
   entityId: string;
   name: string;
+  aka: string | null;
   color: HealthColor;
   am: string | null;
 }
@@ -26,7 +27,7 @@ export default async function AccountPage({ params }: { params: { id: string } }
   if (!account) notFound();
 
   const picker: PickerItem[] = visible
-    .map((a) => ({ entityId: a.entityId, name: a.name, color: a.health.color, am: a.accountManager }))
+    .map((a) => ({ entityId: a.entityId, name: a.name, aka: a.aka, color: a.health.color, am: a.accountManager }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   return (

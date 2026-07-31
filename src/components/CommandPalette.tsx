@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 interface Item {
   id: string;
   name: string;
+  aka: string | null;
   am: string | null;
   city: string | null;
   color: string;
@@ -55,7 +56,7 @@ export default function CommandPalette() {
       .then((r) => r.json())
       .then((p) =>
         setItems(
-          (p.accounts ?? []).map((a: any) => ({ id: a.entityId, name: a.name, am: a.accountManager, city: a.city, color: a.health?.color }))
+          (p.accounts ?? []).map((a: any) => ({ id: a.entityId, name: a.name, aka: a.aka, am: a.accountManager, city: a.city, color: a.health?.color }))
         )
       )
       .catch(() => setItems([]));
@@ -76,6 +77,7 @@ export default function CommandPalette() {
       (a) =>
         !term ||
         a.name.toLowerCase().includes(term) ||
+        (a.aka ?? "").toLowerCase().includes(term) ||
         (a.am ?? "").toLowerCase().includes(term) ||
         (a.city ?? "").toLowerCase().includes(term)
     );

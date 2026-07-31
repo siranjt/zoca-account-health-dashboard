@@ -41,6 +41,9 @@ export interface HealthScore {
 export interface AccountRow {
   entityId: string;
   name: string;
+  /** entity's own name (often the Chargebee/Retool name) — a search alias, since
+   *  `name` here is the GBP profile title which can differ for the same account. */
+  aka: string | null;
   city: string | null;
   state: string | null;
   lat?: number | null;

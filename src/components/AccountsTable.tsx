@@ -301,6 +301,7 @@ export default function AccountsTable({ initial }: { initial: AccountsPayload })
       out = out.filter(
         (a) =>
           a.name.toLowerCase().includes(q) ||
+          (a.aka ?? "").toLowerCase().includes(q) ||
           (a.city ?? "").toLowerCase().includes(q) ||
           (a.accountManager ?? "").toLowerCase().includes(q)
       );

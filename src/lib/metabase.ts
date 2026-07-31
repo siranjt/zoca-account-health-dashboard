@@ -275,6 +275,7 @@ export async function getAccountsFromMetabase(rangeArg: MbRange): Promise<Accoun
     return {
       entityId: id,
       name: (r.gbp_title as string) || "(unnamed)",
+      aka: (r.aka as string) || null,
       city: (r.city as string) || null,
       state: (r.state as string) || null,
       lat: num(r.lat),

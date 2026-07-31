@@ -868,7 +868,7 @@ function AccountCombo({ picker, current, tab }: { picker: PickerItem[]; current:
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (!t) return picker;
-    return picker.filter((p) => p.name.toLowerCase().includes(t) || (p.am ?? "").toLowerCase().includes(t));
+    return picker.filter((p) => p.name.toLowerCase().includes(t) || (p.aka ?? "").toLowerCase().includes(t) || (p.am ?? "").toLowerCase().includes(t));
   }, [picker, q]);
 
   useEffect(() => { setHi(0); }, [q]);
