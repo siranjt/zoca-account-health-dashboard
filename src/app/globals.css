@@ -334,6 +334,40 @@ html.light .table-scroll::-webkit-scrollbar-track { background: #f4efe6; }
   max-height: calc(100vh - 190px);
 }
 
+/* ── AM daily report inks ──────────────────────────────────────────────────
+   Deltas and the freshness banner need good/bad/warn colours that clear 4.5:1
+   on BOTH grounds this app ships. The existing inline #16a34a/#dc2626 pair was
+   chosen for the dark deck only (#dc2626 lands at ~3.2:1 on --cave-panel), so
+   the report uses its own tokens with a light-mode override rather than a hex
+   that reads on one theme and not the other. */
+:root {
+  --am-good: #3ddc97;
+  --am-bad: #ff7a7a;
+  --am-warn: #ffc14d;
+  --am-flat: var(--cave-dim);
+  --am-bad-wash: rgba(255, 122, 122, 0.11);
+  --am-warn-wash: rgba(255, 193, 77, 0.1);
+}
+html.light {
+  --am-good: #076c3b;
+  --am-bad: #b3261e;
+  --am-warn: #8a5a00;
+  --am-flat: #6b7280;
+  --am-bad-wash: rgba(179, 38, 30, 0.08);
+  --am-warn-wash: rgba(138, 90, 0, 0.09);
+}
+/* the loud stale state — a pulse, disabled for reduced-motion below */
+@keyframes am-stale-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px var(--am-bad), 0 0 14px rgba(255, 122, 122, 0.18); }
+  50% { box-shadow: 0 0 0 1px var(--am-bad), 0 0 26px rgba(255, 122, 122, 0.42); }
+}
+.am-stale { animation: am-stale-pulse 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .am-stale { animation: none; box-shadow: 0 0 0 1px var(--am-bad); }
+}
+/* anchor targets sit under the sticky nav */
+.am-anchor { scroll-margin-top: 84px; }
+
 /* ── surface remap ─────────────────────────────────────────────────────── */
 .bg-white { background-color: var(--cave-panel) !important; }
 .bg-slate-50 { background-color: var(--cave-panel2) !important; }

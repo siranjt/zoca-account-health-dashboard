@@ -55,6 +55,14 @@ export default function UserMenu() {
             📋 Activity
           </a>
           <a
+            href="/am-report"
+            title="AM daily report — snapshot trend (owner only)"
+            className="rounded-md border px-2 py-1.5 text-[10px] uppercase tracking-[0.12em] no-underline"
+            style={{ borderColor: "var(--cave-line)", color: "var(--cave-dim)" }}
+          >
+            📒 AM Report
+          </a>
+          <a
             href="/admin/alfred"
             title="Alfred usage (admin)"
             className="rounded-md border px-2 py-1.5 text-[10px] uppercase tracking-[0.12em] no-underline"

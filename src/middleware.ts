@@ -7,6 +7,31 @@ import { ssoConfigured } from "@/lib/access";
 //   require a signed-in roster member; unauthenticated requests go to /signin.
 // - Otherwise fall back to the previous optional Basic-auth password gate, so
 //   this code can ship before SSO is turned on without locking anyone out.
+
+// Surfaces only the owner may open. These get a real 403 rather than a redirect
+// to /overview: a non-admin bounced somewhere else cannot tell "you may not see
+// this" from "that page moved", and an auth decision should never be silent.
+// The pages behind these prefixes guard themselves as well — an auth path is the
+// one place belt and braces is worth the duplication.
+const OWNER_ONLY = ["/am-report"];
+
+function isOwnerOnly(pathname: string): boolean {
+  return OWNER_ONLY.some((base) => pathname === base || pathname.startsWith(`${base}/`));
+}
+
+function forbidden(): NextResponse {
+  return new NextResponse(
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>403 — Not your deck</title>
+     <style>body{background:#04080a;color:#d7e7ea;font:14px ui-monospace,Menlo,monospace;
+     display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}
+     div{max-width:34rem;padding:2rem;border:1px solid #14343d;border-radius:12px}
+     b{color:#ff7a7a;letter-spacing:.18em}a{color:#35e0ff}</style></head><body><div>
+     <b>403 FORBIDDEN</b><p>This report is restricted to the platform owner.</p>
+     <p><a href="/overview">&larr; Back to the book</a></p></div></body></html>`,
+    { status: 403, headers: { "content-type": "text/html; charset=utf-8" } },
+  );
+}
+
 export default auth((req) => {
   const p = req.nextUrl.pathname;
 
@@ -22,8 +47,14 @@ export default auth((req) => {
       url.searchParams.set("callbackUrl", p + (req.nextUrl.search || ""));
       return NextResponse.redirect(url);
     }
+    if (isOwnerOnly(p) && req.auth?.user?.role !== "admin") return forbidden();
     return NextResponse.next();
   }
+
+  // Below this line SSO is NOT configured, so no role exists for anyone. An
+  // owner-only surface must not fall back to the shared password gate — a
+  // DASHBOARD_PASSWORD holder is not the owner. Fail closed here too.
+  if (isOwnerOnly(p)) return forbidden();
 
   // SSO is NOT fully configured. This path must FAIL CLOSED, never open: a
   // missing Google/AUTH_SECRET var — or a malformed ACCESS_CONTROL that flips
