@@ -25,8 +25,8 @@ export async function GET(req: Request) {
       const x = v == null ? "" : String(v);
       return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x;
     };
-    const header = ["Invoice", "Business", "AM", "Status", "Amount due", "Currency", "Days overdue", "Date", "Due", "Auto-collect", "ACH in flight", "Phone", "Email", "State", "In book"];
-    const body = rows.map((r) => [r.invoiceId, r.biz ?? "", r.amName ?? "", r.status, r.amountDue ?? "", r.currency ?? "", r.daysOverdue ?? "", r.invDate ?? "", r.dueDate ?? "", r.autoCollection ?? "", r.achInFlight ? "yes" : "no", r.phone ?? "", r.email ?? "", r.state ?? "", r.inBook ? "yes" : "no"]);
+    const header = ["Invoice", "Business", "AM", "Status", "Amount due", "Currency", "Days overdue", "Date", "Due", "Auto-collect", "ACH in flight", "Phone", "Email", "State", "In book", "Recoverability", "Recovery score", "Recovery action", "Engaged 30d"];
+    const body = rows.map((r) => [r.invoiceId, r.biz ?? "", r.amName ?? "", r.status, r.amountDue ?? "", r.currency ?? "", r.daysOverdue ?? "", r.invDate ?? "", r.dueDate ?? "", r.autoCollection ?? "", r.achInFlight ? "yes" : "no", r.phone ?? "", r.email ?? "", r.state ?? "", r.inBook ? "yes" : "no", r.recovery.tier, r.recovery.score, r.recovery.action, r.recovery.engaged ? "yes" : "no"]);
     const csv = [header, ...body].map((r) => r.map(esc).join(",")).join("\n");
     return new NextResponse(csv, {
       headers: {

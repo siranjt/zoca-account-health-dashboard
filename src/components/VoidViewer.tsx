@@ -18,14 +18,18 @@ type Row = {
   state: string | null; firstName: string | null; company: string | null; phone: string | null; email: string | null;
   autoCollection: string | null; subStatus: string | null; cancellingAt: string | null;
   achInFlight: boolean; ticket: Ticket | null; multiMonth: boolean; inBook: boolean;
+  recovery: { tier: "A" | "B" | "C" | "D"; score: number; action: string; engaged: boolean };
+  engagement: { appDays: number; leadViews: number; leads30: number; gbp30: number; reviews30: number } | null;
 };
 type Ann = { caller?: string; connectionStatus?: string; amComment?: string; comments?: string; oldComments?: string };
 type AnnMap = Record<string, Ann>;
 
 const HIGH_VALUE = 500;
-type Kpi = "outstanding" | "invoices" | "ach" | "multi" | "tickets" | "annotations";
+type Kpi = "outstanding" | "recoverable" | "invoices" | "ach" | "multi" | "tickets" | "annotations";
+const REC_COLOR: Record<"A" | "B" | "C" | "D", string> = { A: "#16a34a", B: "#3a7d5c", C: "#d97706", D: "#dc2626" };
 const KPI_STYLE: Record<Kpi, { value: string; pill: string; pillBg: string }> = {
   outstanding: { value: "var(--cave-txt, #0f172a)", pill: "#0ea5e9", pillBg: "rgba(14,165,233,.14)" },
+  recoverable: { value: "#16a34a", pill: "#16a34a", pillBg: "rgba(22,163,74,.12)" },
   invoices: { value: "#ef4444", pill: "#ef4444", pillBg: "rgba(239,68,68,.14)" },
   ach: { value: "var(--cave-txt, #0f172a)", pill: "#0ea5e9", pillBg: "rgba(14,165,233,.14)" },
   multi: { value: "#d97706", pill: "#d97706", pillBg: "rgba(217,119,6,.12)" },
@@ -191,13 +195,16 @@ export default function VoidViewer() {
     const multiKeys = new Set(userFiltered.filter((r) => r.multiMonth).map((r) => r.entityId || r.customerId));
     const ticketN = userFiltered.filter((r) => r.ticket).length;
     const annN = userFiltered.filter((r) => annHasNotes(ann[r.invoiceId])).length;
-    return { out, highVal, repeatN, achN, multiN: multiKeys.size, ticketN, annN };
+    const recRows = userFiltered.filter((r) => r.recovery.tier !== "D");
+    const recoverable = recRows.reduce((s, r) => s + (r.amountDue ?? 0), 0);
+    return { out, highVal, repeatN, achN, multiN: multiKeys.size, ticketN, annN, recoverable, recN: recRows.length };
   }, [userFiltered, repeatSet, ann]);
 
   const filtered = useMemo(() => {
     if (!activeKpi) return userFiltered;
     switch (activeKpi) {
       case "outstanding": return userFiltered.filter((r) => (r.amountDue ?? 0) >= HIGH_VALUE);
+      case "recoverable": return userFiltered.filter((r) => r.recovery.tier !== "D");
       case "invoices": return userFiltered.filter((r) => r.customerId && repeatSet.has(r.customerId));
       case "ach": return userFiltered.filter((r) => r.achInFlight);
       case "multi": return userFiltered.filter((r) => r.multiMonth);
@@ -222,6 +229,7 @@ export default function VoidViewer() {
 
   const KPIS: { key: Kpi; label: string; value: React.ReactNode; sub: string }[] = [
     { key: "outstanding", label: "Outstanding", value: usd(kpi.out), sub: `${kpi.highVal} high-value ≥ $${HIGH_VALUE}` },
+    { key: "recoverable", label: "Recoverable", value: usd(kpi.recoverable), sub: `${kpi.recN} accounts · tiers A–C` },
     { key: "invoices", label: "Invoices", value: userFiltered.length, sub: `${kpi.repeatN} from repeat businesses` },
     { key: "ach", label: "ACH in flight", value: kpi.achN, sub: "collection in progress" },
     { key: "multi", label: "Multi-month", value: kpi.multiN, sub: "overdue ≥ 2 cycles" },
@@ -310,6 +318,7 @@ export default function VoidViewer() {
             <tr>
               <th className={th}>Customer Id</th><th className={th}>Entity Id</th>
               <Sortable k="biz" label="Biz name" /><Sortable k="amName" label="AM" />
+              <th className={th} title="Recoverability tier · score (0–100). Green dot = active in app/leads in 30d.">Recovery</th>
               <Sortable k="subStatus" label="Sub status" /><Sortable k="cancellingAt" label="Cancelling at" />
               <Sortable k="invoiceId" label="Invoice #" /><th className={th}>ACH</th>
               <Sortable k="autoCollection" label="Auto debit" /><th className={th}>AM Comment</th>
@@ -328,6 +337,12 @@ export default function VoidViewer() {
                   <td className={`${td} tabular-nums text-slate-400`} title={r.entityId || ""}>{r.entityId ? r.entityId.slice(0, 8) : "—"}</td>
                   <td className={`${td} max-w-[220px] truncate text-slate-700`}>{r.entityId ? <a href={`/account/${r.entityId}`} className="text-slate-700 no-underline hover:text-cyan-600">{r.biz || "(no name)"}</a> : (r.biz || "(no name)")}{!r.inBook && <span className="ml-1 text-[8px] uppercase text-slate-400">off-book</span>}</td>
                   <td className={`${td} text-slate-600 ${r.amName ? clickCell : ""}`} onClick={() => r.amName && setAm(r.amName)} title={r.amName ? "Filter by this AM" : undefined}>{r.amName || "—"}</td>
+                  <td className={td} title={`${r.recovery.action}${r.engagement ? ` — ${r.engagement.appDays} app-days, ${r.engagement.leadViews} lead-views (30d)` : ""}`}>
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ color: REC_COLOR[r.recovery.tier], background: `${REC_COLOR[r.recovery.tier]}1f` }}>
+                      {r.recovery.tier} · {r.recovery.score}
+                      {r.recovery.engaged && <span title="active in app / leads (30d)" style={{ width: 5, height: 5, borderRadius: 9, background: REC_COLOR[r.recovery.tier], display: "inline-block" }} />}
+                    </span>
+                  </td>
                   <td className={`${td} ${r.subStatus ? "cursor-pointer" : ""}`} onClick={() => r.subStatus && setSubStatus(r.subStatus)} title={r.subStatus ? "Filter by this status" : undefined}><span className="text-[10px] font-medium" style={{ color: r.subStatus === "active" ? "#16a34a" : r.subStatus === "cancelled" ? "#dc2626" : "#b45309" }}>{r.subStatus || "—"}</span></td>
                   <td className={`${td} tabular-nums text-slate-500`}>{fmtDate(r.cancellingAt)}</td>
                   <td className={`${td} tabular-nums text-slate-500 ${clickCell}`} onClick={() => copyToClipboard(r.invoiceId, "invoice #")} title="Copy invoice #">{r.invoiceId}</td>

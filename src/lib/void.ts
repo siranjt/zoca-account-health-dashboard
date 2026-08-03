@@ -45,6 +45,49 @@ export interface VoidInvoice {
   ticket: VoidTicket | null;
   multiMonth: boolean;
   inBook: boolean; // resolved to an active cx.health_score account
+  engagement: VoidEngagement | null; // product usage in the last 30d (null if unavailable)
+  recovery: VoidRecovery; // recoverability tier/score derived from all the signals above
+}
+
+export interface VoidEngagement { appDays: number; leadViews: number; leads30: number; gbp30: number; reviews30: number }
+export interface VoidRecovery { tier: "A" | "B" | "C" | "D"; score: number; action: string; engaged: boolean }
+
+// Recoverability of a missed payment, scored 0–100 across four axes — all from
+// data the row already carries plus 30-day product engagement. Rule-based and
+// explainable on purpose (no black box): relationship (sub status − churn/exit
+// tickets), payment mechanism (ACH in-flight > auto-retry ≈ invoice terms),
+// freshness (days overdue, chronic penalty), engagement (app opens + lead work).
+// Overrides: ACH in-flight → A; cancelled/offboarding → D; open churn ticket on
+// a live sub → C (collect before they leave). Validated against the live book
+// 2026-08 (docs/tasks + the standalone scorer).
+const EXIT_TICKETS = new Set(["Subscription_Cancellation", "paid_user_offboarding"]);
+export function recoverability(inv: VoidInvoice, eng: VoidEngagement | null): VoidRecovery {
+  const sub = inv.subStatus;
+  const tk = inv.ticket?.classification || "";
+  const isExit = EXIT_TICKETS.has(tk);
+  let rel = sub === "active" ? 35 : sub === "non_renewing" ? 22 : sub === "cancelled" ? 3 : 10;
+  if (tk === "Churn Ticket" || isExit) rel -= 25;
+  else if (tk === "Retention Risk Alert") rel -= 10;
+  rel = Math.max(0, rel);
+  const mech = inv.achInFlight ? 15 : inv.autoCollection === "on" ? 10 : 7;
+  const d = inv.daysOverdue ?? 0;
+  let fr = d <= 14 ? 20 : d <= 30 ? 15 : d <= 60 ? 9 : d <= 90 ? 4 : 2;
+  if (inv.multiMonth) fr = Math.max(0, fr - 6);
+  const appDays = eng?.appDays ?? 0, work = (eng?.leadViews ?? 0) + (eng?.leads30 ?? 0);
+  const eApp = appDays >= 8 ? 12 : appDays >= 1 ? 7 : 0;
+  const eLead = work >= 5 ? 10 : work >= 1 ? 6 : 0;
+  const eProf = (eng?.gbp30 ?? 0) > 0 || (eng?.reviews30 ?? 0) > 0 ? 8 : 0;
+  const engScore = Math.min(30, eApp + eLead + eProf);
+  const score = Math.max(0, Math.min(100, rel + mech + fr + engScore));
+  let tier: VoidRecovery["tier"];
+  if (inv.achInFlight) tier = "A";
+  else if (sub === "cancelled" || isExit) tier = "D";
+  else {
+    tier = score >= 70 ? "A" : score >= 45 ? "B" : score >= 25 ? "C" : "D";
+    if (tk === "Churn Ticket" && (tier === "A" || tier === "B")) tier = "C";
+  }
+  const action = { A: "Confirm / auto-retry", B: "Outreach · resend invoice", C: "Collect before churn", D: "Final demand or write off" }[tier];
+  return { tier, score, action, engaged: appDays > 0 || work > 0 };
 }
 
 const SQL = `WITH sub AS (SELECT id, custom_fields::jsonb->>'cf_entity_id' AS eid, status AS sub_status,
@@ -84,6 +127,43 @@ const SQL = `WITH sub AS (SELECT id, custom_fields::jsonb->>'cf_entity_id' AS ei
 const TTL_MS = 5 * 60_000; // 5 min
 let cache: { at: number; rows: VoidInvoice[] } | null = null;
 let inflight: Promise<VoidInvoice[]> | null = null;
+
+// 30-day product engagement per entity — app opens + in-app lead work (Mixpanel)
+// and profile output (GBP interactions, leads, reviews). Entity-scoped to the
+// unpaid book and windowed, per the big-table rule. Degrades to an empty map on
+// any failure so recoverability still scores (engagement just contributes 0).
+async function getEngagementByEntity(ids: string[]): Promise<Map<string, VoidEngagement>> {
+  const m = new Map<string, VoidEngagement>();
+  const clean = ids.filter((e) => /^[0-9a-fA-F-]{36}$/.test(e)); // only well-formed uuids (::uuid cast safety)
+  if (!clean.length) return m;
+  const inlist = clean.map((e) => `'${e}'`).join(",");
+  const APP = `SELECT "locationEntityId" eid,
+      COUNT(DISTINCT time::date) FILTER (WHERE event='Home-View-Home') app_days,
+      SUM((event LIKE 'Leads-%')::int) lead_views
+    FROM mixpanelzocaappdata.export
+    WHERE time >= CURRENT_DATE - INTERVAL '30 days' AND "locationEntityId" IN (${inlist})
+      AND (event='Home-View-Home' OR event LIKE 'Leads-%') GROUP BY 1`;
+  const PROF = `WITH l AS (SELECT entity_id, COUNT(*) c FROM website.booking_enquiries WHERE is_test_lead=false AND created_at>=now()-interval '30 days' AND entity_id::text IN (${inlist}) GROUP BY 1),
+    r AS (SELECT entity_id, COUNT(*) c FROM reviews.reviews WHERE is_deleted=false AND review_time>=now()-interval '30 days' AND entity_id::text IN (${inlist}) GROUP BY 1),
+    g AS (SELECT gl.entity_id, SUM(m.website_clicks+m.call_clicks+m.business_direction_requests) c FROM gbp.metrics m JOIN gbp.locations gl ON gl.name=m.location_name WHERE m.metrics_timestamp>=now()-interval '30 days' AND gl.entity_id::text IN (${inlist}) GROUP BY 1)
+    SELECT e.eid::text eid, COALESCE(l.c,0) leads30, COALESCE(r.c,0) reviews30, COALESCE(g.c,0) gbp30
+    FROM (SELECT unnest(ARRAY[${inlist}])::uuid eid) e
+    LEFT JOIN l ON l.entity_id=e.eid LEFT JOIN r ON r.entity_id=e.eid LEFT JOIN g ON g.entity_id=e.eid`;
+  const num = (v: unknown) => Number(v) || 0;
+  try {
+    const [appRows, profRows] = await Promise.all([queryAurora(APP), queryAurora(PROF)]);
+    for (const r of appRows) m.set(String(r.eid), { appDays: num(r.app_days), leadViews: num(r.lead_views), leads30: 0, gbp30: 0, reviews30: 0 });
+    for (const r of profRows) {
+      const e = String(r.eid);
+      const cur = m.get(e) || { appDays: 0, leadViews: 0, leads30: 0, gbp30: 0, reviews30: 0 };
+      cur.leads30 = num(r.leads30); cur.reviews30 = num(r.reviews30); cur.gbp30 = num(r.gbp30);
+      m.set(e, cur);
+    }
+  } catch (e) {
+    console.warn("[void] engagement fetch failed; scoring without engagement:", String((e as Error)?.message || e).slice(0, 120));
+  }
+  return m;
+}
 
 export async function getVoidInvoices(refresh = false): Promise<VoidInvoice[]> {
   if (!refresh && cache && Date.now() - cache.at < TTL_MS) return cache.rows;
@@ -131,6 +211,8 @@ export async function getVoidInvoices(refresh = false): Promise<VoidInvoice[]> {
         ticket: t ? { identifier: t.identifier, title: t.title, url: t.url, classification: t.classification || "" } : null,
         multiMonth: false, // filled below
         inBook: r.in_book === true,
+        engagement: null, // filled below
+        recovery: { tier: "D", score: 0, action: "", engaged: false }, // filled below
       };
     });
 
@@ -142,6 +224,15 @@ export async function getVoidInvoices(refresh = false): Promise<VoidInvoice[]> {
       (monthsByKey.get(key) ?? monthsByKey.set(key, new Set()).get(key)!).add(r.invoiceMonth);
     }
     out = out.map((r) => ({ ...r, multiMonth: (monthsByKey.get(r.entityId || r.customerId || r.invoiceId)?.size ?? 0) >= 2 }));
+
+    // Engagement + recoverability: fetch 30d product usage for the book's entities,
+    // then score each invoice (degrades gracefully — no engagement ⇒ still scored).
+    const entityIds = [...new Set(out.map((r) => r.entityId).filter((e): e is string => !!e))];
+    const engByEntity = await getEngagementByEntity(entityIds);
+    out = out.map((r) => {
+      const eng = r.entityId ? engByEntity.get(r.entityId) ?? null : null;
+      return { ...r, engagement: eng, recovery: recoverability(r, eng) };
+    });
 
     cache = { at: Date.now(), rows: out };
     return out;
