@@ -88,16 +88,12 @@ function pct(part: number, activeAccounts: number): number | null {
 /** Derive both churn percentages from the counts, honouring the zero-book rule.
  *  Callers that already have percentages (the workbook backfill) pass them
  *  through; callers that only have counts use this. */
-export function churnPercentages(row: {
-  activeAccounts: number;
-  churned30d: number;
-  churnedMtd: number;
-}): { churnPct30d: number | null; churnPctMtd: number | null } {
-  return {
-    churnPct30d: pct(row.churned30d, row.activeAccounts),
-    churnPctMtd: pct(row.churnedMtd, row.activeAccounts),
-  };
-}
+// churnPercentages() was removed on 04/08/26. It divided by `activeAccounts`
+// alone, while the report — and the five backfilled days already in the table —
+// use `churned / (active + churned)`. Two churn definitions one file apart, with
+// the wrong one exported and uncalled, is a trap: picking it up would silently
+// change the series and look like a real movement. The live definition lives in
+// amReport.ts (`churnPct`), next to the data it describes.
 
 /**
  * Upsert one row per AM for `date`. Re-running the same day updates in place —
