@@ -21,7 +21,9 @@ const ANALYSER_PROMPT = `Produce a complete ACCOUNT ANALYSIS for this account, a
 10. Recommended first-call agenda (numbered) and a 30-day objective.
 11. Final assessment — value, main threat, expansion potential.
 
-Rules: ground every statement strictly in the provided communication and tickets — never invent names, dates, prices, or commitments. Distinguish clearly between what was CLAIMED/promised and what is CONFIRMED. Separate visibility, leads, and bookings; do not treat rankings as bookings or a promise as a delivered fact. Where the context is silent, say so rather than guessing. Write clean professional prose with clear headers; be thorough.`;
+Rules: ground every statement strictly in the provided communication and tickets — never invent names, dates, prices, or commitments. Distinguish clearly between what was CLAIMED/promised and what is CONFIRMED. Separate visibility, leads, and bookings; do not treat rankings as bookings or a promise as a delivered fact. Where the context is silent, say so rather than guessing.
+
+Length: the ENTIRE analysis — all 11 sections — must fit in one response. Write densely: lead with tables and tight bullet points, keep prose minimal and specific, and cut every filler word, hedge, and repetition. State each fact and flag once. For high-history accounts, prioritise the highest-signal facts and flags and compress the rest — never drop a section or a material finding to save space. Aim for roughly 2,500 words; completeness of coverage matters more than length.`;
 
 // Minimal markdown → HTML (headers, bold/italic, tables, lists, blockquotes, rules)
 // so the analysis downloads as a clean Word document. No dependency: Word opens

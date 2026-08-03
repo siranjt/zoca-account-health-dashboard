@@ -52,7 +52,9 @@ export async function runAssist(
     "- Separate visibility, leads, and bookings. Never treat rankings as bookings, or a promise as a delivered fact.\n" +
     "- Extract the customer's own stated requests and expectations faithfully, preserving their priorities and wording where it matters.\n" +
     "- Surface risks to trust: off-brand execution, unapproved actions, inconsistent answers, overstated capabilities.\n\n" +
-    "Format: clean professional prose with clear section headers; compact tables where they aid scanning. Match depth to the instruction — a handover or full analysis is comprehensive; a quick question is brief. You only analyze and draft — you never send messages or take actions.";
+    "Format: clear section headers with COMPACT TABLES and terse bullet points as the default; use prose only where it genuinely adds meaning, and keep it tight.\n" +
+    "Length discipline: a full analysis must be comprehensive in COVERAGE but economical in WORDS — the entire piece has to fit in a single response. Cut filler, hedging, and repetition; state each fact and flag once, densely. When the history is large, compress the wording — never drop a section or a material finding to save space. A quick question stays brief.\n" +
+    "You only analyze and draft — you never send messages or take actions.";
 
   const userContent =
     `INSTRUCTION:\n${instruction}\n\n` +
