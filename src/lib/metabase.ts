@@ -91,6 +91,70 @@ export async function queryAurora(sql: string): Promise<Row[]> {
   return runDataset(cfg, sql);
 }
 
+/** Metabase origin with no trailing slash, or null when unconfigured. Public
+ *  (unauthenticated) endpoints need only this, not the API key. */
+export function metabaseBaseUrl(): string | null {
+  const url = process.env.METABASE_BASE_URL ?? process.env.METABASE_URL;
+  return url ? url.replace(/\/+$/, "") : null;
+}
+
+/**
+ * Run a SAVED Metabase Question by id and return its rows as objects.
+ * Read-only: POST /api/card/:id/query executes the card, it never edits it.
+ * Used for BaseSheet card 1335 (entity_id → am_name), which is a Question
+ * rather than a table we can reach with native SQL.
+ */
+export async function runMetabaseCard(cardId: number): Promise<Row[]> {
+  const cfg = readMetabaseConfig();
+  if (!cfg) throw new Error("Metabase not configured (METABASE_BASE_URL / METABASE_API_KEY)");
+  const res = await fetch(`${cfg.url}/api/card/${cardId}/query`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-key": cfg.apiKey },
+    body: "{}",
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Metabase card ${cardId}: ${res.status} ${(await res.text()).slice(0, 200)}`);
+  const json: any = await res.json();
+  if (json?.error) throw new Error(`Metabase card ${cardId} failed: ${String(json.error).slice(0, 200)}`);
+  const cols: Array<{ name: string }> = json?.data?.cols ?? [];
+  const rows: unknown[][] = json?.data?.rows ?? [];
+  return rows.map((r) => {
+    const o: Row = {};
+    cols.forEach((c, i) => (o[c.name] = r[i]));
+    return o;
+  });
+}
+
+/** Raw CSV text of a PUBLIC Metabase question (shared link — no API key). */
+export async function fetchPublicQuestionCsv(uuid: string): Promise<string> {
+  const base = metabaseBaseUrl();
+  if (!base) throw new Error("METABASE_BASE_URL not set");
+  const res = await fetch(`${base}/public/question/${uuid}.csv`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Metabase public question ${uuid}: ${res.status}`);
+  return res.text();
+}
+
+/**
+ * One dashcard of a PUBLIC dashboard, as column display names + raw rows.
+ * The scheduling onboarding counts live only on dashboard cards, not in a table.
+ */
+export async function fetchPublicDashcard(
+  dashboardUuid: string,
+  dashcardId: number,
+  cardId: number,
+): Promise<{ cols: string[]; rows: unknown[][] }> {
+  const base = metabaseBaseUrl();
+  if (!base) throw new Error("METABASE_BASE_URL not set");
+  const url = `${base}/api/public/dashboard/${dashboardUuid}/dashcard/${dashcardId}/card/${cardId}?parameters=[]`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Metabase public dashcard ${dashcardId}/${cardId}: ${res.status}`);
+  const json: any = await res.json();
+  const data = json?.data ?? {};
+  if (json?.error) throw new Error(`dashcard ${dashcardId}/${cardId} failed: ${String(json.error).slice(0, 200)}`);
+  const cols: string[] = (data.cols ?? []).map((c: any) => String(c.display_name ?? c.name ?? ""));
+  return { cols, rows: (data.rows ?? []) as unknown[][] };
+}
+
 async function runDataset(cfg: MetabaseConfig, sql: string): Promise<Row[]> {
   const res = await fetch(`${cfg.url}/api/dataset`, {
     method: "POST",

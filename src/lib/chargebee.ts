@@ -54,6 +54,64 @@ type CBInvoice = {
   date?: number; due_date?: number; paid_at?: number;
 };
 
+// ---- Book-wide listing (AM daily report) -------------------------------------
+// Everything above is per-account. The AM report needs the whole book, so it
+// needs list endpoints that page to exhaustion. Chargebee's `offset` is an
+// opaque cursor, so a single stream is unavoidably sequential — concurrency
+// comes from running several *filtered* streams at once (see amReport.ts), not
+// from parallelising one.
+
+export interface CbSubscription {
+  id: string;
+  status: string;
+  cf_entity_id?: string;
+  mrr?: number;
+  cancelled_at?: number;
+}
+
+export interface CbInvoiceLite {
+  id?: string;
+  status: string;
+  subscription_id?: string;
+  amount_due?: number;
+  due_date?: number;
+  deleted?: boolean;
+}
+
+async function cbListAll<T>(
+  path: string,
+  key: string,
+  filter: Record<string, string>,
+  maxPages = 200,
+): Promise<T[]> {
+  const out: T[] = [];
+  let offset: string | undefined;
+  for (let page = 0; page < maxPages; page++) {
+    const params: Record<string, string> = { ...filter, limit: "100" };
+    if (offset) params.offset = offset;
+    const res = await cbGet<{ list: Array<Record<string, T>>; next_offset?: string }>(path, params);
+    for (const row of res.list || []) if (row[key] != null) out.push(row[key]);
+    if (!res.next_offset) return out;
+    offset = res.next_offset;
+  }
+  // A truncated book would silently understate every metric downstream.
+  throw new Error(`Chargebee ${path}: more than ${maxPages} pages for filter ${JSON.stringify(filter)}`);
+}
+
+/** Every subscription matching a Chargebee list filter, e.g. `{"status[is]":"active"}`. */
+export function listSubscriptions(filter: Record<string, string>): Promise<CbSubscription[]> {
+  return cbListAll<CbSubscription>("/subscriptions", "subscription", filter);
+}
+
+/** Every invoice matching a Chargebee list filter, e.g. `{"status[is]":"payment_due"}`. */
+export function listInvoices(filter: Record<string, string>): Promise<CbInvoiceLite[]> {
+  return cbListAll<CbInvoiceLite>("/invoices", "invoice", filter);
+}
+
+export function chargebeeConfigured(): boolean {
+  return Boolean(KEY);
+}
+
 // Fetch EVERY invoice for a scope, oldest-first. Chargebee lists are cursor-paged
 // via `offset`/`next_offset`; loop until exhausted, capped at 20 pages (2000 invoices)
 // so a pathological account can never hang the request.
