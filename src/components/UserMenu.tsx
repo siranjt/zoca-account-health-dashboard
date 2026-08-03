@@ -68,11 +68,11 @@ export default function UserMenu() {
         <>
           <a
             href="/admin/lead-droughts"
-            title={u.role === "am" ? "Your quiet accounts" : "Lead droughts"}
+            title={u.role === "am" ? "Your quiet accounts — no incoming leads" : "Accounts gone quiet — no incoming leads"}
             className="rounded-md border px-2 py-1.5 text-[10px] uppercase tracking-[0.12em] no-underline"
             style={{ borderColor: "var(--cave-line)", color: "var(--cave-dim)" }}
           >
-            🏜️ Droughts
+            🦇 Bat-Signal
           </a>
           <a
             href="/admin/void"
@@ -80,7 +80,7 @@ export default function UserMenu() {
             className="rounded-md border px-2 py-1.5 text-[10px] uppercase tracking-[0.12em] no-underline"
             style={{ borderColor: "var(--cave-line)", color: "var(--cave-dim)" }}
           >
-            🕳️ Void
+            🃏 Rogues
           </a>
         </>
       )}

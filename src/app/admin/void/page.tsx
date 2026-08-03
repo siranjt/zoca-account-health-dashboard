@@ -17,7 +17,7 @@ export default async function AdminVoidPage() {
       <main className="mx-auto max-w-[1600px] px-4 py-5">
         <div className="mb-4">
           <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400/70">{isAm ? "Your book" : "Admin"}</div>
-          <h1 className="cave-decode text-2xl font-semibold tracking-tight">Void</h1>
+          <h1 className="cave-decode text-2xl font-semibold tracking-tight">Rogues</h1>
           <p className="mt-1 text-sm text-slate-400">
             {isAm
               ? "Your unpaid invoices — every Chargebee invoice on your accounts that's payment-due or not-paid, with the phone and context to chase it."
