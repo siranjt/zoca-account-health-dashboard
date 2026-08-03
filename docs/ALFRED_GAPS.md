@@ -55,6 +55,14 @@ in one turn), and back-to-back re-asks by the same user.
 - **F2 (new tool `book_tickets_by_manager`):** one call → per-AM active/closed
   ticket counts by classification across the whole book. Kills the 10–11× loop.
 
+- **F3 (prompt):** hard rule against the intermittent memory refusal. The SAME
+  "remember that…" question was asked twice — once Alfred used `remember` and
+  saved correctly, once he claimed *"I don't have a built-in write-to-memory
+  tool"* and told the user to log it in Keeper/HubSpot instead. Inconsistency,
+  not a missing tool. Prompt now: MUST call `remember` on explicit save
+  requests; NEVER claim the capability doesn't exist; if a save fails, say the
+  save failed (not that the tool is absent).
+
 ## Not done (candidates for next iteration — needs a decision)
 - **"Website tickets" as a real category** — would need a product/technical
   Linear team synced with a topic field. Today that taxonomy doesn't exist in
@@ -66,3 +74,4 @@ in one turn), and back-to-back re-asks by the same user.
 | Date | Change | Why |
 |---|---|---|
 | 03/08/26 | Initial analysis; F1 + F2 applied | 28% ticket questions, worst thrashing + false "I can't" |
+| 03/08/26 | F3 applied | Intermittent false "no memory tool" refusal (same Q answered both ways) |
