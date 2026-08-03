@@ -181,6 +181,8 @@ export interface AccountDetail {
   bookingsByCreator?: { creatorType: string | null; count: number }[];
   wowTasks?: { wk: string; total: number; completed: number; cancelled: number; pending: number; resolutionPct: number | null }[];
   callbackActions?: { action: string | null; count: number }[];
+  frontDeskStatus?: { active: string | null; botActive: boolean | null; voiceActive: boolean | null; virtualNumber: boolean | null; channel: string | null; onboardedDate: string | null } | null;
+  frontDeskCalls?: { wk: string; calls: number }[];
   paymentLinks?: { missedPayment: string | null; paymentMethodUpdate: string | null } | null;
 }
 

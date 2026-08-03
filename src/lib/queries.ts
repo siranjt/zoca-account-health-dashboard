@@ -627,6 +627,27 @@ export function detailCallbackActionsSql(id: string, windowDays: number): string
     GROUP BY l2bcc.action ORDER BY count DESC`;
 }
 
+/** Front Desk (AI receptionist) status — l2b.entities is the setup row; the
+ *  boolean `status` is the master on/off, with per-channel flags. Onboarded date
+ *  comes from l2b.win_onboarding_status (latest completed). No row = not onboarded. */
+export function detailFrontDeskStatusSql(id: string): string {
+  return `SELECT
+      (CASE WHEN e.status THEN 'Active' ELSE 'Paused' END) fd_active,
+      e.is_bot_active fd_bot, e.is_voice_active fd_voice, e.is_virtual_number_active fd_vnum,
+      NULLIF(e.channel,'') fd_channel,
+      (SELECT to_char(max(w.completed_at),'YYYY-MM-DD') FROM l2b.win_onboarding_status w WHERE w.entity_id=e.entity_id AND w.status='completed') fd_onboarded
+    FROM l2b.entities e WHERE e.entity_id='${id}'::uuid LIMIT 1`;
+}
+
+/** Front Desk call volume over the window (non-test), from chatbot.transcript_mapping. */
+export function detailFrontDeskCallsSql(id: string, windowDays: number): string {
+  const w = wDays(windowDays), u = trendUnit(w), f = labelFmt(u);
+  return `SELECT to_char(date_trunc('${u}', ctm.start_time)::date,'${f}') wk, COUNT(*) calls
+    FROM chatbot.transcript_mapping ctm
+    WHERE ctm.entity_id='${id}'::uuid AND ctm.is_test=false AND ctm.start_time >= now()-interval '${w} days'
+    GROUP BY 1 ORDER BY 1`;
+}
+
 /** Public payment action links (Retool "paymentRelatedLinks"). */
 export function detailPaymentLinksSql(id: string): string {
   return `SELECT

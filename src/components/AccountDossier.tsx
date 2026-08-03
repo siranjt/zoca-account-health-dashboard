@@ -51,6 +51,7 @@ const TABS = [
   "Reviews",
   "Payments",
   "Scheduling & Support",
+  "Front Desk",
   "All Data (76)",
 ] as const;
 type Tab = (typeof TABS)[number];
@@ -656,26 +657,6 @@ export default function AccountDossier({
               ) : <NoData />) : skel}
             </ChartCard>
 
-            <ChartCard title="WoW Tasks (weekly)" subtitle="follow-up task volume & completion (l2b.call_callbacks)">
-              {detail ? (detail.wowTasks?.length ? (
-                <MultiLineChart xLabels={detail.wowTasks.map((t) => t.wk)} series={[
-                  { name: "Total", color: VIZ.series[0], values: detail.wowTasks.map((t) => t.total) },
-                  { name: "Completed", color: VIZ.series[3], values: detail.wowTasks.map((t) => t.completed) },
-                  { name: "Pending", color: VIZ.series[1], values: detail.wowTasks.map((t) => t.pending) },
-                ]} />
-              ) : <NoData />) : skel}
-            </ChartCard>
-
-            <ChartCard title="Callback Actions" subtitle="actions taken on AI callbacks (l2b.call_callbacks)">
-              {detail ? (detail.callbackActions?.length ? (
-                <div className="space-y-1 py-1 text-xs">
-                  {detail.callbackActions.map((c) => (
-                    <Row key={c.action ?? "—"} l={c.action ?? "—"} v={formatNumber(c.count)} />
-                  ))}
-                </div>
-              ) : <NoData />) : skel}
-            </ChartCard>
-
             <ChartCard title="Total Calls / Comms" subtitle={`${gran} chat · calls · SMS · email · meetings · ${winN}`}>
               {detail ? (detail.comms?.length ? (
                 <MultiLineChart xLabels={detail.comms.map((c) => c.wk)} series={commsSeries(detail.comms)} />
@@ -738,6 +719,55 @@ export default function AccountDossier({
                 ) : skel}
               </ChartCard>
             </div>
+          </>
+        )}
+
+        {tab === "Front Desk" && (
+          <>
+            <ChartCard title="Front Desk Status" subtitle="AI receptionist setup (l2b.entities · win_onboarding_status)">
+              {detail ? (
+                detail.frontDeskStatus ? (
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <Stat label="Front Desk" value={detail.frontDeskStatus.active ?? "—"} />
+                    <Stat label="Onboarded" value={detail.frontDeskStatus.onboardedDate ? ddmmyy(detail.frontDeskStatus.onboardedDate) : "—"} />
+                    <Stat label="Chat bot" value={yesNo(detail.frontDeskStatus.botActive)} />
+                    <Stat label="Voice agent" value={yesNo(detail.frontDeskStatus.voiceActive)} />
+                    <Stat label="Virtual number" value={yesNo(detail.frontDeskStatus.virtualNumber)} />
+                    <Stat label="Channel" value={detail.frontDeskStatus.channel ?? "—"} />
+                  </div>
+                ) : (
+                  <div className="py-6 text-center text-xs text-slate-400">Not onboarded to Front Desk.</div>
+                )
+              ) : skel}
+            </ChartCard>
+
+            <ChartCard title="Calls Handled (weekly)" subtitle={`${gran} AI front-desk calls · non-test · ${winN}`}>
+              {detail ? (detail.frontDeskCalls?.length ? (
+                <MultiLineChart xLabels={detail.frontDeskCalls.map((c) => c.wk)} series={[
+                  { name: "Calls", color: VIZ.series[0], values: detail.frontDeskCalls.map((c) => c.calls) },
+                ]} />
+              ) : <NoData />) : skel}
+            </ChartCard>
+
+            <ChartCard title="WoW Tasks (weekly)" subtitle="follow-up task volume & completion (l2b.call_callbacks)">
+              {detail ? (detail.wowTasks?.length ? (
+                <MultiLineChart xLabels={detail.wowTasks.map((t) => t.wk)} series={[
+                  { name: "Total", color: VIZ.series[0], values: detail.wowTasks.map((t) => t.total) },
+                  { name: "Completed", color: VIZ.series[3], values: detail.wowTasks.map((t) => t.completed) },
+                  { name: "Pending", color: VIZ.series[1], values: detail.wowTasks.map((t) => t.pending) },
+                ]} />
+              ) : <NoData />) : skel}
+            </ChartCard>
+
+            <ChartCard title="Callback Actions" subtitle="actions taken on AI callbacks (l2b.call_callbacks)">
+              {detail ? (detail.callbackActions?.length ? (
+                <div className="space-y-1 py-1 text-xs">
+                  {detail.callbackActions.map((c) => (
+                    <Row key={c.action ?? "—"} l={c.action ?? "—"} v={formatNumber(c.count)} />
+                  ))}
+                </div>
+              ) : <NoData />) : skel}
+            </ChartCard>
           </>
         )}
 
