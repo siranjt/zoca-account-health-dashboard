@@ -4,6 +4,25 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 interface PromptMeta { function: string; type: string; useCase: string; }
 
+// One-click comprehensive read — reads the full comms + ticket history and
+// produces a handover-grade account analysis. Kept in code (not the shared
+// prompt catalog) so it's versioned with the app.
+const ANALYSER_PROMPT = `Produce a complete ACCOUNT ANALYSIS for this account, at the standard of a rigorous customer-success analyst briefing an incoming account manager. Read ALL the communication history and every Linear ticket provided, then write a structured document with these sections:
+
+1. Executive summary — business, primary contact, email, phone, location, website, current tools, selected Zoca product(s), discussed pricing, launch date, previous AM. Facts only; mark anything inferred as "reported".
+2. Account health — a compact table: overall, relationship, churn risk, product adoption, lead activity, brand sensitivity, main risk, ticket status (one line each).
+3. Business background — history, recent changes, service mix, and the owner's real goal (beyond "more leads").
+4. Sales & product history — options and prices presented, what they chose, what is ambiguous.
+5. Billing — REQUIRES VERIFICATION. List explicitly what the comms/tickets do NOT confirm (trial dates, setup fee, first payment, next renewal). Never assume billing facts.
+6. What the customer specifically requested — extract their stated expectations faithfully, grouped (visibility, priority services, geography, competitor intel, reporting, content ownership, etc.).
+7. Delivery vs promises — compare what onboarding/tickets claim was done against what was actually validated; surface every contradiction (e.g. content promised as customer-published vs an automated email that auto-drafted it; name/spelling mismatches; "Done" tickets with blank required fields).
+8. Open commitments & unresolved items — split Critical vs Important, each with the concrete next action.
+9. Customer profile & communication style — what will work and what to avoid with this person.
+10. Recommended first-call agenda (numbered) and a 30-day objective.
+11. Final assessment — value, main threat, expansion potential.
+
+Rules: ground every statement strictly in the provided communication and tickets — never invent names, dates, prices, or commitments. Distinguish clearly between what was CLAIMED/promised and what is CONFIRMED. Separate visibility, leads, and bookings; do not treat rankings as bookings or a promise as a delivered fact. Where the context is silent, say so rather than guessing. Write clean professional prose with clear headers; be thorough.`;
+
 export default function AiAssist({
   entityId,
   windowDays,
@@ -114,7 +133,7 @@ export default function AiAssist({
     <div className="rounded-xl border p-3" style={{ borderColor: "var(--cave-line2)", background: "var(--cave-panel)" }}>
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold" style={{ color: "var(--cave-cy)" }}>✨ AI Assist</span>
-        <span className="text-xs text-slate-400">· pick a prompt or write your own · runs over the last {windowDays}d of communication</span>
+        <span className="text-xs text-slate-400">· run the Account Analyser, pick a prompt, or write your own · reads the full communication history</span>
       </div>
 
       {focusBody && (
@@ -145,6 +164,16 @@ export default function AiAssist({
           {useCases.map((u) => <option key={u} value={u}>{u}</option>)}
         </select>
         {loadingPrompt && <span className="self-center text-xs text-slate-400">loading prompt…</span>}
+      </div>
+
+      {/* one-click comprehensive analysis */}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => { setInstruction(ANALYSER_PROMPT); setResponse(null); setError(null); }}
+          className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold text-cyan-300 transition-colors hover:bg-cyan-400/10"
+          style={{ borderColor: "var(--cave-line2)" }}>
+          🔎 Account Analyser
+        </button>
+        <span className="text-[10px] text-slate-500">full-history handover-grade read · can take a minute or two</span>
       </div>
 
       {/* instruction (editable / run your own) */}

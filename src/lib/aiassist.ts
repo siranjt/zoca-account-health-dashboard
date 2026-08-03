@@ -7,9 +7,9 @@ import { getComms } from "@/lib/comms";
 // drafts/answers; it never sends or writes anything.
 
 const MODEL = process.env.ANTHROPIC_ASK_MODEL || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
-const TIMEOUT_MS = 55_000;
-const CTX_MESSAGES = 40; // recent messages included as context
-const CTX_BODY_CAP = 1200; // per-message chars in context
+const TIMEOUT_MS = 170_000; // room for a full handover-length generation
+const CTX_MESSAGES = 120; // messages included as context (getComms caps at 600)
+const CTX_BODY_CAP = 2000; // per-message chars in context
 
 export interface AssistResult {
   response: string;
@@ -27,7 +27,10 @@ export async function runAssist(
   const instruction = (opts.instruction || "").trim();
   if (!instruction) return { response: "", usedMessages: 0, usedTickets: 0, error: "No prompt/instruction provided." };
 
-  const comms = await getComms(entityId, opts.windowDays).catch(() => null);
+  // Analysis reads the account's FULL history, not just the page's window — a
+  // handover or health read needs everything. getComms caps at 600 messages.
+  const w = Math.min(3650, Math.max(opts.windowDays || 0, 365));
+  const comms = await getComms(entityId, w).catch(() => null);
   const messages = comms?.messages ?? [];
   const tickets = comms?.tickets ?? [];
 
@@ -36,21 +39,25 @@ export async function runAssist(
     .map((m) => `[${m.type}${m.sender ? " · " + m.sender : ""}${m.at ? " · " + m.at.slice(0, 16) : ""}]\n${(m.body || "").slice(0, CTX_BODY_CAP)}`)
     .join("\n\n---\n\n");
   const ctxTickets = tickets
-    .slice(0, 20)
-    .map((t) => `- [${t.state || "?"}] ${t.title || "?"}${t.assignee ? " (" + t.assignee + ")" : ""}${t.description ? ": " + t.description.slice(0, 200) : ""}`)
+    .slice(0, 80)
+    .map((t) => `- [${t.state || "?"}] ${t.title || "?"}${t.assignee ? " (" + t.assignee + ")" : ""}${t.createdAt ? " · " + t.createdAt.slice(0, 10) : ""}${t.description ? "\n  " + t.description.slice(0, 700).replace(/\s+/g, " ") : ""}`)
     .join("\n");
 
   const system =
-    "You are Alfred, a communication assistant for Zoca's customer-success and finance team. " +
-    "You are given ONE account's recent communication history (app chat, calls, SMS, email, and meeting transcripts) and its Linear tickets. " +
-    "Follow the user's instruction precisely. Ground every statement strictly in the provided context — never invent facts, names, dates, or commitments that aren't present. " +
-    "Be concise, specific, and skimmable. If the context lacks what the instruction needs, say so plainly. " +
-    "You only draft and analyze — you never send messages or take actions.";
+    "You are Alfred, a senior customer-success analyst for Zoca. You are given ONE account's communication history (app chat, calls, SMS, email, meeting transcripts) and its Linear tickets, plus an instruction. Produce work at the standard of a rigorous account handover: thorough, precise, and decision-ready.\n\n" +
+    "Discipline (non-negotiable):\n" +
+    "- Ground every statement strictly in the provided communication and tickets. Never invent a name, date, price, product, or commitment that is not present.\n" +
+    "- Distinguish clearly between what was CLAIMED or promised and what is CONFIRMED. Call out promises, ambiguities, and contradictions explicitly (e.g. a capability described in an email that the tickets don't support; a name/spelling mismatch; a 'Done' ticket with blank required fields).\n" +
+    "- When something the instruction needs is NOT in the context (billing, payment status, renewal dates, etc.), say so plainly and list it under 'requires verification' — never guess or fill the gap.\n" +
+    "- Separate visibility, leads, and bookings. Never treat rankings as bookings, or a promise as a delivered fact.\n" +
+    "- Extract the customer's own stated requests and expectations faithfully, preserving their priorities and wording where it matters.\n" +
+    "- Surface risks to trust: off-brand execution, unapproved actions, inconsistent answers, overstated capabilities.\n\n" +
+    "Format: clean professional prose with clear section headers; compact tables where they aid scanning. Match depth to the instruction — a handover or full analysis is comprehensive; a quick question is brief. You only analyze and draft — you never send messages or take actions.";
 
   const userContent =
     `INSTRUCTION:\n${instruction}\n\n` +
     (opts.selectedBody ? `FOCUS MESSAGE (the user selected this):\n${opts.selectedBody.slice(0, 3000)}\n\n` : "") +
-    `ACCOUNT COMMUNICATION — last ${comms?.windowDays ?? opts.windowDays}d, ${comms?.total ?? 0} messages total, showing ${Math.min(CTX_MESSAGES, messages.length)} most recent:\n${ctxMsgs || "(no messages in this window)"}\n\n` +
+    `ACCOUNT COMMUNICATION — full history, ${comms?.total ?? 0} messages total, showing the ${Math.min(CTX_MESSAGES, messages.length)} most recent:\n${ctxMsgs || "(no messages found)"}\n\n` +
     `LINEAR TICKETS:\n${ctxTickets || "(none)"}`;
 
   const ctrl = new AbortController();
@@ -59,7 +66,7 @@ export async function runAssist(
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: MODEL, max_tokens: 1600, system, messages: [{ role: "user", content: userContent }] }),
+      body: JSON.stringify({ model: MODEL, max_tokens: 5000, system, messages: [{ role: "user", content: userContent }] }),
       signal: ctrl.signal,
     });
     if (!r.ok) {
