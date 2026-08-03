@@ -1,18 +1,22 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/scope";
-import { getLeadDroughts } from "@/lib/leadDroughts";
+import { getLeadDroughts, scopeDroughts } from "@/lib/leadDroughts";
 
-// Admin-only lead-drought readout: accounts with no incoming leads for a
-// continuous stretch. JSON by default; ?format=csv&days=N returns the accounts
-// dry for >= N days.
+// Lead-drought readout: accounts with no incoming leads for a continuous stretch.
+// Visible to admin / manager / am; AMs are scoped server-side to their own
+// accounts only (fail-closed). JSON by default; ?format=csv&days=N exports the
+// SAME scoped set for accounts dry >= N days.
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET(req: Request) {
   const viewer = await getViewer();
-  if (viewer.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (viewer.role !== "admin" && viewer.role !== "manager" && viewer.role !== "am") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
-  const rows = await getLeadDroughts();
+  // SECURITY BOUNDARY: scope to the viewer BEFORE anything is returned/exported.
+  const rows = scopeDroughts(await getLeadDroughts(), viewer);
   const { searchParams } = new URL(req.url);
 
   if (searchParams.get("format") === "csv") {

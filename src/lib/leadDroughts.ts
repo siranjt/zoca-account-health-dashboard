@@ -77,3 +77,14 @@ export async function getLeadDroughts(): Promise<DroughtRow[]> {
   })().finally(() => { inflight = null; });
   return inflight;
 }
+
+/** Restrict the drought list to what a viewer may see. AMs see ONLY their own
+ *  accounts (exact amName match, same rule as scopeAccounts); an AM with no
+ *  amName sees nothing (fail-closed). Managers and admins see the whole book.
+ *  Apply server-side — never rely on the client's filters. */
+export function scopeDroughts(rows: DroughtRow[], viewer: { role: string | null; amName: string | null }): DroughtRow[] {
+  if (viewer.role === "am") {
+    return viewer.amName ? rows.filter((r) => r.amName === viewer.amName) : [];
+  }
+  return rows;
+}

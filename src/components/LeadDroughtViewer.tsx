@@ -50,7 +50,7 @@ function tierGroup(tier: string | null): string {
   return "Other";
 }
 
-export default function LeadDroughtViewer() {
+export default function LeadDroughtViewer({ isAdmin = false }: { isAdmin?: boolean }) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(3);
@@ -167,28 +167,30 @@ export default function LeadDroughtViewer() {
 
   return (
     <div>
-      {/* send AM alerts */}
-      <div className="mb-3 flex items-center gap-3">
-        <button
-          onClick={sendAlerts}
-          disabled={sending}
-          className="rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
-          style={{ borderColor: "#22d3ee", color: "#22d3ee", background: "rgba(34,211,238,.08)" }}
-          title="DM each AM their quiet accounts via Slack"
-        >
-          {sending ? "Sending…" : "📣 Send AM alerts"}
-        </button>
-        <button
-          onClick={testToMe}
-          disabled={sending}
-          className="rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
-          style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}
-          title="DM one sample digest to your own Slack (no AM is touched)"
-        >
-          🧪 Test to me
-        </button>
-        {sendMsg && <span className="text-xs text-slate-500">{sendMsg}</span>}
-      </div>
+      {/* send AM alerts — admin only (these DM real AMs via Slack) */}
+      {isAdmin && (
+        <div className="mb-3 flex items-center gap-3">
+          <button
+            onClick={sendAlerts}
+            disabled={sending}
+            className="rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+            style={{ borderColor: "#22d3ee", color: "#22d3ee", background: "rgba(34,211,238,.08)" }}
+            title="DM each AM their quiet accounts via Slack"
+          >
+            {sending ? "Sending…" : "📣 Send AM alerts"}
+          </button>
+          <button
+            onClick={testToMe}
+            disabled={sending}
+            className="rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+            style={{ borderColor: "var(--cave-line2)", color: "var(--cave-dim)" }}
+            title="DM one sample digest to your own Slack (no AM is touched)"
+          >
+            🧪 Test to me
+          </button>
+          {sendMsg && <span className="text-xs text-slate-500">{sendMsg}</span>}
+        </div>
+      )}
 
       {/* threshold toggle */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
