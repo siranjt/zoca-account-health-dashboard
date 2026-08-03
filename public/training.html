@@ -633,7 +633,77 @@
   </section>
 
   <!-- M9 CERT -->
+  <!-- M9 NEW TOOLS: ROGUES & BAT-SIGNAL -->
   <section class="mod" data-m="9">
+    <div class="kick rise" style="color:var(--gold)"><span style="width:26px;height:1px;background:linear-gradient(90deg,var(--gold),transparent)"></span>Module 10 · New tools</div>
+    <h1 class="mt rise">Rogues &amp; Bat-Signal</h1>
+    <div class="sub rise">Two new surfaces, both scoped to your book — the accounts that owe you money, and the accounts that have gone quiet.</div>
+
+    <div class="grid2">
+      <div class="card brk rise">
+        <div class="kick" style="color:var(--gold)"><span style="width:20px;height:1px;background:linear-gradient(90deg,var(--gold),transparent)"></span>🃏 Rogues</div>
+        <p style="margin-top:8px"><b>Your unpaid invoices.</b> Every Chargebee invoice on your accounts that's <b>payment-due</b> or <b>not-paid</b> — the chase list, with the phone, amount, days overdue and any linked ticket for each row.</p>
+        <div class="kv" style="grid-template-columns:repeat(3,1fr)">
+          <div class="kvc"><div class="v" style="color:var(--red)">$1,847</div><div class="l">Outstanding</div></div>
+          <div class="kvc"><div class="v">9</div><div class="l">Invoices</div></div>
+          <div class="kvc"><div class="v" style="color:var(--amber)">4</div><div class="l">Auto-debit off</div></div>
+        </div>
+      </div>
+      <div class="card brk rise">
+        <div class="kick" style="color:var(--cy)"><span style="width:20px;height:1px;background:linear-gradient(90deg,var(--cy),transparent)"></span>🦇 Bat-Signal</div>
+        <p style="margin-top:8px"><b>Your quiet accounts.</b> Accounts on your book with <b>no incoming leads</b> for a continuous stretch — banded by how long they've gone dark, so a drop-off surfaces on its own.</p>
+        <div class="callout" style="margin:14px 0 0"><div class="t">Why it matters</div>A <b>3-day</b> drought is a quick call. A <b>30-day</b> one is usually already halfway out the door. Catch them while they're still saveable.</div>
+      </div>
+    </div>
+
+    <h3 class="sec">Rogues — work the chase list</h3>
+    <div class="mock">
+      <div class="cap">One row on your Rogues book — click-to-copy phone, log the call inline</div>
+      <div class="row" data-red="1">
+        <span class="dot r"></span>
+        <div><div class="nm2">Pamper Me Total Beauty Spa</div><div class="meta2">payment&nbsp;due · $600 · 18 days overdue · 🔒 no ticket</div></div>
+        <span class="badge" style="margin-left:auto">📞 copy phone</span>
+        <span class="seg reg" data-tip="You log who called and how it went — saved live, the whole team sees it">Caller ▾</span>
+        <span class="seg cas" data-tip="Connected · VM · Not connected">Connection ▾</span>
+      </div>
+      <p style="font-size:13px;color:var(--dim);margin:6px 2px 0">Every row carries the account link, sub-status, auto-debit on/off, ACH-in-flight, and editable <b>Caller / Connection / Comments</b> cells — your call log, saved the moment you blur the field.</p>
+    </div>
+    <div class="grid3">
+      <div class="card feat"><div class="fi" style="color:var(--gold)">◱</div><b>Charts drill down</b><span>Click the funnel, a bar, or a status — the table filters to it.</span></div>
+      <div class="card feat"><div class="fi" style="color:var(--gold)">⭳</div><b>Export Excel</b><span>The full styled workbook, per month + multi-month.</span></div>
+      <div class="card feat"><div class="fi" style="color:var(--gold)">↻</div><b>Refresh live</b><span>Pull the latest straight from Chargebee.</span></div>
+    </div>
+
+    <h3 class="sec">Bat-Signal — catch drops early</h3>
+    <p>Toggle a band to see how many of your accounts have gone that long without a lead. Masked accounts (leads withheld over billing) are flagged <b>🔒</b> — dry by design, not a real drought.</p>
+    <div class="chips" id="bsBands">
+      <div class="chip on" data-band="3">3–6 days <b style="color:var(--cy2)">·5</b></div>
+      <div class="chip" data-band="7">7–13 days <b style="color:var(--cy2)">·3</b></div>
+      <div class="chip" data-band="14">14–29 days <b style="color:var(--cy2)">·2</b></div>
+      <div class="chip" data-band="30">30+ days <b style="color:var(--red)">·1</b></div>
+    </div>
+    <div class="mock" style="margin-top:10px">
+      <div class="cap"><span id="bsCap">Accounts dry 3–6 days</span></div>
+      <div class="row" data-b="3"><span class="dot y"></span><div><div class="nm2">Judy Hair Salon</div><div class="meta2">4 days dry · last lead 27/07 · $150 MRR</div></div></div>
+      <div class="row" data-b="3"><span class="dot y"></span><div><div class="nm2">Rockstar Hair</div><div class="meta2">5 days dry · last lead 26/07 · $199 MRR</div></div></div>
+      <div class="row" data-b="7"><span class="dot y"></span><div><div class="nm2">Bhumi's Salon</div><div class="meta2">12 days dry · last lead 19/07 · $120 MRR</div></div></div>
+      <div class="row" data-b="14"><span class="dot r"></span><div><div class="nm2">Laser Now</div><div class="meta2">19 days dry · last lead 12/07 · 🔒 masked</div></div></div>
+      <div class="row" data-b="30"><span class="dot r"></span><div><div class="nm2">Pamela Hair Salon</div><div class="meta2">31+ days dry · never in the window · $100 MRR</div></div></div>
+    </div>
+
+    <div class="callout gold"><div class="t">Scoped to you</div>Both Rogues and Bat-Signal show <b>only your accounts</b> — you never see another AM's book, and no one sees yours. Admins send the weekly Slack nudge; you just work the list.</div>
+
+    <div class="quiz" data-quiz>
+      <div class="q">An account of yours shows on Bat-Signal at <b>4 days dry</b>. Best move?</div>
+      <button class="opt">Ignore it — 4 days is nothing.</button>
+      <button class="opt" data-correct>Call now — a short drought is the cheapest to fix before it becomes 30.</button>
+      <button class="opt">Wait for the 30+ band.</button>
+      <div class="fb"></div>
+    </div>
+  </section>
+
+  <!-- M10 CERTIFICATE -->
+  <section class="mod" data-m="10">
     <div class="cert-wrap">
       <div class="kick" style="justify-content:center">Certification</div>
       <div class="cert" id="certCard">
@@ -664,7 +734,7 @@
 
 <script>
 (function(){
-  var MODS=[{t:"Orientation",ic:"1"},{t:"The morning board",ic:"2"},{t:"Overview & filters",ic:"3"},{t:"The dossier",ic:"4"},{t:"Web-app signals",ic:"5"},{t:"Meet Alfred",ic:"6"},{t:"Power moves",ic:"7"},{t:"Daily routine",ic:"8"},{t:"Case file · solve it",ic:"9"},{t:"Certificate",ic:"★"}];
+  var MODS=[{t:"Orientation",ic:"1"},{t:"The morning board",ic:"2"},{t:"Overview & filters",ic:"3"},{t:"The dossier",ic:"4"},{t:"Web-app signals",ic:"5"},{t:"Meet Alfred",ic:"6"},{t:"Power moves",ic:"7"},{t:"Daily routine",ic:"8"},{t:"Case file · solve it",ic:"9"},{t:"Rogues & Bat-Signal",ic:"◈"},{t:"Certificate",ic:"★"}];
   var LAST=MODS.length-1, cur=0, done={};
   try{ done=JSON.parse(localStorage.getItem("cave_train2")||"{}"); }catch(e){}
 
@@ -727,6 +797,18 @@
   if(fr)fr.addEventListener("click",function(){fRisk=!fRisk;this.classList.toggle("on",fRisk);applyFilter();});
   if(fm)fm.addEventListener("click",function(){fMine=!fMine;this.classList.toggle("on",fMine);applyFilter();});
 
+  // Bat-Signal band toggle (Module 10)
+  (function(){var wrap=document.getElementById("bsBands");if(!wrap)return;
+    var caps={"3":"Accounts dry 3–6 days","7":"Accounts dry 7–13 days","14":"Accounts dry 14–29 days","30":"Accounts dry 30+ days"};
+    wrap.querySelectorAll(".chip").forEach(function(ch){ch.addEventListener("click",function(){
+      wrap.querySelectorAll(".chip").forEach(function(x){x.classList.remove("on");});this.classList.add("on");
+      var b=this.getAttribute("data-band");var cap=document.getElementById("bsCap");if(cap)cap.textContent=caps[b];
+      document.querySelectorAll('.mod[data-m="9"] .mock .row[data-b]').forEach(function(r){r.classList.toggle("hide",r.getAttribute("data-b")!==b);});
+    });});
+    // initial state: show only the default-selected band (3–6)
+    document.querySelectorAll('.mod[data-m="9"] .mock .row[data-b]').forEach(function(r){r.classList.toggle("hide",r.getAttribute("data-b")!=="3");});
+  })();
+
   // segment donut interactivity
   document.querySelectorAll('[data-seg]').forEach(function(ch){ch.addEventListener("click",function(){
     document.querySelectorAll('[data-seg]').forEach(function(x){x.classList.remove("on");});this.classList.add("on");
@@ -771,7 +853,9 @@
    ["Who are my top 3 accounts to call today?","Priority order: 1) Bliss Nail Lounge — critical AND overdue, the highest churn risk. 2) Alpha Massage — composite 18, engagement collapse. 3) Serenity Skin — critical with an open ticket. Shall I open the first?"],
    ["How is Priya's book doing?","Priya has 38 accounts: 4 critical, 6 monitor, 28 healthy — average composite 67, a touch above the team median. Her main exposure is two overdue accounts. Want the two at-risk names?"],
    ["Draft a save-play for Alpha Massage.","Draft — Save-play for Alpha Massage & Spa: (1) Verify their Google Business Profile this week; it's the root blocker. (2) Re-engagement: two GBP posts + a review-request campaign. (3) Book a check-in to walk them through Command Center. I've drafted the AM note as well — shall I show it? (Draft only — you send.)"],
-   ["What changed since last week?","Since last week: 2 accounts slipped into critical (Noir Beauty, Velvet Lash), 1 recovered (Opal Beauty → healthy). Book-wide leads are flat; reviews up 6%. Both new reds are engagement-driven. Want details on either?"]
+   ["What changed since last week?","Since last week: 2 accounts slipped into critical (Noir Beauty, Velvet Lash), 1 recovered (Opal Beauty → healthy). Book-wide leads are flat; reviews up 6%. Both new reds are engagement-driven. Want details on either?"],
+   ["How many retention-risk tickets are active on my book?","Across your book: 11 active tickets — 4 Retention Risk Alert, 3 Churn Ticket, 2 Subscription Support, 2 Subscription Cancellation. (Tickets come in these five types — there's no 'finance' or 'website' category.) The two Churn tickets are on Bliss Nail Lounge; want those first?"],
+   ["Remember that the owner of Alpha Massage prefers WhatsApp in the evenings.","Saved, tied to Alpha Massage & Spa — it'll resurface automatically whenever that account comes up, so it's there before your next call. (I only save when you ask, and I never delete.)"]
   ];
   var askEl=document.getElementById("alfAsk"),logEl=document.getElementById("alfLog"),busy=false;
   QA.forEach(function(pair){var b=document.createElement("button");b.className="askq";b.textContent=pair[0];b.addEventListener("click",function(){ask(pair[0],pair[1]);});askEl.appendChild(b);});
