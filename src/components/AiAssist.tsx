@@ -23,6 +23,52 @@ const ANALYSER_PROMPT = `Produce a complete ACCOUNT ANALYSIS for this account, a
 
 Rules: ground every statement strictly in the provided communication and tickets — never invent names, dates, prices, or commitments. Distinguish clearly between what was CLAIMED/promised and what is CONFIRMED. Separate visibility, leads, and bookings; do not treat rankings as bookings or a promise as a delivered fact. Where the context is silent, say so rather than guessing. Write clean professional prose with clear headers; be thorough.`;
 
+// Minimal markdown → HTML (headers, bold/italic, tables, lists, blockquotes, rules)
+// so the analysis downloads as a clean Word document. No dependency: Word opens
+// an HTML file with a .doc extension and renders tables/headers natively.
+function mdToHtml(md: string): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inline = (s: string) => esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*]+?)\*/g, "$1<em>$2</em>").replace(/`([^`]+?)`/g, "<code>$1</code>");
+  const rows = md.replace(/\r/g, "").split("\n");
+  const out: string[] = [];
+  let list: "ul" | "ol" | null = null;
+  const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  for (let i = 0; i < rows.length; i++) {
+    const ln = rows[i];
+    if (/^\s*\|.*\|\s*$/.test(ln) && i + 1 < rows.length && /^\s*\|?[\s:|-]+\|?\s*$/.test(rows[i + 1]) && rows[i + 1].includes("-")) {
+      closeList();
+      const cells = (r: string) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      out.push("<table><tr>" + cells(ln).map((h) => `<th>${inline(h)}</th>`).join("") + "</tr>");
+      i += 2;
+      while (i < rows.length && /^\s*\|.*\|\s*$/.test(rows[i])) { out.push("<tr>" + cells(rows[i]).map((c) => `<td>${inline(c)}</td>`).join("") + "</tr>"); i++; }
+      i--; out.push("</table>"); continue;
+    }
+    const h = ln.match(/^(#{1,4})\s+(.+)/);
+    if (h) { closeList(); out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); continue; }
+    if (/^\s*(-{3,}|_{3,}|\*{3,})\s*$/.test(ln)) { closeList(); out.push("<hr/>"); continue; }
+    if (/^\s*>\s?/.test(ln)) { closeList(); out.push(`<blockquote>${inline(ln.replace(/^\s*>\s?/, ""))}</blockquote>`); continue; }
+    const ul = ln.match(/^\s*[-*]\s+(.+)/), ol = ln.match(/^\s*\d+\.\s+(.+)/);
+    if (ul) { if (list !== "ul") { closeList(); out.push("<ul>"); list = "ul"; } out.push(`<li>${inline(ul[1])}</li>`); continue; }
+    if (ol) { if (list !== "ol") { closeList(); out.push("<ol>"); list = "ol"; } out.push(`<li>${inline(ol[1])}</li>`); continue; }
+    if (ln.trim() === "") { closeList(); continue; }
+    closeList(); out.push(`<p>${inline(ln)}</p>`);
+  }
+  closeList();
+  return out.join("\n");
+}
+
+function downloadDoc(response: string) {
+  const title = (response.match(/^#\s+(.+)/m)?.[1] || "Account Analysis").replace(/[#*_`]/g, "").trim();
+  const style = "body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#111;line-height:1.45}h1{font-size:18pt;margin:0 0 4px}h2{font-size:13.5pt;border-bottom:1px solid #ccc;padding-bottom:2px;margin-top:18px}h3{font-size:11.5pt;margin-top:12px}table{border-collapse:collapse;width:100%;margin:8px 0}th,td{border:1px solid #999;padding:5px 7px;text-align:left;vertical-align:top}th{background:#eef1f4}blockquote{border-left:3px solid #bbb;margin:6px 0;padding:2px 12px;color:#444}code{font-family:Consolas,monospace;font-size:10pt}";
+  const doc = `<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>${title}</title><style>${style}</style></head><body>${mdToHtml(response)}</body></html>`;
+  const blob = new Blob(["﻿" + doc], { type: "application/msword" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = title.replace(/[^a-z0-9]+/gi, "-").slice(0, 60).replace(/^-|-$/g, "") + ".doc";
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
 export default function AiAssist({
   entityId,
   windowDays,
@@ -208,12 +254,18 @@ export default function AiAssist({
           <div className="mb-1 flex items-center gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">LLM Response</span>
             {response && (
-              <button
-                onClick={() => { navigator.clipboard?.writeText(response); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
-                className="ml-auto text-[10px] font-medium text-indigo-600 hover:underline"
-              >
-                {copied ? "copied ✓" : "copy"}
-              </button>
+              <div className="ml-auto flex items-center gap-3">
+                <button onClick={() => downloadDoc(response)} className="inline-flex items-center gap-1 text-[10px] font-medium text-indigo-600 hover:underline" title="Download as a Word document">
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>
+                  Word
+                </button>
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(response); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+                  className="text-[10px] font-medium text-indigo-600 hover:underline"
+                >
+                  {copied ? "copied ✓" : "copy"}
+                </button>
+              </div>
             )}
           </div>
           {running ? (

@@ -7,7 +7,7 @@ import { getComms } from "@/lib/comms";
 // drafts/answers; it never sends or writes anything.
 
 const MODEL = process.env.ANTHROPIC_ASK_MODEL || process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
-const TIMEOUT_MS = 170_000; // room for a full handover-length generation
+const TIMEOUT_MS = 290_000; // room for a full-length analysis (within the 300s route budget)
 const CTX_MESSAGES = 120; // messages included as context (getComms caps at 600)
 const CTX_BODY_CAP = 2000; // per-message chars in context
 
@@ -66,7 +66,7 @@ export async function runAssist(
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: MODEL, max_tokens: 5000, system, messages: [{ role: "user", content: userContent }] }),
+      body: JSON.stringify({ model: MODEL, max_tokens: 8000, system, messages: [{ role: "user", content: userContent }] }),
       signal: ctrl.signal,
     });
     if (!r.ok) {
@@ -74,7 +74,9 @@ export async function runAssist(
       return { response: "", usedMessages: messages.length, usedTickets: tickets.length, error: `LLM error ${r.status}: ${t.slice(0, 200)}` };
     }
     const j: any = await r.json();
-    const text = (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n").trim();
+    let text = (j.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n").trim();
+    // Never cut silently: if the model hit the length limit, say so.
+    if (j.stop_reason === "max_tokens") text += "\n\n---\n_⚠️ This analysis reached the length limit and was cut off. Re-run it, or ask for a specific remaining section (e.g. \"just the first-call agenda and final assessment\")._";
     return { response: text || "(the model returned no text)", usedMessages: Math.min(CTX_MESSAGES, messages.length), usedTickets: tickets.length };
   } catch (e) {
     const msg = (e as Error)?.name === "AbortError" ? "The model took too long to respond. Try a shorter window or instruction." : String((e as Error)?.message || e).slice(0, 200);

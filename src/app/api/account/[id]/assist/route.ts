@@ -3,7 +3,7 @@ import { runAssist } from "@/lib/aiassist";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-export const maxDuration = 180; // a full account analysis is a long generation
+export const maxDuration = 300; // a full account analysis is a long generation
 
 const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
