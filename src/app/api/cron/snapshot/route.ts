@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { takeSnapshot } from "@/lib/snapshots";
 import { neonUrl } from "@/lib/neon";
+import { cronAuthFailure } from "@/lib/cronAuth";
 
 // Daily snapshot of the book (Vercel cron hits this). Idempotent per day.
 //
@@ -24,11 +25,12 @@ export const revalidate = 0;
 export const maxDuration = 300;
 
 async function run(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const authz = req.headers.get("authorization");
-    if (authz !== `Bearer ${secret}`) return new NextResponse("unauthorized", { status: 401 });
-  }
+  // Fails CLOSED: an unset CRON_SECRET now refuses rather than opening the route.
+  // The previous `if (secret) { ...verify... }` left this endpoint — a Metabase
+  // pull plus a Neon write, exempt from SSO by the /api/cron prefix — completely
+  // public whenever the env var was missing.
+  const denied = await cronAuthFailure(req);
+  if (denied) return denied;
   if (!neonUrl()) return NextResponse.json({ ok: false, reason: "no database configured" });
   try {
     const r = await takeSnapshot();

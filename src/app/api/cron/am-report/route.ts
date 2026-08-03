@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { neonUrl } from "@/lib/neon";
 import { beginAmRun, finishAmRun, takeAmSnapshot } from "@/lib/amSnapshot";
 import { computeAmSnapshot } from "@/lib/amReport";
+import { cronAuthFailure } from "@/lib/cronAuth";
 
 // Daily AM report snapshot — one row per AM per day into alfred.am_daily.
 // Scheduled at 17:30 IST (12:00 UTC), matching the laptop job it replaces.
@@ -15,11 +16,11 @@ export const revalidate = 0;
 export const maxDuration = 300; // Vercel Pro; the ported compute targets <120s
 
 export async function GET(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const authz = req.headers.get("authorization");
-    if (authz !== `Bearer ${secret}`) return new NextResponse("unauthorized", { status: 401 });
-  }
+  // Fails CLOSED. The previous `if (secret) { ...verify... }` meant an unset
+  // CRON_SECRET left this route fully public — and it both returns book-wide
+  // aggregates and overwrites the day's owner-only snapshot.
+  const denied = await cronAuthFailure(req);
+  if (denied) return denied;
   if (!neonUrl()) return NextResponse.json({ ok: false, reason: "no database configured" });
 
   const date = new Date().toISOString().slice(0, 10);
