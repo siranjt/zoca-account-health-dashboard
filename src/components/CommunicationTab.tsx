@@ -23,6 +23,36 @@ function ddmmyyhm(iso: string | null): string {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+// Client-side CSV export of exactly what's already on screen — no new endpoint,
+// nothing extra leaves the (SSO-gated) tool beyond what the viewer already sees.
+function downloadCsv(filename: string, rows: (string | number | null)[][]) {
+  const esc = (v: string | number | null) => {
+    const x = v == null ? "" : String(v);
+    return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x;
+  };
+  const csv = rows.map((r) => r.map(esc).join(",")).join("\r\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function DownloadBtn({ onClick, title }: { onClick: () => void; title: string }) {
+  return (
+    <button onClick={onClick} title={title}
+      className="ml-auto inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-slate-400 transition-colors hover:text-cyan-400"
+      style={{ borderColor: "var(--cave-line)" }}>
+      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>
+      Download
+    </button>
+  );
+}
+
 export default function CommunicationTab({ entityId, windowDays }: { entityId: string; windowDays: number }) {
   const [data, setData] = useState<CommsPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +101,13 @@ export default function CommunicationTab({ entityId, windowDays }: { entityId: s
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold" style={{ color: "var(--cave-cy)" }}>Message History</span>
           <span className="text-xs text-slate-400">· {data.total} message{data.total === 1 ? "" : "s"} · {data.windowDays >= 365 ? "all-time" : `last ${data.windowDays}d`}{data.capped ? ` (showing ${data.messages.length})` : ""}</span>
+          {data.messages.length > 0 && (
+            <DownloadBtn
+              title={`Download all ${data.messages.length} messages as CSV`}
+              onClick={() => downloadCsv(`comms-${entityId.slice(0, 8)}-${data.windowDays >= 365 ? "all" : data.windowDays + "d"}.csv`,
+                [["Type", "Date/Time", "Sender", "Body"], ...data.messages.map((m) => [m.type, m.at ?? "", m.sender ?? "", m.body ?? ""])])}
+            />
+          )}
         </div>
 
         {data.total === 0 ? (
@@ -151,6 +188,13 @@ export default function CommunicationTab({ entityId, windowDays }: { entityId: s
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold" style={{ color: "var(--cave-cy)" }}>Linear Tickets</span>
           <span className="text-xs text-slate-400">· {data.tickets.length} ticket{data.tickets.length === 1 ? "" : "s"} (all-time)</span>
+          {data.tickets.length > 0 && (
+            <DownloadBtn
+              title={`Download ${data.tickets.length} tickets as CSV`}
+              onClick={() => downloadCsv(`tickets-${entityId.slice(0, 8)}.csv`,
+                [["Created", "State", "Title", "Assignee", "Description", "URL"], ...data.tickets.map((t) => [t.createdAt ?? "", t.state ?? "", t.title ?? "", t.assignee ?? "", t.description ?? "", t.url ?? ""])])}
+            />
+          )}
         </div>
         {data.tickets.length === 0 ? (
           <div className="py-6 text-center text-sm text-slate-400">No Linear tickets linked to this account.</div>
