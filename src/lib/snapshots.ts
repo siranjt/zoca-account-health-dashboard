@@ -6,7 +6,10 @@ import { getAccountsPayload } from "@/lib/data";
 // Powers the Trends explorer (aggregate columns) and the Activity feed (diff of
 // consecutive days' per-account JSON). Threshold alerts run on live data, no DB.
 
-interface AcctSnap { i: string; n: string; c: string; k: number | null; m: number | null; t: number; o: number | null }
+// `a` (account manager) exists so book_daily can answer AM questions on its own
+// and cross-check alfred.am_daily — two tables from the same source that should
+// agree. It does not retro-fill: AM history starts the day this shipped.
+interface AcctSnap { i: string; n: string; c: string; k: number | null; m: number | null; t: number; o: number | null; a: string | null }
 
 async function ensureTable() {
   const sql = getSql();
@@ -34,7 +37,7 @@ export async function takeSnapshot(): Promise<{ date: string; accounts: number }
   const totalTickets = A.reduce((s, a) => s + a.openTickets, 0);
   const comps = A.map((a) => a.health.composite).filter((v): v is number => v != null);
   const avgComp = comps.length ? Math.round((comps.reduce((s, v) => s + v, 0) / comps.length) * 100) / 100 : null;
-  const json = JSON.stringify(A.map((a): AcctSnap => ({ i: a.entityId, n: a.name, c: a.health.color, k: a.health.composite, m: a.mrr, t: a.openTickets, o: a.daysOverdue })));
+  const json = JSON.stringify(A.map((a): AcctSnap => ({ i: a.entityId, n: a.name, c: a.health.color, k: a.health.composite, m: a.mrr, t: a.openTickets, o: a.daysOverdue, a: a.accountManager })));
 
   await sql`INSERT INTO alfred.book_daily
     (snapshot_date, accounts, greens, yellows, reds, total_mrr, total_leads, total_reviews, total_tickets, avg_composite, accounts_json)
