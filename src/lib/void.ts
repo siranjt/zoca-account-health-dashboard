@@ -50,7 +50,13 @@ export interface VoidInvoice {
 }
 
 export interface VoidEngagement { appDays: number; leadViews: number; leads30: number; gbp30: number; reviews30: number }
-export interface VoidRecovery { tier: "A" | "B" | "C" | "D"; score: number; action: string; engaged: boolean }
+export interface VoidFactor { text: string; kind: "plus" | "minus" | "info"; points?: number }
+export interface VoidAxes { relationship: number; mechanism: number; freshness: number; engagement: number }
+export const AXIS_MAX: VoidAxes = { relationship: 35, mechanism: 15, freshness: 20, engagement: 30 };
+export interface VoidRecovery {
+  tier: "A" | "B" | "C" | "D"; score: number; action: string; engaged: boolean;
+  axes: VoidAxes; factors: VoidFactor[]; headline: string;
+}
 
 // Recoverability of a missed payment, scored 0–100 across four axes — all from
 // data the row already carries plus 30-day product engagement. Rule-based and
@@ -58,26 +64,57 @@ export interface VoidRecovery { tier: "A" | "B" | "C" | "D"; score: number; acti
 // tickets), payment mechanism (ACH in-flight > auto-retry ≈ invoice terms),
 // freshness (days overdue, chronic penalty), engagement (app opens + lead work).
 // Overrides: ACH in-flight → A; cancelled/offboarding → D; open churn ticket on
-// a live sub → C (collect before they leave). Validated against the live book
-// 2026-08 (docs/tasks + the standalone scorer).
+// a live sub → C (collect before they leave). Returns the axis subtotals and the
+// specific plus/minus factors so the Rogues explainer can show WHY, not just what.
+// Validated against the live book 2026-08 (docs/tasks + the standalone scorer).
 const EXIT_TICKETS = new Set(["Subscription_Cancellation", "paid_user_offboarding"]);
 export function recoverability(inv: VoidInvoice, eng: VoidEngagement | null): VoidRecovery {
   const sub = inv.subStatus;
   const tk = inv.ticket?.classification || "";
   const isExit = EXIT_TICKETS.has(tk);
+  const F: VoidFactor[] = [];
+
+  // relationship
   let rel = sub === "active" ? 35 : sub === "non_renewing" ? 22 : sub === "cancelled" ? 3 : 10;
-  if (tk === "Churn Ticket" || isExit) rel -= 25;
-  else if (tk === "Retention Risk Alert") rel -= 10;
+  if (sub === "active") F.push({ text: "Subscription is active — still a paying customer", kind: "plus", points: 35 });
+  else if (sub === "non_renewing") F.push({ text: "Subscription set to not renew — still live through this billing period", kind: "info", points: 22 });
+  else if (sub === "cancelled") F.push({ text: "Subscription is cancelled — the relationship has ended", kind: "minus", points: 3 });
+  else F.push({ text: "Subscription status unknown", kind: "info", points: 10 });
+  if (tk === "Churn Ticket") { rel -= 25; F.push({ text: "Open churn ticket in Linear — actively leaving", kind: "minus", points: -25 }); }
+  else if (isExit) { rel -= 25; F.push({ text: `Open ${tk.replace(/_/g, " ")} ticket — exit already in motion`, kind: "minus", points: -25 }); }
+  else if (tk === "Retention Risk Alert") { rel -= 10; F.push({ text: "Retention-risk alert open — relationship is wobbling", kind: "minus", points: -10 }); }
+  else if (tk === "Subscription Support Ticket") F.push({ text: "Open support ticket — an issue, not an exit signal", kind: "info" });
   rel = Math.max(0, rel);
+
+  // mechanism
   const mech = inv.achInFlight ? 15 : inv.autoCollection === "on" ? 10 : 7;
+  if (inv.achInFlight) F.push({ text: "A bank payment (ACH) is already in flight — money is on its way", kind: "plus", points: 15 });
+  else if (inv.autoCollection === "on") F.push({ text: "Card on file, auto-collect on — dunning will retry the charge", kind: "plus", points: 10 });
+  else F.push({ text: "Invoice-terms billing (auto-collect off) — normal here, needs a manual nudge", kind: "info", points: 7 });
+
+  // freshness
   const d = inv.daysOverdue ?? 0;
   let fr = d <= 14 ? 20 : d <= 30 ? 15 : d <= 60 ? 9 : d <= 90 ? 4 : 2;
-  if (inv.multiMonth) fr = Math.max(0, fr - 6);
-  const appDays = eng?.appDays ?? 0, work = (eng?.leadViews ?? 0) + (eng?.leads30 ?? 0);
+  const freshWord = d <= 14 ? "Fresh" : d <= 30 ? "Recent" : d <= 60 ? "Aging" : d <= 90 ? "Stale" : "Aged";
+  F.push({ text: `${freshWord} — ${d} day${d === 1 ? "" : "s"} overdue`, kind: d <= 30 ? "plus" : d <= 60 ? "info" : "minus", points: fr });
+  if (inv.multiMonth) { fr = Math.max(0, fr - 6); F.push({ text: "Chronic — owing across two or more months", kind: "minus", points: -6 }); }
+
+  // engagement
+  const appDays = eng?.appDays ?? 0, leadViews = eng?.leadViews ?? 0, leads30 = eng?.leads30 ?? 0;
+  const work = leadViews + leads30;
   const eApp = appDays >= 8 ? 12 : appDays >= 1 ? 7 : 0;
   const eLead = work >= 5 ? 10 : work >= 1 ? 6 : 0;
   const eProf = (eng?.gbp30 ?? 0) > 0 || (eng?.reviews30 ?? 0) > 0 ? 8 : 0;
   const engScore = Math.min(30, eApp + eLead + eProf);
+  if (!eng) F.push({ text: "No product-usage data for this account", kind: "info" });
+  else {
+    if (appDays >= 1) F.push({ text: `Opening the app — ${appDays} active day${appDays === 1 ? "" : "s"} in the last 30`, kind: "plus", points: eApp });
+    else F.push({ text: "Has not opened the app in the last 30 days", kind: "minus" });
+    if (work >= 1) F.push({ text: `Working leads — ${leadViews} in-app lead views, ${leads30} new leads (30d)`, kind: "plus", points: eLead });
+    else F.push({ text: "No lead activity in the last 30 days", kind: "minus" });
+    if (eProf) F.push({ text: "Profile still producing — GBP interactions / reviews in 30d", kind: "plus", points: 8 });
+  }
+
   const score = Math.max(0, Math.min(100, rel + mech + fr + engScore));
   let tier: VoidRecovery["tier"];
   if (inv.achInFlight) tier = "A";
@@ -87,7 +124,19 @@ export function recoverability(inv: VoidInvoice, eng: VoidEngagement | null): Vo
     if (tk === "Churn Ticket" && (tier === "A" || tier === "B")) tier = "C";
   }
   const action = { A: "Confirm / auto-retry", B: "Outreach · resend invoice", C: "Collect before churn", D: "Final demand or write off" }[tier];
-  return { tier, score, action, engaged: appDays > 0 || work > 0 };
+  const dormant = !!eng && appDays === 0 && work === 0;
+  const headline = tier === "A"
+    ? "Live customer, a working payment path, and still actively using the product — most likely a billing hiccup to recover."
+    : tier === "B"
+    ? "Still a live, real customer; the payment has stalled on a fixable reason — a nudge should clear it."
+    : tier === "C"
+    ? "Technically still subscribed but actively churning — collect this balance now, before they leave."
+    : sub === "cancelled" || isExit
+    ? "The relationship has ended — pursue as a final demand or write it off; not worth save-effort."
+    : dormant
+    ? "Subscribed on paper but dormant — not opening the app or working leads — treat as a likely write-off."
+    : "Too little left to justify chasing — treat as a write-off unless something changes.";
+  return { tier, score, action, engaged: appDays > 0 || work > 0, axes: { relationship: rel, mechanism: mech, freshness: fr, engagement: engScore }, factors: F, headline };
 }
 
 const SQL = `WITH sub AS (SELECT id, custom_fields::jsonb->>'cf_entity_id' AS eid, status AS sub_status,
@@ -212,7 +261,7 @@ export async function getVoidInvoices(refresh = false): Promise<VoidInvoice[]> {
         multiMonth: false, // filled below
         inBook: r.in_book === true,
         engagement: null, // filled below
-        recovery: { tier: "D", score: 0, action: "", engaged: false }, // filled below
+        recovery: { tier: "D", score: 0, action: "", engaged: false, axes: { relationship: 0, mechanism: 0, freshness: 0, engagement: 0 }, factors: [], headline: "" }, // filled below
       };
     });
 

@@ -17,7 +17,10 @@ export default async function AdminVoidPage() {
       <main className="mx-auto max-w-[1600px] px-4 py-5">
         <div className="mb-4">
           <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400/70">{isAm ? "Your book" : "Admin"}</div>
-          <h1 className="cave-decode text-2xl font-semibold tracking-tight">Rogues</h1>
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="cave-decode text-2xl font-semibold tracking-tight">Rogues</h1>
+            <a href="/admin/void/recoverability" className="flex-none rounded-md border px-3 py-1.5 text-[12px] font-medium text-emerald-300 no-underline hover:bg-emerald-400/10" style={{ borderColor: "var(--cave-line)" }}>Why recoverable? →</a>
+          </div>
           <p className="mt-1 text-sm text-slate-400">
             {isAm
               ? "Your unpaid invoices — every Chargebee invoice on your accounts that's payment-due or not-paid, with the phone and context to chase it."
