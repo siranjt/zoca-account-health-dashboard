@@ -148,3 +148,15 @@ export async function getVoidInvoices(refresh = false): Promise<VoidInvoice[]> {
   })().finally(() => { inflight = null; });
   return inflight;
 }
+
+/** Restrict the unpaid book to what a viewer may see. AMs see ONLY invoices whose
+ *  resolved AM matches their own roster name (exact match, same rule as
+ *  scopeAccounts); an AM with no amName sees nothing (fail-closed). Managers and
+ *  admins see the whole book. This is the security boundary — always apply it
+ *  server-side, never rely on the client's filters. */
+export function scopeVoidInvoices(rows: VoidInvoice[], viewer: { role: string | null; amName: string | null }): VoidInvoice[] {
+  if (viewer.role === "am") {
+    return viewer.amName ? rows.filter((r) => r.amName === viewer.amName) : [];
+  }
+  return rows;
+}

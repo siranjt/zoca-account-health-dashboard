@@ -70,15 +70,17 @@ export default function UserMenu() {
           >
             🏜️ Droughts
           </a>
-          <a
-            href="/admin/void"
-            title="Unpaid-invoice book (admin)"
-            className="rounded-md border px-2 py-1.5 text-[10px] uppercase tracking-[0.12em] no-underline"
-            style={{ borderColor: "var(--cave-line)", color: "var(--cave-dim)" }}
-          >
-            🕳️ Void
-          </a>
         </>
+      )}
+      {(u.role === "admin" || u.role === "manager" || u.role === "am") && (
+        <a
+          href="/admin/void"
+          title={u.role === "am" ? "Your unpaid invoices" : "Unpaid-invoice book"}
+          className="rounded-md border px-2 py-1.5 text-[10px] uppercase tracking-[0.12em] no-underline"
+          style={{ borderColor: "var(--cave-line)", color: "var(--cave-dim)" }}
+        >
+          🕳️ Void
+        </a>
       )}
       <button
         onClick={() => { track("sign_out"); signOut({ callbackUrl: "/signin" }); }}
