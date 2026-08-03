@@ -125,6 +125,37 @@ export async function getTicketCountsByEntity(fromISO: string): Promise<Map<stri
   return out;
 }
 
+// Whole-book ticket load rolled up BY MANAGER in ONE call — so "which AM has the
+// most churn/retention tickets across the book" doesn't loop manager_tickets once
+// per manager. Active + closed-in-window counts per AM, with a per-classification
+// breakdown, ranked by active desc.
+export async function getBookTicketsByManager(windowDays = 30) {
+  const days = Math.min(Math.max(windowDays, 1), 365);
+  let rows: LinearTicket[];
+  try { rows = await fetchAllTickets(); } catch (e) {
+    return { available: false as const, reason: `tickets fetch failed: ${String((e as Error)?.message || e).slice(0, 140)}` };
+  }
+  const fromMs = Date.now() - days * 86400000;
+  const byAm = new Map<string, { active: number; closed: number; cls: Record<string, { active: number; closed: number }> }>();
+  for (const t of rows) {
+    const a = isActive(t), c = !a && closedInWindow(t, fromMs);
+    if (!a && !c) continue;
+    const am = (t.amName || "").trim() || "(unassigned)";
+    const rec = byAm.get(am) || { active: 0, closed: 0, cls: {} };
+    const cl = t.classification || "Other";
+    (rec.cls[cl] ||= { active: 0, closed: 0 });
+    if (a) { rec.active++; rec.cls[cl].active++; } else { rec.closed++; rec.cls[cl].closed++; }
+    byAm.set(am, rec);
+  }
+  const managers = [...byAm.entries()]
+    .map(([manager, v]) => ({
+      manager, active: v.active, closed: v.closed,
+      by_classification: Object.entries(v.cls).map(([classification, x]) => ({ classification, active: x.active, closed: x.closed })).sort((p, q) => (q.active + q.closed) - (p.active + p.closed)),
+    }))
+    .sort((p, q) => q.active - p.active || q.closed - p.closed);
+  return { window_days: days, manager_count: managers.length, managers, classification_note: CLASS_NOTE };
+}
+
 function summarize(mine: LinearTicket[], fromMs: number) {
   const byClass: Record<string, { active: number; closed: number }> = {};
   let activeTotal = 0, closedTotal = 0;
