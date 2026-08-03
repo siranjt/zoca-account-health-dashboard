@@ -195,23 +195,36 @@ export default function VoidViewer() {
     const multiKeys = new Set(userFiltered.filter((r) => r.multiMonth).map((r) => r.entityId || r.customerId));
     const ticketN = userFiltered.filter((r) => r.ticket).length;
     const annN = userFiltered.filter((r) => annHasNotes(ann[r.invoiceId])).length;
-    const recRows = userFiltered.filter((r) => r.recovery.tier !== "D");
-    const recoverable = recRows.reduce((s, r) => s + (r.amountDue ?? 0), 0);
-    return { out, highVal, repeatN, achN, multiN: multiKeys.size, ticketN, annN, recoverable, recN: recRows.length };
+    // Account-level recoverability: an account (entity, else customer) is
+    // recoverable if any of its invoices scores above write-off; sum its full
+    // balance. Keeps the KPI value, count, and click-through account-consistent.
+    const acctKey = (r: Row) => r.entityId || r.customerId || r.invoiceId;
+    const byAcct = new Map<string, { due: number; rec: boolean }>();
+    for (const r of userFiltered) {
+      const k = acctKey(r);
+      const a = byAcct.get(k) || { due: 0, rec: false };
+      a.due += r.amountDue ?? 0;
+      if (r.recovery.tier !== "D") a.rec = true;
+      byAcct.set(k, a);
+    }
+    const recAcctKeys = new Set<string>();
+    let recoverable = 0;
+    for (const [k, a] of byAcct) if (a.rec) { recoverable += a.due; recAcctKeys.add(k); }
+    return { out, highVal, repeatN, achN, multiN: multiKeys.size, ticketN, annN, recoverable, recN: recAcctKeys.size, recAcctKeys };
   }, [userFiltered, repeatSet, ann]);
 
   const filtered = useMemo(() => {
     if (!activeKpi) return userFiltered;
     switch (activeKpi) {
       case "outstanding": return userFiltered.filter((r) => (r.amountDue ?? 0) >= HIGH_VALUE);
-      case "recoverable": return userFiltered.filter((r) => r.recovery.tier !== "D");
+      case "recoverable": return userFiltered.filter((r) => kpi.recAcctKeys.has(r.entityId || r.customerId || r.invoiceId));
       case "invoices": return userFiltered.filter((r) => r.customerId && repeatSet.has(r.customerId));
       case "ach": return userFiltered.filter((r) => r.achInFlight);
       case "multi": return userFiltered.filter((r) => r.multiMonth);
       case "tickets": return userFiltered.filter((r) => r.ticket);
       case "annotations": return userFiltered.filter((r) => annHasNotes(ann[r.invoiceId]));
     }
-  }, [userFiltered, activeKpi, repeatSet, ann]);
+  }, [userFiltered, activeKpi, repeatSet, ann, kpi]);
 
   const shown = useMemo(() => {
     const arr = [...filtered];
