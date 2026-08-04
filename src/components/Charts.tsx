@@ -355,47 +355,71 @@ export function FunnelChart({ f }: { f: { enquiries: number; opened: number; con
   let worst = -1, worstDrop = -1;
   for (let i = 1; i < stages.length; i++) { const drop = 100 - step[i]; if (drop > worstDrop) { worstDrop = drop; worst = i; } }
 
-  const W = 300, H = 30, GAP = 18, PT = 4, LM = 62, RM = 32;
-  const cx = LM + (W - LM - RM) / 2;
-  const maxHalf = (W - LM - RM) / 2 - 2;
-  const half = (v: number) => Math.max(5, (v / top) * maxHalf);
-  const yTop = (i: number) => PT + i * (H + GAP);
-  const totalH = PT * 2 + stages.length * H + (stages.length - 1) * GAP;
+  const cumPct = (i: number) => (f.enquiries ? Math.round((stages[i].v / f.enquiries) * 1000) / 10 : 0);
+
+  // horizontal flowing funnel (Metabase-style): smooth taper left→right
+  const N = stages.length;
+  const W = 520, H = 176, LW = 92, PR = 12, HT = 20, HB = 30;
+  const plotTop = HT + 8, plotBot = H - HB, cy = (plotTop + plotBot) / 2;
+  const maxHalf = (plotBot - plotTop) / 2 - 2;
+  const xAt = (i: number) => LW + (i / (N - 1)) * (W - PR - LW);
+  const halfAt = (i: number) => Math.max(1.5, (stages[i].v / top) * maxHalf);
+  const segPath = (i: number) => {
+    const x0 = xAt(i - 1), x1 = xAt(i), xm = (x0 + x1) / 2;
+    const t0 = cy - halfAt(i - 1), t1 = cy - halfAt(i), b0 = cy + halfAt(i - 1), b1 = cy + halfAt(i);
+    return `M ${x0},${t0} C ${xm},${t0} ${xm},${t1} ${x1},${t1} L ${x1},${b1} C ${xm},${b1} ${xm},${b0} ${x0},${b0} Z`;
+  };
+
+  if (!f.enquiries) return <div className="py-8 text-center text-sm" style={{ color: "var(--cave-dim)" }}>No leads in this window.</div>;
 
   return (
     <div>
-      <div className="mb-1 text-xs text-slate-400">End-to-end booking conversion: <span className="font-semibold text-slate-700">{conv}%</span></div>
-      <svg viewBox={`0 0 ${W} ${totalH}`} className="w-full" style={{ maxHeight: totalH + 12 }} role="img" aria-label={`Lead funnel: ${stages.map((s) => `${s.label} ${s.v}`).join(", ")}`}>
-        {/* tapering silhouette between stages */}
-        {stages.slice(0, -1).map((s, i) => {
-          const y1 = yTop(i) + H, y2 = yTop(i + 1), h1 = half(s.v), h2 = half(stages[i + 1].v);
-          return <polygon key={`c${i}`} points={`${cx - h1},${y1} ${cx + h1},${y1} ${cx + h2},${y2} ${cx - h2},${y2}`} fill={RAMP[i]} opacity={0.13} />;
-        })}
-        {/* stage bands */}
+      <style>{`
+        @keyframes fnlWipe { from { transform: scaleX(.02); } to { transform: scaleX(1); } }
+        @keyframes fnlFade { from { opacity: 0; } to { opacity: 1; } }
+        .fnl-seg { transform-box: fill-box; transform-origin: left center; animation: fnlWipe .6s cubic-bezier(.22,.61,.36,1) both; cursor: pointer; transition: filter .15s ease, opacity .15s ease; }
+        .fnl-seg:hover { filter: brightness(1.14); }
+        .fnl-fade { animation: fnlFade .5s ease both; }
+        @media (prefers-reduced-motion: reduce) { .fnl-seg, .fnl-fade { animation: none !important; } }
+      `}</style>
+      <div className="mb-1 text-xs" style={{ color: "var(--cave-dim)" }}>End-to-end booking conversion: <span className="font-semibold" style={{ color: "var(--cave-txt)" }}>{conv}%</span> · tap a stage</div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: H + 24 }} role="img" aria-label={`Lead funnel: ${stages.map((s) => `${s.label} ${s.v}`).join(", ")}`}>
+        {/* stage headers */}
         {stages.map((s, i) => {
-          const h = half(s.v), y = yTop(i), on = sel === i, mid = y + H / 2;
+          const x = i === 0 ? LW / 2 : (xAt(i - 1) + xAt(i)) / 2;
+          return <text key={`h${i}`} className="fnl-fade" style={{ animationDelay: `${i * 0.08}s` }} x={x} y={13} textAnchor="middle" fontSize={8.5} fill="var(--cave-dim)">{`${i + 1}. ${s.label}`}</text>;
+        })}
+        {/* stage dividers */}
+        {stages.map((s, i) => <line key={`d${i}`} x1={xAt(i)} x2={xAt(i)} y1={HT} y2={H - 8} stroke="var(--cave-line)" strokeWidth={1} />)}
+        {/* starting count */}
+        <text className="fnl-fade" x={LW / 2} y={cy - 1} textAnchor="middle" fontSize={22} fontWeight={700} fill="var(--cave-txt)">{formatNumber(stages[0].v)}</text>
+        <text className="fnl-fade" x={LW / 2} y={cy + 14} textAnchor="middle" fontSize={9} fill="var(--cave-dim)">enquiries</text>
+        {/* flowing funnel segments (light → dark), each clickable */}
+        {stages.slice(1).map((s, idx) => {
+          const i = idx + 1, on = sel === i;
           return (
-            <g key={s.label} onClick={() => setSel((v) => (v === i ? null : i))} style={{ cursor: "pointer" }}>
-              <rect x={cx - h} y={y} width={2 * h} height={H} rx={5} fill={RAMP[i]} opacity={on ? 1 : 0.9} stroke={on ? "#312e81" : "none"} strokeWidth={on ? 1.5 : 0} />
-              <text x={2} y={mid + 3.5} fontSize={10} fill="#64748b">{s.label}</text>
-              <text x={W - 2} y={mid + 3.5} textAnchor="end" fontSize={11} fontWeight={600} fill="#334155">{s.v}</text>
-            </g>
+            <path key={`seg${i}`} className="fnl-seg" style={{ animationDelay: `${idx * 0.12}s`, opacity: sel != null && !on ? 0.4 : 1 }}
+              d={segPath(i)} fill={RAMP[Math.max(0, RAMP.length - 1 - idx)]} stroke={on ? "var(--cave-cy)" : "none"} strokeWidth={on ? 1.5 : 0}
+              onClick={() => setSel((v) => (v === i ? null : i))}>
+              <title>{`${s.label}: ${s.v} · ${cumPct(i)}% of enquiries · ${step[i]}% of ${stages[i - 1].label.toLowerCase()}`}</title>
+            </path>
           );
         })}
-        {/* step conversion between stages; biggest drop called out */}
+        {/* per-stage cumulative % + count along the bottom */}
         {stages.slice(1).map((s, idx) => {
-          const i = idx + 1, y = yTop(i) - GAP / 2 + 3.5, bad = i === worst && worstDrop > 0;
+          const i = idx + 1, x = (xAt(i - 1) + xAt(i)) / 2, bad = i === worst && worstDrop > 0;
           return (
-            <text key={`s${i}`} x={cx} y={y} textAnchor="middle" fontSize={9} fontWeight={bad ? 700 : 500} fill={bad ? "#dc2626" : "#94a3b8"}>
-              ↓ {step[i]}% kept{bad ? " · biggest drop" : ""}
-            </text>
+            <g key={`b${i}`} className="fnl-fade" style={{ animationDelay: `${idx * 0.12 + 0.25}s` }}>
+              <text x={x} y={H - 15} textAnchor="middle" fontSize={13} fontWeight={700} fill={bad ? "#f87171" : "var(--cave-txt)"}>{cumPct(i)}%</text>
+              <text x={x} y={H - 3} textAnchor="middle" fontSize={9} fill="var(--cave-dim)">{formatNumber(s.v)}</text>
+            </g>
           );
         })}
       </svg>
       {sel != null && (
-        <div className="mt-1 rounded bg-slate-50 px-2 py-1 text-xs text-slate-600">
-          <b>{stages[sel].label}:</b> {stages[sel].v}
-          {f.enquiries > 0 && <> · {Math.round((stages[sel].v / f.enquiries) * 100)}% of enquiries</>}
+        <div className="mt-1 rounded px-2 py-1 text-xs" style={{ background: "var(--cave-panel2)", color: "var(--cave-dim)", border: "1px solid var(--cave-line)" }}>
+          <b style={{ color: "var(--cave-txt)" }}>{stages[sel].label}:</b> {stages[sel].v}
+          {f.enquiries > 0 && <> · {cumPct(sel)}% of enquiries</>}
           {sel > 0 && stages[sel - 1].v > 0 && <> · {step[sel]}% of {stages[sel - 1].label.toLowerCase()}</>}
         </div>
       )}

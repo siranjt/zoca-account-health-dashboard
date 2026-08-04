@@ -52,6 +52,18 @@ use. Scope on request.
 4. **Keep horizontal** *(no work)* — LeadSources, Keywords. Long labels; horizontal is correct. A
    forced vertical here would rotate/clip the labels — the exact "hard to work with" we're avoiding.
 
+## Detail-page ("Open in detail") addendum
+Scoped both the inline row-expand (`DetailPanel.tsx`) and the full page (`AccountDossier.tsx`).
+**Every chart on the detail page is a shared `Charts.tsx` component already covered above** — the
+funnel rebuild and Lead-Sources sort apply to both surfaces. The only detail-page-specific data
+displays are **not charts**:
+- Bookings by status / by creator / callback actions → `Row` = label/value **text rows** (no bars).
+- Migration cards 5392/5393 → `Stat` tiles + a Metric/AM/All **table** (no bars).
+- WOW tasks → line chart (time-series).
+
+*Optional future enhancement (NOT a horizontal-chart fix):* the bookings/callbacks text tables could
+become small bar charts for at-a-glance comparison — but that's **adding** viz, not reorienting it.
+
 ## Open questions (blocking precise scoping)
 - **Which specific charts hurt?** "Horizontal is hard" is real but the fix diverges by label length —
   a long-label chart wants sort+labels, a short-label chart can go vertical. One or two named
