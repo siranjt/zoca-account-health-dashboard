@@ -70,6 +70,9 @@ export default function UserMenu({ children }: { children?: ReactNode }) {
             {first} <span style={{ color: "var(--cave-cy)" }}>· {roleLabel}</span>
           </div>
 
+          {rule}
+          <a href="/training.html" target="_blank" rel="noopener noreferrer" className={item} style={itemStyle}>🎓 Training</a>
+
           {u.role === "admin" && (
             <>
               {rule}
