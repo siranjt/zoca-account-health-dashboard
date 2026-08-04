@@ -1,5 +1,5 @@
 // ===========================================================================
-// /am-report — the owner's readout over alfred.am_daily.
+// /am-report — the admin readout over alfred.am_daily.
 //
 // A server component on purpose: there is no state to hold, so the page ships
 // no JavaScript for the table or the charts. Every chart is hand-built SVG —

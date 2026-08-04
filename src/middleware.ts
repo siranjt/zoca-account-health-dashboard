@@ -8,15 +8,21 @@ import { ssoConfigured } from "@/lib/access";
 // - Otherwise fall back to the previous optional Basic-auth password gate, so
 //   this code can ship before SSO is turned on without locking anyone out.
 
-// Surfaces only the owner may open. These get a real 403 rather than a redirect
-// to /overview: a non-admin bounced somewhere else cannot tell "you may not see
-// this" from "that page moved", and an auth decision should never be silent.
-// The pages behind these prefixes guard themselves as well — an auth path is the
-// one place belt and braces is worth the duplication.
-const OWNER_ONLY = ["/am-report"];
+// Surfaces only the `admin` role may open. These get a real 403 rather than a
+// redirect to /overview: a non-admin bounced somewhere else cannot tell "you may
+// not see this" from "that page moved", and an auth decision should never be
+// silent. The pages behind these prefixes guard themselves as well — an auth
+// path is the one place belt and braces is worth the duplication.
+//
+// The rule is the ADMIN ROLE, not the owner. This list was called OWNER_ONLY and
+// the 403 said "restricted to the platform owner", while the check below has
+// always read `role !== "admin"` — a comment describing a stricter rule than the
+// code enforces is how someone later "fixes" the check to match the prose and
+// locks out every admin but one.
+const ADMIN_ONLY = ["/am-report"];
 
-function isOwnerOnly(pathname: string): boolean {
-  return OWNER_ONLY.some((base) => pathname === base || pathname.startsWith(`${base}/`));
+function isAdminOnly(pathname: string): boolean {
+  return ADMIN_ONLY.some((base) => pathname === base || pathname.startsWith(`${base}/`));
 }
 
 function forbidden(): NextResponse {
@@ -26,7 +32,7 @@ function forbidden(): NextResponse {
      display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}
      div{max-width:34rem;padding:2rem;border:1px solid #14343d;border-radius:12px}
      b{color:#ff7a7a;letter-spacing:.18em}a{color:#35e0ff}</style></head><body><div>
-     <b>403 FORBIDDEN</b><p>This report is restricted to the platform owner.</p>
+     <b>403 FORBIDDEN</b><p>This report is restricted to admins.</p>
      <p><a href="/overview">&larr; Back to the book</a></p></div></body></html>`,
     { status: 403, headers: { "content-type": "text/html; charset=utf-8" } },
   );
@@ -38,7 +44,15 @@ export default auth((req) => {
   // Public static assets in /public (images, fonts, .html, etc.) must load even
   // when signed out — e.g. the Alfred crest on the sign-in page. Anything with a
   // file extension is a static file, never a gated route.
-  if (/\.[a-zA-Z0-9]+$/.test(p)) return NextResponse.next();
+  //
+  // EXCEPT under an admin-only prefix. This check used to run unconditionally and
+  // ahead of the role check below, so any admin-only path carrying a dot —
+  // /am-report/data.json, /am-report/export.csv — was handed NextResponse.next()
+  // before anyone asked who was calling. No such route exists today, which is the
+  // only reason it was never exploitable; the next one added would have inherited
+  // an open door. A static asset is never served from under an admin-only prefix,
+  // so excluding them costs nothing.
+  if (!isAdminOnly(p) && /\.[a-zA-Z0-9]+$/.test(p)) return NextResponse.next();
 
   if (ssoConfigured()) {
     if (p.startsWith("/api/auth") || p.startsWith("/api/cron") || p.startsWith("/api/digest/click") || p === "/signin") return NextResponse.next();
@@ -47,14 +61,14 @@ export default auth((req) => {
       url.searchParams.set("callbackUrl", p + (req.nextUrl.search || ""));
       return NextResponse.redirect(url);
     }
-    if (isOwnerOnly(p) && req.auth?.user?.role !== "admin") return forbidden();
+    if (isAdminOnly(p) && req.auth?.user?.role !== "admin") return forbidden();
     return NextResponse.next();
   }
 
   // Below this line SSO is NOT configured, so no role exists for anyone. An
-  // owner-only surface must not fall back to the shared password gate — a
-  // DASHBOARD_PASSWORD holder is not the owner. Fail closed here too.
-  if (isOwnerOnly(p)) return forbidden();
+  // admin-only surface must not fall back to the shared password gate — a
+  // DASHBOARD_PASSWORD holder holds no role at all. Fail closed here too.
+  if (isAdminOnly(p)) return forbidden();
 
   // SSO is NOT fully configured. This path must FAIL CLOSED, never open: a
   // missing Google/AUTH_SECRET var — or a malformed ACCESS_CONTROL that flips

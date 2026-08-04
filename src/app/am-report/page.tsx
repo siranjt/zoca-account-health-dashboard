@@ -7,7 +7,7 @@ import { buildAmReportView, parseTrend } from "@/lib/amMetrics";
 import CaveNav from "@/components/CaveNav";
 import AmReport from "@/components/AmReport";
 
-// Owner-only AM daily report. Reads alfred.am_daily and alfred.am_daily_run —
+// Admin-only AM daily report. Reads alfred.am_daily and alfred.am_daily_run —
 // it never computes a metric. The compute lives in src/lib/amReport.ts behind
 // the 17:30 IST cron, and having exactly one implementation is the point: the
 // TypeScript port and the Python workbook disagreed across a seven-minute gap
@@ -38,7 +38,7 @@ export default async function AmReportPage() {
   if (ssoConfigured() && !viewer.email) redirect("/signin?callbackUrl=%2Fam-report");
 
   if (!ssoConfigured()) {
-    // No roster means no roles, so "owner only" cannot be enforced. Refuse
+    // No roster means no roles, so admin-only cannot be enforced. Refuse
     // rather than open — CLAUDE.md hard rule 6: never degrade an auth path.
     return (
       <>
@@ -46,7 +46,7 @@ export default async function AmReportPage() {
         <main className="mx-auto max-w-[1600px] px-4 py-5">
           <Locked
             title="LOCKED — access control not configured"
-            body="ACCESS_CONTROL, AUTH_GOOGLE_ID/SECRET or AUTH_SECRET is missing, so no role can be resolved and owner-only cannot be enforced. This page stays shut rather than opening to whoever reaches it."
+            body="ACCESS_CONTROL, AUTH_GOOGLE_ID/SECRET or AUTH_SECRET is missing, so no role can be resolved and admin-only cannot be enforced. This page stays shut rather than opening to whoever reaches it."
           />
         </main>
       </>
@@ -60,7 +60,7 @@ export default async function AmReportPage() {
         <main className="mx-auto max-w-[1600px] px-4 py-5">
           <Locked
             title="403 — FORBIDDEN"
-            body="This report is restricted to the platform owner. Your account is signed in but does not hold the admin role."
+            body="This report is restricted to admins. Your account is signed in but does not hold the admin role."
           />
         </main>
       </>
@@ -78,7 +78,7 @@ export default async function AmReportPage() {
       <CaveNav />
       <main className="mx-auto max-w-[1600px] px-4 py-5">
         <div className="mb-4">
-          <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400/70">Owner</div>
+          <div className="text-[11px] uppercase tracking-[0.22em] text-cyan-400/70">Admin</div>
           <h1 className="cave-decode text-2xl font-semibold tracking-tight">AM Daily Report</h1>
           <p className="mt-1 text-sm text-slate-400">
             Read straight from the daily snapshot in <code>alfred.am_daily</code>. Nothing on this page is recomputed —
