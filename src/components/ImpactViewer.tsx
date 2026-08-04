@@ -39,12 +39,17 @@ function daysBetween(a: string | null, b: string | null): number | null {
   return Math.max(1, Math.round((tb - ta) / 86_400_000));
 }
 
-function Card({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
+// `note` says what the number COUNTS, in one line, always visible — not a
+// tooltip. This page gets screenshotted and forwarded to people who will never
+// hover anything, and a figure whose definition is hidden is a figure that gets
+// quoted wrong.
+function Card({ label, value, sub, note }: { label: string; value: React.ReactNode; sub?: string; note?: string }) {
   return (
-    <div className="rounded-xl border p-3" style={{ borderColor: "var(--cave-line)", background: "var(--cave-panel)" }}>
+    <div className="flex flex-col rounded-xl border p-3" style={{ borderColor: "var(--cave-line)", background: "var(--cave-panel)" }}>
       <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">{label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-800">{value}</div>
       {sub && <div className="mt-0.5 text-[11px] text-slate-400">{sub}</div>}
+      {note && <div className="mt-2 border-t pt-1.5 text-[10px] leading-snug text-slate-400" style={{ borderColor: "var(--cave-line)" }}>{note}</div>}
     </div>
   );
 }
@@ -117,17 +122,72 @@ export default function ImpactViewer() {
         </div>
       )}
 
+      {/* The carryable sentence. This page is read by people who never saw a
+          demo, so the headline has to be prose, not a grid of labels — "Total
+          events: 4,182" is not something anyone can repeat in a meeting.
+          Derived entirely from the figures below; it never computes anything of
+          its own, so it cannot disagree with the cards. */}
+      {data?.configured && (
+        <div className="rounded-xl border p-4" style={{ borderColor: "var(--cave-line2)", background: "var(--cave-panel)" }}>
+          <div className="mb-1 text-[10px] uppercase tracking-[0.18em] text-cyan-400/70">In this period</div>
+          {data.events === 0 ? (
+            <p className="text-sm text-slate-400">
+              No activity was recorded between <b>{ddmmyy(data.fromDate)}</b> and <b>{ddmmyy(data.toDate)}</b>. That is a
+              genuine absence of use in this window, not a loading state — widen the range to see earlier activity.
+            </p>
+          ) : (
+            <p className="text-sm leading-relaxed text-slate-600">
+              Between <b>{ddmmyy(data.fromDate)}</b> and <b>{ddmmyy(data.toDate)}</b>,{" "}
+              <b className="text-slate-800">{data.activeUsers.toLocaleString()}</b> {data.activeUsers === 1 ? "person" : "people"} opened{" "}
+              <b className="text-slate-800">{data.accountsReviewed.toLocaleString()}</b> distinct{" "}
+              {data.accountsReviewed === 1 ? "account" : "accounts"} across{" "}
+              <b className="text-slate-800">{data.accountOpens.toLocaleString()}</b> account{" "}
+              {data.accountOpens === 1 ? "view" : "views"}
+              {data.alfredQuestions > 0 && <>, asked the AI analyst <b className="text-slate-800">{data.alfredQuestions.toLocaleString()}</b> {data.alfredQuestions === 1 ? "question" : "questions"}</>}
+              {data.exports > 0 && <> and exported <b className="text-slate-800">{data.exports.toLocaleString()}</b> {data.exports === 1 ? "CSV" : "CSVs"}</>}
+              .
+              {data.amRosterSize > 0 && (
+                <> <b className="text-slate-800">{data.amActive}</b> of <b className="text-slate-800">{data.amRosterSize}</b> account managers used it at least once.</>
+              )}
+            </p>
+          )}
+        </div>
+      )}
+
       {data && (
         <>
           {/* summary cards */}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            <Card label="Distinct users" value={data.activeUsers} sub={`in ${data.windowDays}d`} />
-            <Card label="Accounts reviewed" value={data.accountsReviewed} sub={`${data.accountOpens} opens`} />
-            <Card label="AM adoption" value={`${data.amActive}/${data.amRosterSize}`} sub={data.amRosterSize ? `${Math.round((data.amActive / data.amRosterSize) * 100)}% of AMs` : "no roster"} />
-            <Card label="Alfred questions" value={data.alfredQuestions} sub={`${data.alfredAskers} askers · ${data.alfredAccounts} accounts`} />
-            <Card label="CSV exports" value={data.exports} />
-            <Card label="Total events" value={data.events} sub={`${data.windowChanges} window changes`} />
+            <Card label="Distinct users" value={data.activeUsers} sub={`in ${data.windowDays}d`}
+              note="Individual people who signed in and did something. Counted by email address, so one person on two devices is one user — not sessions, not page views." />
+            <Card label="Accounts reviewed" value={data.accountsReviewed} sub={`${data.accountOpens} opens`}
+              note={`Distinct accounts opened at least once.${data.accountsReviewed ? ` ${data.accountOpens.toLocaleString()} opens across ${data.accountsReviewed.toLocaleString()} accounts means accounts were revisited, not skimmed once.` : ""}`} />
+            <Card label="AM adoption" value={`${data.amActive}/${data.amRosterSize}`} sub={data.amRosterSize ? `${Math.round((data.amActive / data.amRosterSize) * 100)}% of AMs` : "no roster"}
+              note="Account managers on the roster with at least one event. The denominator is the roster itself, so this moves when someone joins or leaves — a fall can mean a smaller team, not less use." />
+            <Card label="Alfred questions" value={data.alfredQuestions} sub={`${data.alfredAskers} askers · ${data.alfredAccounts} accounts`}
+              note="Questions put to the AI analyst. Proves it is used, not merely shipped. Every answer is drafted for a human to send — nothing is sent automatically." />
+            <Card label="CSV exports" value={data.exports}
+              note="Data pulled out for a deck, a meeting or a spreadsheet. The closest proxy for work that previously meant a manual pull from the old dashboard." />
+            <Card label="Total events" value={data.events} sub={`${data.windowChanges} window changes`}
+              note="Every logged action. Least meaningful on its own — it is the denominator the figures above are measured against." />
           </div>
+
+          {/* What this page cannot tell you. Naming a metric's limits is what
+              makes the rest of it credible — the same reasoning applied to the
+              servicing-load index. Without this, a reader assumes the numbers
+              claim more than they do. */}
+          {data.configured && (
+            <div className="rounded-xl border px-3 py-2.5 text-[11px] leading-relaxed text-slate-500" style={{ borderColor: "var(--cave-line)", background: "rgba(148,163,184,.04)" }}>
+              <b className="text-slate-400">How to read this.</b>{" "}
+              Every figure is counted from the platform&apos;s own activity log — a row is written when someone
+              signs in, opens an account, changes a window, exports, or asks the AI analyst. Nothing here is
+              estimated or sampled. Days are IST days.{" "}
+              <b className="text-slate-400">What it does not show:</b>{" "}
+              time saved, decisions changed, or revenue affected. It records that an account was opened, not what
+              was done about it. It also cannot yet split usage by team — the roster holds roles, not
+              departments — so &ldquo;across CS, Finance and CX&rdquo; is not a claim this page can currently support.
+            </div>
+          )}
 
           {/* daily activity mini-bars */}
           {data.daily.length > 0 && (
