@@ -34,10 +34,25 @@ export default function ActivityLogViewer() {
   const [users, setUsers] = useState<Facet[]>([]);
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState<string | null>(null);
-  const [range, setRange] = useState<RangeState>(() => defaultRange(7));
+  // Seed from the URL so drill-through links from /admin/impact actually land
+  // filtered. Without this the page always opened on its own default window and
+  // silently discarded whatever the link asked for — a link that looks like it
+  // worked but shows the wrong data is worse than no link.
+  // Read from window rather than useSearchParams() to avoid forcing a Suspense
+  // boundary on this client component.
+  const [range, setRange] = useState<RangeState>(() => {
+    if (typeof window === "undefined") return defaultRange(7);
+    const p = new URLSearchParams(window.location.search);
+    const from = p.get("from");
+    const to = p.get("to");
+    if (from && to) return { preset: "custom", from, to };
+    const days = Number(p.get("days"));
+    return defaultRange(Number.isFinite(days) && days > 0 ? days : 7);
+  });
   const [trunc, setTrunc] = useState<{ total: number; returned: number } | null>(null);
-  const [user, setUser] = useState("");
-  const [event, setEvent] = useState("");
+  const initial = typeof window === "undefined" ? null : new URLSearchParams(window.location.search);
+  const [user, setUser] = useState(initial?.get("user") ?? "");
+  const [event, setEvent] = useState(initial?.get("event") ?? "");
 
   const load = useCallback(() => {
     setLoading(true);

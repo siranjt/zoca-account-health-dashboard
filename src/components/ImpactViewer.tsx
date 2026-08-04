@@ -43,14 +43,29 @@ function daysBetween(a: string | null, b: string | null): number | null {
 // tooltip. This page gets screenshotted and forwarded to people who will never
 // hover anything, and a figure whose definition is hidden is a figure that gets
 // quoted wrong.
-function Card({ label, value, sub, note }: { label: string; value: React.ReactNode; sub?: string; note?: string }) {
-  return (
-    <div className="flex flex-col rounded-xl border p-3" style={{ borderColor: "var(--cave-line)", background: "var(--cave-panel)" }}>
+function Card({ label, value, sub, note, href, hint }: {
+  label: string; value: React.ReactNode; sub?: string; note?: string; href?: string; hint?: string;
+}) {
+  const body = (
+    <>
       <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">{label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-800">{value}</div>
       {sub && <div className="mt-0.5 text-[11px] text-slate-400">{sub}</div>}
       {note && <div className="mt-2 border-t pt-1.5 text-[10px] leading-snug text-slate-400" style={{ borderColor: "var(--cave-line)" }}>{note}</div>}
-    </div>
+      {href && <div className="mt-1.5 text-[10px] font-medium text-cyan-600 opacity-0 transition-opacity group-hover:opacity-100">{hint ?? "See the events →"}</div>}
+    </>
+  );
+  const shell = "flex flex-col rounded-xl border p-3";
+  const style = { borderColor: "var(--cave-line)", background: "var(--cave-panel)" };
+
+  // A real <a>, not a div with onClick: middle-click, ⌘-click and keyboard
+  // focus all have to work, and a number you can drill into is only useful if
+  // you can open it in a new tab beside the one you are reading.
+  if (!href) return <div className={shell} style={style}>{body}</div>;
+  return (
+    <a href={href} className={`group no-underline transition-colors hover:border-cyan-400/60 ${shell}`} style={style}>
+      {body}
+    </a>
   );
 }
 
@@ -87,6 +102,20 @@ export default function ImpactViewer() {
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, [qs]);
+
+  // Every drill-through carries the range currently on screen, taken from the
+  // SERVER's resolved dates — so a preset like "30d" hands the activity log the
+  // same window it was actually computed over, not a re-derivation that could
+  // land a day out.
+  const drill = useMemo(() => {
+    return (extra?: { user?: string; event?: string }) => {
+      const p = new URLSearchParams();
+      if (data?.fromDate && data?.toDate) { p.set("from", data.fromDate); p.set("to", data.toDate); }
+      if (extra?.user) p.set("user", extra.user);
+      if (extra?.event) p.set("event", extra.event);
+      return `/admin/activity?${p.toString()}`;
+    };
+  }, [data?.fromDate, data?.toDate]);
 
   const coverage = useMemo(() => daysBetween(data?.dataFrom ?? null, data?.dataTo ?? null), [data]);
   const maxDaily = useMemo(() => Math.max(1, ...(data?.daily ?? []).map((x) => x.events)), [data]);
@@ -161,14 +190,18 @@ export default function ImpactViewer() {
             <Card label="Distinct users" value={data.activeUsers} sub={`in ${data.windowDays}d`}
               note="Individual people who signed in and did something. Counted by email address, so one person on two devices is one user — not sessions, not page views." />
             <Card label="Accounts reviewed" value={data.accountsReviewed} sub={`${data.accountOpens} opens`}
+              href={drill({ event: "account_opened" })} hint="See every account open →"
               note={`Distinct accounts opened at least once.${data.accountsReviewed ? ` ${data.accountOpens.toLocaleString()} opens across ${data.accountsReviewed.toLocaleString()} accounts means accounts were revisited, not skimmed once.` : ""}`} />
             <Card label="AM adoption" value={`${data.amActive}/${data.amRosterSize}`} sub={data.amRosterSize ? `${Math.round((data.amActive / data.amRosterSize) * 100)}% of AMs` : "no roster"}
               note="Account managers on the roster with at least one event. The denominator is the roster itself, so this moves when someone joins or leaves — a fall can mean a smaller team, not less use." />
             <Card label="Alfred questions" value={data.alfredQuestions} sub={`${data.alfredAskers} askers · ${data.alfredAccounts} accounts`}
+              href={drill({ event: "alfred_asked" })} hint="See every question →"
               note="Questions put to the AI analyst. Proves it is used, not merely shipped. Every answer is drafted for a human to send — nothing is sent automatically." />
             <Card label="CSV exports" value={data.exports}
+              href={drill({ event: "csv_exported" })} hint="See every export →"
               note="Data pulled out for a deck, a meeting or a spreadsheet. The closest proxy for work that previously meant a manual pull from the old dashboard." />
             <Card label="Total events" value={data.events} sub={`${data.windowChanges} window changes`}
+              href={drill()} hint="Open the full log →"
               note="Every logged action. Least meaningful on its own — it is the denominator the figures above are measured against." />
           </div>
 
@@ -195,8 +228,42 @@ export default function ImpactViewer() {
               <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Daily activity (events)</div>
               <div className="flex items-end gap-0.5" style={{ height: 60 }}>
                 {data.daily.map((x) => (
-                  <div key={x.d} title={`${x.d}: ${x.events} events · ${x.users} users`} className="flex-1 rounded-t bg-cyan-400/60 hover:bg-cyan-400"
-                    style={{ height: `${Math.max(2, (x.events / maxDaily) * 100)}%` }} />
+                  // Clicking a bar narrows the whole page to that day rather
+                  // than leaving — the question a bar provokes is "what
+                  // happened THEN", and the answer is the same page, re-scoped.
+                  <button
+                    key={x.d}
+                    type="button"
+                    title={`${ddmmyy(x.d)}: ${x.events} events · ${x.users} users — click to filter to this day`}
+                    aria-label={`Filter to ${ddmmyy(x.d)}, ${x.events} events`}
+                    onClick={() => setRange({ preset: "custom", from: x.d, to: x.d })}
+                    className="flex-1 rounded-t bg-cyan-400/60 hover:bg-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                    style={{ height: `${Math.max(2, (x.events / maxDaily) * 100)}%` }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* What people actually DO here. The API has always returned this and
+              the page never rendered it — the shape of usage says which parts of
+              the platform earn their keep, and which to retire. Each row filters
+              the log to that event. */}
+          {data.eventBreakdown.length > 0 && (
+            <div className="rounded-xl border p-3" style={{ borderColor: "var(--cave-line)", background: "var(--cave-panel)" }}>
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                What people did ({data.eventBreakdown.length} event type{data.eventBreakdown.length === 1 ? "" : "s"})
+              </div>
+              <div className="space-y-1">
+                {data.eventBreakdown.map((e) => (
+                  <a key={e.event} href={drill({ event: e.event })}
+                    className="group flex items-center gap-2 rounded px-1 py-0.5 no-underline hover:bg-cyan-50"
+                    title={`See all ${e.n.toLocaleString()} ${e.event} events in this period`}>
+                    <span className="w-40 shrink-0 truncate text-[11px] text-slate-600 group-hover:text-cyan-700">{e.event}</span>
+                    <span className="h-2 rounded-sm bg-cyan-400/50 group-hover:bg-cyan-400"
+                      style={{ width: `${Math.max(1, (e.n / Math.max(1, data.eventBreakdown[0].n)) * 70)}%` }} />
+                    <span className="text-[11px] tabular-nums text-slate-500">{e.n.toLocaleString()}</span>
+                  </a>
                 ))}
               </div>
             </div>
@@ -233,8 +300,16 @@ export default function ImpactViewer() {
                 </thead>
                 <tbody>
                   {data.users.map((u) => (
-                    <tr key={u.email} className="border-t border-slate-100">
-                      <td className="px-2 py-1.5 text-slate-700" title={u.email}>{u.label}</td>
+                    <tr key={u.email} className="border-t border-slate-100 hover:bg-cyan-50/50">
+                      <td className="px-2 py-1.5" title={u.email}>
+                        {/* The person's name is the link, not the whole row: a
+                            row-wide click target swallows text selection, and
+                            people copy names off this table. */}
+                        <a href={drill({ user: u.email })} className="font-medium text-slate-700 no-underline hover:text-cyan-700 hover:underline"
+                          title={`See every event by ${u.label} in this period`}>
+                          {u.label}
+                        </a>
+                      </td>
                       <td className="px-2 py-1.5 text-slate-500">{u.role ?? "—"}</td>
                       <td className="px-2 py-1.5 text-slate-500">{u.amName ?? "—"}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">{u.events}</td>
