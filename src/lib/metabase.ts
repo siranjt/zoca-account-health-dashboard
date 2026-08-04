@@ -168,13 +168,21 @@ export async function queryPostgres(sql: string): Promise<Row[]> {
 }
 
 // Book-wide migration roll-up is expensive (scans the whole book) but changes
-// slowly — cache it 30 min and share across every account view.
+// slowly. Stale-while-revalidate: NEVER block an account-detail load on it —
+// return whatever's cached (or empty on a cold start) immediately, and refresh
+// in the background when stale. The summary card just fills in on the next view.
 let _migCache: { at: number; rows: Row[] } | null = null;
-export async function getMigrationSummary(): Promise<Row[]> {
-  if (_migCache && Date.now() - _migCache.at < 30 * 60_000) return _migCache.rows;
-  const rows = await queryPostgres(migrationSummarySql());
-  _migCache = { at: Date.now(), rows };
-  return rows;
+let _migRefreshing = false;
+export function getMigrationSummaryCached(): Row[] {
+  const fresh = _migCache && Date.now() - _migCache.at < 30 * 60_000;
+  if (!fresh && !_migRefreshing) {
+    _migRefreshing = true;
+    queryPostgres(migrationSummarySql())
+      .then((rows) => { _migCache = { at: Date.now(), rows }; })
+      .catch(() => {})
+      .finally(() => { _migRefreshing = false; });
+  }
+  return _migCache?.rows ?? [];
 }
 
 async function runDataset(cfg: MetabaseConfig, sql: string, dbId?: number): Promise<Row[]> {
@@ -507,7 +515,8 @@ export async function getAccountDetailFromMetabase(
       webActivePct: num(r.web_active_pct), keywordsPct: num(r.keywords_pct),
       contentPct: num(r.content_pct), fullyActivatedPct: num(r.fully_activated_pct),
     });
-    const [msRows, summaryAll] = await Promise.all([queryPostgres(detailMigrationStatusSql(id)), getMigrationSummary()]);
+    const msRows = await queryPostgres(detailMigrationStatusSql(id)); // cheap, per-entity
+    const summaryAll = getMigrationSummaryCached(); // non-blocking; empty on cold cache, fills in next view
     const s = msRows[0];
     if (s) {
       const am = String(s.am_name || "");
