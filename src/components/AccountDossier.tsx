@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import type { AccountDetail, AccountRow, PaymentInvoice } from "@/lib/types";
+import type { AccountDetail, AccountRow, PaymentInvoice, MigrationSummaryRow } from "@/lib/types";
 import type { PickerItem } from "@/app/account/[id]/page";
 import { VIZ } from "@/lib/theme";
 import HealthDot from "./HealthDot";
@@ -72,6 +72,8 @@ export default function AccountDossier({
   const [tab, setTab] = useState<Tab>((TABS as readonly string[]).includes(paramTab ?? "") ? (paramTab as Tab) : "Profile & GBP");
   const [detail, setDetail] = useState<AccountDetail | null>(null);
   const [error, setError] = useState(false);
+  const [migSum, setMigSum] = useState<{ am: MigrationSummaryRow | null; all: MigrationSummaryRow | null } | null>(null);
+  const [migSumLoading, setMigSumLoading] = useState(false);
 
   // keep the active tab in the URL (deep-linkable, shareable, back-button-safe)
   function selectTab(t: Tab) {
@@ -119,6 +121,22 @@ export default function AccountDossier({
       alive = false;
     };
   }, [account.entityId, windowDays]);
+
+  // Book-wide migration summary (card 5393) — fetched separately so its cold
+  // ~30s run never blocks the detail load. Keyed off the account's AM.
+  const migAm = detail?.migration?.amName || null;
+  useEffect(() => {
+    if (!migAm) { setMigSum(null); return; }
+    let alive = true;
+    setMigSum(null);
+    setMigSumLoading(true);
+    fetch(`/api/migration-summary?am=${encodeURIComponent(migAm)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => alive && setMigSum(d))
+      .catch(() => {})
+      .finally(() => alive && setMigSumLoading(false));
+    return () => { alive = false; };
+  }, [migAm]);
 
   // record recently-viewed for the command palette
   useEffect(() => {
@@ -617,13 +635,15 @@ export default function AccountDossier({
             </ChartCard>
 
             <ChartCard title={`Migration progress — ${detail?.migration?.amName?.split(" ")[0] || "AM"} vs all`} subtitle="% of the book activated (card 5393)">
-              {detail ? (detail.migration?.amSummary ? (() => {
-                const amS = detail.migration.amSummary as unknown as Record<string, number | null>;
-                const allS = (detail.migration.allSummary || {}) as unknown as Record<string, number | null>;
+              {!detail || migSumLoading ? (
+                <div className="flex items-center gap-2 py-6 text-xs text-slate-400"><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-cyan-400" /> loading book-wide roll-up…</div>
+              ) : migSum?.am ? (() => {
+                const amS = migSum.am as unknown as Record<string, number | null>;
+                const allS = (migSum.all || {}) as unknown as Record<string, number | null>;
                 const rows: [string, string][] = [["Scheduling opted-in", "schedOptedInPct"], ["Scheduling enabled", "schedEnabledPct"], ["Discovery Web active", "webActivePct"], ["Keywords done", "keywordsPct"], ["Content done", "contentPct"], ["Fully activated", "fullyActivatedPct"]];
                 return (
                   <div className="text-xs">
-                    <div className="mb-1 grid grid-cols-3 gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400"><span>Metric</span><span className="text-right">{detail.migration.amName?.split(" ")[0] || "AM"}</span><span className="text-right">All</span></div>
+                    <div className="mb-1 grid grid-cols-3 gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400"><span>Metric</span><span className="text-right">{detail.migration?.amName?.split(" ")[0] || "AM"}</span><span className="text-right">All</span></div>
                     {rows.map(([lbl, key]) => (
                       <div key={lbl} className="grid grid-cols-3 gap-2 border-t py-1" style={{ borderColor: "var(--cave-line)" }}>
                         <span className="text-slate-600">{lbl}</span>
@@ -631,10 +651,10 @@ export default function AccountDossier({
                         <span className="text-right tabular-nums text-slate-400">{allS[key] ?? "—"}%</span>
                       </div>
                     ))}
-                    <div className="mt-1.5 text-[10px] text-slate-400">{detail.migration.amSummary.accounts} accounts on this AM&apos;s book · {detail.migration.allSummary?.accounts ?? "—"} book-wide</div>
+                    <div className="mt-1.5 text-[10px] text-slate-400">{migSum.am.accounts} accounts on this AM&apos;s book · {migSum.all?.accounts ?? "—"} book-wide</div>
                   </div>
                 );
-              })() : <NoData />) : skel}
+              })() : <NoData />}
             </ChartCard>
 
             <ChartCard title="Scheduling Status" subtitle="entities.product_entities · scheduling.onboarding">

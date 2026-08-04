@@ -194,7 +194,6 @@ export interface AccountDetail {
     schedOptedInAt: string | null; schedOnboardedAt: string | null;
     discoveryWebActive: boolean; discoveryWebSince: string | null;
     keywordRanks: number; contentItems: number; amName: string | null;
-    amSummary: MigrationSummaryRow | null; allSummary: MigrationSummaryRow | null;
   } | null;
   paymentLinks?: { missedPayment: string | null; paymentMethodUpdate: string | null } | null;
 }

@@ -167,22 +167,22 @@ export async function queryPostgres(sql: string): Promise<Row[]> {
   return runDataset(cfg, sql, 2);
 }
 
-// Book-wide migration roll-up is expensive (scans the whole book) but changes
-// slowly. Stale-while-revalidate: NEVER block an account-detail load on it —
-// return whatever's cached (or empty on a cold start) immediately, and refresh
-// in the background when stale. The summary card just fills in on the next view.
+// Book-wide migration roll-up (card 5393) — expensive (~30s cold) but changes
+// slowly. Blocking + 30-min cache + in-flight coalescing. Served by its OWN
+// client-fetched endpoint (/api/migration-summary), NOT from the detail path, so
+// a cold run never blocks an account page. On serverless the cache is per-warm-
+// instance (best-effort) — correctness never depends on it, only speed.
 let _migCache: { at: number; rows: Row[] } | null = null;
-let _migRefreshing = false;
-export function getMigrationSummaryCached(): Row[] {
-  const fresh = _migCache && Date.now() - _migCache.at < 30 * 60_000;
-  if (!fresh && !_migRefreshing) {
-    _migRefreshing = true;
-    queryPostgres(migrationSummarySql())
-      .then((rows) => { _migCache = { at: Date.now(), rows }; })
-      .catch(() => {})
-      .finally(() => { _migRefreshing = false; });
-  }
-  return _migCache?.rows ?? [];
+let _migInflight: Promise<Row[]> | null = null;
+export async function getMigrationSummary(): Promise<Row[]> {
+  if (_migCache && Date.now() - _migCache.at < 30 * 60_000) return _migCache.rows;
+  if (_migInflight) return _migInflight;
+  _migInflight = (async () => {
+    const rows = await queryPostgres(migrationSummarySql());
+    _migCache = { at: Date.now(), rows };
+    return rows;
+  })().finally(() => { _migInflight = null; });
+  return _migInflight;
 }
 
 async function runDataset(cfg: MetabaseConfig, sql: string, dbId?: number): Promise<Row[]> {
@@ -509,26 +509,18 @@ export async function getAccountDetailFromMetabase(
   // the AM/company roll-up (cached). Degrades to null if the source is down.
   let migration: AccountDetail["migration"] = null;
   try {
-    const summaryRow = (r: Row) => ({
-      label: String(r.am_name), accounts: int0(r.accounts),
-      schedOptedInPct: num(r.sched_opted_in_pct), schedEnabledPct: num(r.sched_enabled_pct),
-      webActivePct: num(r.web_active_pct), keywordsPct: num(r.keywords_pct),
-      contentPct: num(r.content_pct), fullyActivatedPct: num(r.fully_activated_pct),
-    });
-    const msRows = await queryPostgres(detailMigrationStatusSql(id)); // cheap, per-entity
-    const summaryAll = getMigrationSummaryCached(); // non-blocking; empty on cold cache, fills in next view
+    // Only the cheap PER-ENTITY status loads inline. The book-wide AM/all summary
+    // (card 5393) is fetched client-side from /api/migration-summary so a cold
+    // ~30s run never blocks this page.
+    const msRows = await queryPostgres(detailMigrationStatusSql(id));
     const s = msRows[0];
     if (s) {
-      const am = String(s.am_name || "");
-      const amRow = summaryAll.find((r) => String(r.am_name) === am);
-      const allRow = summaryAll.find((r) => String(r.am_name) === "ALL ACCOUNTS");
       migration = {
         subscriptionStatus: (s.subscription_status as string) || null,
         schedOptedIn: s.sched_opted_in === true, schedEnabled: s.sched_enabled === true,
         schedOptedInAt: (s.sched_opted_in_at as string) || null, schedOnboardedAt: (s.sched_onboarded_at as string) || null,
         discoveryWebActive: s.discovery_web_active === true, discoveryWebSince: (s.discovery_web_since as string) || null,
-        keywordRanks: int0(s.keyword_ranks), contentItems: int0(s.content_items), amName: am || null,
-        amSummary: amRow ? summaryRow(amRow) : null, allSummary: allRow ? summaryRow(allRow) : null,
+        keywordRanks: int0(s.keyword_ranks), contentItems: int0(s.content_items), amName: String(s.am_name || "") || null,
       };
     }
   } catch { /* Postgres/migration source unavailable — no migration panel */ }
