@@ -300,16 +300,22 @@ export function parseTrend(raw: Record<string, unknown>[]): AmSnapshotRow[] {
       missed_payment_accounts: int(r.missed_payment_accounts),
       missed_payment_amount: int(r.missed_payment_amount),
       churned_30d: int(r.churned_30d),
-      // The two percentages are the only nullable metrics, and their NULL is
-      // load-bearing — see churn_pct_30d in AM_METRICS above.
+      // SIX metrics are nullable, and NULL is load-bearing in every one of them:
+      // the two churn percentages (see churn_pct_30d in AM_METRICS above) and the
+      // four sched_* counts, whose NULL means "this day never measured scheduling"
+      // — the pre-29/07 backfilled workbooks. int() collapsed that to 0 and
+      // redrew the 0 -> 106 cliff that making the columns nullable was meant to
+      // remove: the fix was applied to the write path and undone here on read.
+      // num() preserves it; formatMetric() renders blank and deltaFor() returns
+      // kind 'blank' rather than a jump that never happened.
       churn_pct_30d: num(r.churn_pct_30d),
       churned_mtd: int(r.churned_mtd),
       churn_pct_mtd: num(r.churn_pct_mtd),
       retention_risk_tickets: int(r.retention_risk_tickets),
-      sched_provisioned: int(r.sched_provisioned),
-      sched_product_active: int(r.sched_product_active),
-      sched_onboarded: int(r.sched_onboarded),
-      sched_incomplete: int(r.sched_incomplete),
+      sched_provisioned: num(r.sched_provisioned),
+      sched_product_active: num(r.sched_product_active),
+      sched_onboarded: num(r.sched_onboarded),
+      sched_incomplete: num(r.sched_incomplete),
       untouched_human_30d: int(r.untouched_human_30d),
       untouched_all_30d: int(r.untouched_all_30d),
     },
@@ -334,7 +340,17 @@ function round2(n: number): number {
  */
 export function companyTotal(rowsForDay: AmSnapshotRow[]): Record<MetricKey, number | null> {
   const out = {} as Record<MetricKey, number | null>;
-  for (const k of COUNT_KEYS) out[k] = rowsForDay.reduce((s, r) => s + (r.values[k] ?? 0), 0);
+  for (const k of COUNT_KEYS) {
+    const vals = rowsForDay.map((r) => r.values[k]);
+    // An unmeasured value has no sum. `?? 0` here would rebuild the exact fake
+    // zero that making sched_* nullable removed — and rebuild it on the company
+    // row, the first line anyone reads. On 28/07 all fourteen AMs hold NULL
+    // scheduling, so the total is NULL, and 29/07 shows no delta against it
+    // rather than a +106 jump that never happened.
+    out[k] = vals.some((v) => v === null || v === undefined)
+      ? null
+      : vals.reduce((s: number, v) => s + (v as number), 0);
+  }
 
   const active = out.active_accounts ?? 0;
   const c30 = out.churned_30d ?? 0;

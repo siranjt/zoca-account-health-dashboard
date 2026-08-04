@@ -3,6 +3,7 @@ import { neonUrl } from "@/lib/neon";
 import { beginAmRun, finishAmRun, takeAmSnapshot } from "@/lib/amSnapshot";
 import { computeAmSnapshot } from "@/lib/amReport";
 import { cronAuthFailure } from "@/lib/cronAuth";
+import { setChargebeeDeadline } from "@/lib/chargebee";
 import { istDate } from "@/lib/istDate";
 
 // Daily AM report snapshot — one row per AM per day into alfred.am_daily.
@@ -30,6 +31,11 @@ export async function GET(req: Request) {
   const date = istDate();
   const started = Date.now();
   await beginAmRun(date);
+  // Arm the Chargebee retry budget against THIS RUN, not each request. 240s of
+  // 300 leaves ~60s to write the snapshot and, more importantly, to record a
+  // failure: a Vercel hard kill at maxDuration skips the catch block below, so
+  // finishAmRun() would never fire and the run row would stay finished_at=NULL.
+  setChargebeeDeadline(240_000);
   try {
     const rows = await computeAmSnapshot();
     await takeAmSnapshot({ date, rows, source: "cron" });
@@ -47,5 +53,11 @@ export async function GET(req: Request) {
     const msg = e instanceof Error ? e.message : String(e);
     await finishAmRun(date, { ok: false, durationMs: Date.now() - started, amRows: null, error: msg });
     return NextResponse.json({ ok: false, date, error: msg }, { status: 500 });
+  } finally {
+    // Must disarm. The deadline is module state and Fluid Compute reuses the
+    // instance, so an armed budget would leak into whatever runs next on it —
+    // /api/ask would start refusing to retry against a clock that expired hours
+    // ago, and the failure would look like Chargebee being down.
+    setChargebeeDeadline(null);
   }
 }

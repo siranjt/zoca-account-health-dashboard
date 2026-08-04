@@ -69,20 +69,6 @@ async function ensureTables() {
     metric_version             integer       NOT NULL DEFAULT 1,
     created_at                 timestamptz   DEFAULT now(),
     PRIMARY KEY (snapshot_date, am_name))`);
-  // The four sched_* columns shipped as `NOT NULL DEFAULT 0`, so a workbook
-  // that never measured them stored a *measured* zero — and the 28/07 rows
-  // duly hold sched_product_active=0 and sched_onboarded=0 for all 14 AMs,
-  // which reads on the page as a 0 -> 106 cliff on 29/07 that never happened.
-  // "Not measured" has to be representable, and only NULL says it.
-  //
-  // CREATE TABLE IF NOT EXISTS is a no-op against the table already in
-  // production, so the column type change needs its own ALTER path. Both
-  // statements below are idempotent — dropping a constraint or default that is
-  // already gone succeeds silently — so this is safe on every start-up.
-  for (const col of ["sched_provisioned", "sched_product_active", "sched_onboarded", "sched_incomplete"]) {
-    await sql.query(`ALTER TABLE alfred.am_daily ALTER COLUMN ${col} DROP NOT NULL`);
-    await sql.query(`ALTER TABLE alfred.am_daily ALTER COLUMN ${col} DROP DEFAULT`);
-  }
   await sql.query(`CREATE TABLE IF NOT EXISTS alfred.am_daily_run (
     snapshot_date  date PRIMARY KEY,
     started_at     timestamptz NOT NULL,
@@ -91,6 +77,41 @@ async function ensureTables() {
     duration_ms    integer,
     am_rows        integer,
     error          text)`);
+}
+
+/** Once per process, and only from the write path — see the two reasons below. */
+let amDailyMigrated = false;
+
+/**
+ * Make the four sched_* columns nullable.
+ *
+ * WHY IT EXISTS. They shipped as `NOT NULL DEFAULT 0`, so a workbook that never
+ * measured scheduling stored a *measured* zero — the 28/07 rows held
+ * sched_product_active=0 and sched_onboarded=0 for all 14 AMs, which the page
+ * drew as a 0 -> 106 cliff on 29/07 that never happened. "Not measured" has to
+ * be representable, and only NULL says it. CREATE TABLE IF NOT EXISTS is a no-op
+ * against a table already in production, so the change needs its own ALTER path.
+ *
+ * WHY IT IS NOT IN ensureTables(). ensureTables() is awaited by getAmTrend(),
+ * getAmRuns() and beginAmRun(), and am-report/page.tsx calls the first two in one
+ * Promise.all — so every page render was issuing 16 ALTER TABLE statements, each
+ * taking an ACCESS EXCLUSIVE lock on alfred.am_daily. Worse, ALTER TABLE requires
+ * table ownership: if the app's Neon role does not own the table, that turns
+ * every read into a 500 where CREATE TABLE IF NOT EXISTS was harmless. Reads must
+ * not run DDL. Only takeAmSnapshot() calls this, once per process — the cron runs
+ * daily and the backfill by hand, so a cold start per migration check is free.
+ *
+ * Both statements are idempotent: dropping a constraint or default that is
+ * already gone succeeds silently.
+ */
+async function migrateAmDaily() {
+  if (amDailyMigrated) return;
+  const sql = getSql();
+  for (const col of ["sched_provisioned", "sched_product_active", "sched_onboarded", "sched_incomplete"]) {
+    await sql.query(`ALTER TABLE alfred.am_daily ALTER COLUMN ${col} DROP NOT NULL`);
+    await sql.query(`ALTER TABLE alfred.am_daily ALTER COLUMN ${col} DROP DEFAULT`);
+  }
+  amDailyMigrated = true;
 }
 
 /** NULL, never 100, when the AM holds no live book. */
@@ -140,6 +161,7 @@ export async function takeAmSnapshot(input: {
     throw new Error(`takeAmSnapshot: refusing to replace ${input.date} with zero rows`);
   }
   await ensureTables();
+  await migrateAmDaily();
   const sql = getSql();
   const source = input.source ?? "cron";
   const version = input.metricVersion ?? AM_METRIC_VERSION;

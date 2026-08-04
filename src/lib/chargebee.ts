@@ -20,14 +20,36 @@ function authHeader() {
 // Retry, because the AM daily report makes ~30 of these per run on a
 // once-a-day cron. A single transient 429, 502 or timeout used to throw, reject
 // the enclosing Promise.all, and lose the entire day — with the next attempt 24
-// hours away. Three attempts, so the worst case is 3 x 12s of timeout plus ~2s
-// of backoff per request: comfortably inside the route's maxDuration of 300.
+// hours away.
 //
 // Only retried when a retry can plausibly help: a timeout, a 429, or a 5xx.
 // A 401 or a 404 means the same thing three times in a row.
 const MAX_ATTEMPTS = 3;
 const BACKOFF_MS = [500, 1_500, 4_000];
 const RETRY_AFTER_CAP_MS = 4_000;
+
+// THE RETRY BUDGET IS PER RUN, NOT PER REQUEST. Worst case per request is
+// 3 x 12s of timeout plus ~6s of backoff (~42s), and cbListAll pages
+// SEQUENTIALLY — so under a sustained 429 a stream of only eight pages blows
+// past the route's maxDuration of 300s. A Vercel hard kill does not run the
+// route's catch block, so finishAmRun() never fires and the run row is left
+// finished_at=NULL: the retry would destroy the very failure record it exists
+// to protect, which is strictly worse than the clean abort it replaced.
+//
+// So callers arm a deadline for the whole run. Past it, cbGet stops retrying
+// and throws the underlying error, which the route catches and records
+// properly. Unarmed — every non-cron caller: /api/ask, the invoice PDF route —
+// the budget is Infinity and behaviour is exactly as before.
+let deadlineAt: number | null = null;
+
+/** Arm (ms from now) or disarm (null) the shared retry budget. */
+export function setChargebeeDeadline(ms: number | null): void {
+  deadlineAt = ms === null ? null : Date.now() + ms;
+}
+
+function remainingMs(): number {
+  return deadlineAt === null ? Infinity : deadlineAt - Date.now();
+}
 
 class CbHttpError extends Error {
   constructor(readonly status: number, readonly retryAfter: string | null, message: string) {
@@ -61,8 +83,12 @@ async function cbGet<T = Record<string, unknown>>(path: string, params: Record<s
   const url = `${BASE}${path}${qs ? "?" + qs : ""}`;
 
   for (let attempt = 1; ; attempt++) {
+    // Never let one request's timeout outlive the run's budget: a 12s abort
+    // fired after the 300s kill is a timer nobody is left to observe.
+    const budget = remainingMs();
+    if (budget <= 0) throw new Error(`Chargebee ${path}: run budget exhausted before attempt ${attempt}`);
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    const timer = setTimeout(() => ctrl.abort(), Math.min(TIMEOUT_MS, budget));
     let wait = 0;
     try {
       const res = await fetch(url, { headers: authHeader(), signal: ctrl.signal });
@@ -74,6 +100,10 @@ async function cbGet<T = Record<string, unknown>>(path: string, params: Record<s
     } catch (e) {
       if (attempt >= MAX_ATTEMPTS || !isRetryable(e)) throw e;
       wait = backoffMs(attempt, e instanceof CbHttpError ? e.retryAfter : null);
+      // Only sleep if the backoff AND a second's worth of the next attempt fit
+      // inside what is left. Otherwise fail now, with time still on the clock
+      // for the caller to record the failure.
+      if (remainingMs() < wait + 1_000) throw e;
     } finally {
       // Before the backoff, not after it — this attempt's timeout must not be
       // left armed while we wait to start the next one.
