@@ -77,10 +77,11 @@ export default function CaveNav() {
         <kbd className="rounded px-1 text-[10px]" style={{ background: "var(--cave-line)", color: "#a7c3c8" }}>⌘K</kbd>
       </button>
 
-      <UserMenu />
-      <RainToggle />
-      <DetectiveToggle />
-      <CalmToggle />
+      <UserMenu>
+        <RainToggle />
+        <DetectiveToggle />
+        <CalmToggle />
+      </UserMenu>
       <ThemeToggle />
 
       <div className="flex items-center gap-1 text-sm">
