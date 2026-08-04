@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getViewer, canUseAdminTools } from "@/lib/scope";
+import { getViewer } from "@/lib/scope";
 import { getSql, neonUrl } from "@/lib/neon";
 
 // Admin-only read over the activity log: recent rows (filterable by person /
@@ -9,7 +9,7 @@ export const revalidate = 0;
 
 export async function GET(req: Request) {
   const viewer = await getViewer();
-  if (!canUseAdminTools(viewer)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (viewer.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
   if (!neonUrl()) return NextResponse.json({ rows: [], events: [], users: [], reason: "activity store not configured" });
 
   const { searchParams } = new URL(req.url);

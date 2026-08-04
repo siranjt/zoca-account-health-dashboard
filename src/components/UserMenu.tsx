@@ -40,11 +40,6 @@ export default function UserMenu({ children }: { children?: ReactNode }) {
     u.role === "am" ? `AM · ${u.amName || "—"}` :
     "no role — check ACCESS_CONTROL";
   const first = (u.name || u.email || "").split(" ")[0];
-  // Impact / Activity / Alfred are open to admins plus a small allow-list of
-  // non-admins (mirrors canUseAdminTools + ADMIN_TOOL_EMAILS in lib/scope.ts,
-  // inlined here because that module is server-only). AM Report + Archives stay
-  // strictly admin. The server routes enforce this too — this is nav visibility.
-  const canTools = u.role === "admin" || (u.email || "").trim().toLowerCase() === "robin@zoca.com";
 
   const item = "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs no-underline transition-colors hover:bg-white/[0.06]";
   const itemStyle = { color: "var(--cave-dim)" };
@@ -78,17 +73,12 @@ export default function UserMenu({ children }: { children?: ReactNode }) {
           {rule}
           <a href="/training.html" target="_blank" rel="noopener noreferrer" className={item} style={itemStyle}>🎓 Training</a>
 
-          {canTools && (
+          {u.role === "admin" && (
             <>
               {rule}
               <a href="/admin/impact" className={item} style={itemStyle}>📈 Impact</a>
               <a href="/admin/activity" className={item} style={itemStyle}>📋 Activity</a>
               <a href="/admin/alfred" className={item} style={itemStyle}>🤖 Alfred</a>
-            </>
-          )}
-          {u.role === "admin" && (
-            <>
-              {rule}
               <a href="/am-report" className={item} style={itemStyle} title="AM daily report — snapshot trend (owner only)">📒 AM Report</a>
               <a href="/admin/archives" className={item} style={itemStyle}>🗄️ Archives</a>
             </>

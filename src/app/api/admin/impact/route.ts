@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getViewer, canUseAdminTools } from "@/lib/scope";
+import { getViewer } from "@/lib/scope";
 import { getImpact } from "@/lib/impact";
 
 // Admin-only impact readout over cave_activity_log. JSON by default; ?format=csv
@@ -9,7 +9,7 @@ export const revalidate = 0;
 
 export async function GET(req: Request) {
   const viewer = await getViewer();
-  if (!canUseAdminTools(viewer)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (viewer.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
   const days = Math.min(365, Math.max(1, Number(searchParams.get("days")) || 30));

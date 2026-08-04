@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getViewer, canUseAdminTools } from "@/lib/scope";
+import { getViewer } from "@/lib/scope";
 import { getSql, neonUrl } from "@/lib/neon";
 import { ensureAlfred } from "@/lib/memory";
 
@@ -30,7 +30,7 @@ function costOf(model: string | null | undefined, tokensIn: number, tokensOut: n
 
 export async function GET(req: Request) {
   const viewer = await getViewer();
-  if (!canUseAdminTools(viewer)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (viewer.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
   if (!neonUrl()) return NextResponse.json({ reason: "Alfred store not configured", summary: null, askers: [], accounts: [], tools: [], conversations: [], daily: [] });
 
   const { searchParams } = new URL(req.url);
