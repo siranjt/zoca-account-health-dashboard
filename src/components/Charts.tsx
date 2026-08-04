@@ -340,37 +340,63 @@ export function RankTrendChart({ data }: { data: { d: string; avgRank: number | 
 // ---- lead → booking funnel ------------------------------------------------
 const RAMP = ["#2a78d6", "#3987e5", "#5598e7", "#86b6ef"];
 export function FunnelChart({ f }: { f: { enquiries: number; opened: number; contacted: number; booked: number } }) {
-  const rows = [
+  const stages = [
     { label: "Enquiries", v: f.enquiries },
     { label: "Opened", v: f.opened },
     { label: "Contacted", v: f.contacted },
     { label: "Booked", v: f.booked },
   ];
   const [sel, setSel] = useState<number | null>(null);
-  const max = Math.max(1, f.enquiries);
+  const top = Math.max(1, f.enquiries);
   const conv = f.enquiries ? Math.round((f.booked / f.enquiries) * 100) : 0;
+  // step conversion vs the previous stage (first stage is the 100% baseline)
+  const step = stages.map((s, i) => (i === 0 ? 100 : stages[i - 1].v > 0 ? Math.round((s.v / stages[i - 1].v) * 100) : 0));
+  // biggest drop-off between consecutive stages
+  let worst = -1, worstDrop = -1;
+  for (let i = 1; i < stages.length; i++) { const drop = 100 - step[i]; if (drop > worstDrop) { worstDrop = drop; worst = i; } }
+
+  const W = 300, H = 30, GAP = 18, PT = 4, LM = 62, RM = 32;
+  const cx = LM + (W - LM - RM) / 2;
+  const maxHalf = (W - LM - RM) / 2 - 2;
+  const half = (v: number) => Math.max(5, (v / top) * maxHalf);
+  const yTop = (i: number) => PT + i * (H + GAP);
+  const totalH = PT * 2 + stages.length * H + (stages.length - 1) * GAP;
+
   return (
     <div>
-      <div className="mb-1 text-xs text-slate-400">Booking conversion: <span className="font-semibold text-slate-700">{conv}%</span></div>
-      <div className="space-y-1.5">
-        {rows.map((r, i) => {
-          const pct = f.enquiries ? Math.round((r.v / f.enquiries) * 100) : 0;
+      <div className="mb-1 text-xs text-slate-400">End-to-end booking conversion: <span className="font-semibold text-slate-700">{conv}%</span></div>
+      <svg viewBox={`0 0 ${W} ${totalH}`} className="w-full" style={{ maxHeight: totalH + 12 }} role="img" aria-label={`Lead funnel: ${stages.map((s) => `${s.label} ${s.v}`).join(", ")}`}>
+        {/* tapering silhouette between stages */}
+        {stages.slice(0, -1).map((s, i) => {
+          const y1 = yTop(i) + H, y2 = yTop(i + 1), h1 = half(s.v), h2 = half(stages[i + 1].v);
+          return <polygon key={`c${i}`} points={`${cx - h1},${y1} ${cx + h1},${y1} ${cx + h2},${y2} ${cx - h2},${y2}`} fill={RAMP[i]} opacity={0.13} />;
+        })}
+        {/* stage bands */}
+        {stages.map((s, i) => {
+          const h = half(s.v), y = yTop(i), on = sel === i, mid = y + H / 2;
           return (
-            <button key={r.label} onClick={() => setSel((s) => (s === i ? null : i))} className={`flex w-full items-center gap-2 rounded text-xs ${sel === i ? "bg-indigo-50" : ""}`}>
-              <span className="w-16 shrink-0 text-left text-slate-500">{r.label}</span>
-              <div className="h-4 flex-1 rounded bg-slate-100">
-                <div className="h-4 rounded transition-all hover:brightness-95" style={{ width: `${(r.v / max) * 100}%`, background: RAMP[i], minWidth: r.v > 0 ? 2 : 0 }} />
-              </div>
-              <span className="w-8 shrink-0 text-right font-medium tabular-nums text-slate-700">{r.v}</span>
-            </button>
+            <g key={s.label} onClick={() => setSel((v) => (v === i ? null : i))} style={{ cursor: "pointer" }}>
+              <rect x={cx - h} y={y} width={2 * h} height={H} rx={5} fill={RAMP[i]} opacity={on ? 1 : 0.9} stroke={on ? "#312e81" : "none"} strokeWidth={on ? 1.5 : 0} />
+              <text x={2} y={mid + 3.5} fontSize={10} fill="#64748b">{s.label}</text>
+              <text x={W - 2} y={mid + 3.5} textAnchor="end" fontSize={11} fontWeight={600} fill="#334155">{s.v}</text>
+            </g>
           );
         })}
-      </div>
+        {/* step conversion between stages; biggest drop called out */}
+        {stages.slice(1).map((s, idx) => {
+          const i = idx + 1, y = yTop(i) - GAP / 2 + 3.5, bad = i === worst && worstDrop > 0;
+          return (
+            <text key={`s${i}`} x={cx} y={y} textAnchor="middle" fontSize={9} fontWeight={bad ? 700 : 500} fill={bad ? "#dc2626" : "#94a3b8"}>
+              ↓ {step[i]}% kept{bad ? " · biggest drop" : ""}
+            </text>
+          );
+        })}
+      </svg>
       {sel != null && (
-        <div className="mt-2 rounded bg-slate-50 px-2 py-1 text-xs text-slate-600">
-          <b>{rows[sel].label}:</b> {rows[sel].v}
-          {f.enquiries > 0 && <> · {Math.round((rows[sel].v / f.enquiries) * 100)}% of enquiries</>}
-          {sel > 0 && rows[sel - 1].v > 0 && <> · {Math.round((rows[sel].v / rows[sel - 1].v) * 100)}% of {rows[sel - 1].label.toLowerCase()}</>}
+        <div className="mt-1 rounded bg-slate-50 px-2 py-1 text-xs text-slate-600">
+          <b>{stages[sel].label}:</b> {stages[sel].v}
+          {f.enquiries > 0 && <> · {Math.round((stages[sel].v / f.enquiries) * 100)}% of enquiries</>}
+          {sel > 0 && stages[sel - 1].v > 0 && <> · {step[sel]}% of {stages[sel - 1].label.toLowerCase()}</>}
         </div>
       )}
     </div>

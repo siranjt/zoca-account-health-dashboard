@@ -555,7 +555,9 @@ export async function getAccountDetailFromMetabase(
     impressions: im.map((r) => ({ ym: String(r.ym), impressions: int0(r.impressions) })),
     reviewsDist: rTot ? { total: rTot, avg: rRated ? Math.round((rSum / rRated) * 100) / 100 : null, last30: r30, last90: r90, dist: rDist } : null,
     comms: cm,
-    leadSources: ls.map((r) => ({ bucket: String(r.bucket), n: int0(r.n) })),
+    leadSources: ls
+      .map((r) => ({ bucket: String(r.bucket), n: int0(r.n) }))
+      .sort((a, b) => (a.bucket === "Other" ? 1 : b.bucket === "Other" ? -1 : b.n - a.n)),
     productMrr: pm.map((r) => ({ product: String(r.product), mrr: num(r.mrr) ?? 0, startDate: (r.start_date as string) || null })),
     mediaCadence,
     forecast: fcRow.predicted != null || fcRow.actual != null ? { predicted: num(fcRow.predicted), actual: int0(fcRow.actual) } : null,
