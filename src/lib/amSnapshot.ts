@@ -59,16 +59,30 @@ async function ensureTables() {
     churned_mtd                integer       NOT NULL DEFAULT 0,
     churn_pct_mtd              numeric(5,2),
     retention_risk_tickets     integer       NOT NULL DEFAULT 0,
-    sched_provisioned          integer       NOT NULL DEFAULT 0,
-    sched_product_active       integer       NOT NULL DEFAULT 0,
-    sched_onboarded            integer       NOT NULL DEFAULT 0,
-    sched_incomplete           integer       NOT NULL DEFAULT 0,
+    sched_provisioned          integer,
+    sched_product_active       integer,
+    sched_onboarded            integer,
+    sched_incomplete           integer,
     untouched_human_30d        integer       NOT NULL DEFAULT 0,
     untouched_all_30d          integer       NOT NULL DEFAULT 0,
     source                     text          NOT NULL DEFAULT 'cron',
     metric_version             integer       NOT NULL DEFAULT 1,
     created_at                 timestamptz   DEFAULT now(),
     PRIMARY KEY (snapshot_date, am_name))`);
+  // The four sched_* columns shipped as `NOT NULL DEFAULT 0`, so a workbook
+  // that never measured them stored a *measured* zero — and the 28/07 rows
+  // duly hold sched_product_active=0 and sched_onboarded=0 for all 14 AMs,
+  // which reads on the page as a 0 -> 106 cliff on 29/07 that never happened.
+  // "Not measured" has to be representable, and only NULL says it.
+  //
+  // CREATE TABLE IF NOT EXISTS is a no-op against the table already in
+  // production, so the column type change needs its own ALTER path. Both
+  // statements below are idempotent — dropping a constraint or default that is
+  // already gone succeeds silently — so this is safe on every start-up.
+  for (const col of ["sched_provisioned", "sched_product_active", "sched_onboarded", "sched_incomplete"]) {
+    await sql.query(`ALTER TABLE alfred.am_daily ALTER COLUMN ${col} DROP NOT NULL`);
+    await sql.query(`ALTER TABLE alfred.am_daily ALTER COLUMN ${col} DROP DEFAULT`);
+  }
   await sql.query(`CREATE TABLE IF NOT EXISTS alfred.am_daily_run (
     snapshot_date  date PRIMARY KEY,
     started_at     timestamptz NOT NULL,
@@ -96,8 +110,21 @@ function pct(part: number, activeAccounts: number): number | null {
 // amReport.ts (`churnPct`), next to the data it describes.
 
 /**
- * Upsert one row per AM for `date`. Re-running the same day updates in place —
- * the primary key is (snapshot_date, am_name), so a re-run never duplicates.
+ * Replace the whole of `date` with `rows`, atomically.
+ *
+ * Two failures this shape rules out, both of which the previous row-at-a-time
+ * loop allowed:
+ *   • A half-written day. Every statement over the Neon HTTP driver
+ *     autocommits, so a throw at row 9 of 14 left five AMs on disk and no way
+ *     to tell that from a day when only five AMs had a book. One transaction
+ *     means the day is either wholly replaced or wholly untouched.
+ *   • A stale AM counted twice. The old upsert never deleted, so an AM who
+ *     left between runs kept their last row forever, and companyTotal()
+ *     (amMetrics.ts) went on summing their active_accounts and MRR into every
+ *     later company row. DELETE inside the transaction retires them.
+ *
+ * Re-running the same day is still safe and still idempotent — it now replaces
+ * the day rather than merging into it.
  */
 export async function takeAmSnapshot(input: {
   date: string;
@@ -106,17 +133,25 @@ export async function takeAmSnapshot(input: {
   metricVersion?: number;
 }): Promise<{ date: string; rows: number }> {
   if (!neonUrl()) throw new Error("DATABASE_URL not set");
+  // DELETE-then-INSERT makes an empty input destructive in a way the old upsert
+  // never was: it would silently erase a good day. The compute throws rather
+  // than returning a partial set, so zero rows here is a bug, not a quiet day.
+  if (!input.rows.length) {
+    throw new Error(`takeAmSnapshot: refusing to replace ${input.date} with zero rows`);
+  }
   await ensureTables();
   const sql = getSql();
   const source = input.source ?? "cron";
   const version = input.metricVersion ?? AM_METRIC_VERSION;
 
-  for (const r of input.rows) {
+  const statements = [
+    sql`DELETE FROM alfred.am_daily WHERE snapshot_date = ${input.date}`,
+    ...input.rows.map((r) => {
     // Belt and braces: a percentage against an empty book is meaningless
     // whatever the caller passed.
     const p30 = r.activeAccounts ? r.churnPct30d : null;
     const pMtd = r.activeAccounts ? r.churnPctMtd : null;
-    await sql`INSERT INTO alfred.am_daily
+    return sql`INSERT INTO alfred.am_daily
       (snapshot_date, am_name, active_accounts, mrr, missed_payment_accounts, missed_payment_amount,
        churned_30d, churn_pct_30d, churned_mtd, churn_pct_mtd, retention_risk_tickets,
        sched_provisioned, sched_product_active, sched_onboarded, sched_incomplete,
@@ -135,7 +170,12 @@ export async function takeAmSnapshot(input: {
         sched_onboarded=EXCLUDED.sched_onboarded, sched_incomplete=EXCLUDED.sched_incomplete,
         untouched_human_30d=EXCLUDED.untouched_human_30d, untouched_all_30d=EXCLUDED.untouched_all_30d,
         source=EXCLUDED.source, metric_version=EXCLUDED.metric_version, created_at=now()`;
-  }
+    }),
+  ];
+  // ON CONFLICT is redundant after the DELETE against what is on disk; it is
+  // kept because it still catches the same am_name appearing twice within one
+  // batch, which would otherwise abort the whole day on the primary key.
+  await sql.transaction(statements);
   return { date: input.date, rows: input.rows.length };
 }
 

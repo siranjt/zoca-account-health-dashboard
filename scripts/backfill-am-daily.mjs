@@ -90,8 +90,15 @@ const FIELDS = [
   // clicks (mixpanel_website.daily_page_views.unique_book_now_clicks), which fired
   // for 752 of 819 accounts. It is NOT the same measure as schedProductActive
   // (product provisioning, ~109). Mapping it across would invent a cliff from 752
-  // to 109 that never happened, so it is claimed and DISCARDED: this key is absent
-  // from the INSERT's explicit $1..$18 params, leaving pre-29/07 scheduling NULL.
+  // to 109 that never happened, so it is claimed here purely to keep the strict
+  // header check happy, and its value is never read.
+  //
+  // It claims the column but NOT the field: schedProductActive stays unclaimed
+  // for that workbook, which is what makes it write NULL below. (This comment
+  // used to assert the NULL came from the key being absent from the INSERT's
+  // $1..$18 params. It did not: every sched_* field was coerced through
+  // `?? 0` and the columns were NOT NULL DEFAULT 0, so 28/07 landed four
+  // measured zeros — the fake 0 -> 106 step visible on the page.)
   ["_dropLegacySchedulingActive", (h) => h === "schedulingactive"],
   ["activeAccounts", (h) => h.includes("active") || h === "accounts" || h.includes("livebook")],
 ];
@@ -101,6 +108,14 @@ const COUNT_FIELDS = [
   "schedProvisioned", "schedProductActive", "schedOnboarded", "schedIncomplete",
   "untouchedHuman30d", "untouchedAll30d",
 ];
+
+// The only columns alfred.am_daily stores nullable — i.e. the only metrics that
+// can say "this workbook did not measure me". Everything else is NOT NULL, so a
+// workbook missing that column has no honest representation and must abort
+// rather than record a zero it never measured.
+const NULLABLE_FIELDS = new Set([
+  "schedProvisioned", "schedProductActive", "schedOnboarded", "schedIncomplete",
+]);
 
 function num(v) {
   if (v == null || v === "") return null;
@@ -172,6 +187,20 @@ function parseWorkbook(file) {
   const missing = required.filter((f) => !claimed.has(f));
   if (missing.length) throw new Error(`${file}: Summary sheet is missing column(s): ${missing.join(", ")}`);
 
+  // A field the workbook never measured is written as NULL below. That only
+  // works for the columns declared nullable; for the rest, NULL would trip the
+  // NOT NULL constraint with an opaque driver error at write time. Say it here
+  // instead, while the file that caused it is still in hand.
+  const unrepresentable = [...COUNT_FIELDS, "mrr", "missedPaymentAmount"]
+    .filter((f) => !claimed.has(f) && !NULLABLE_FIELDS.has(f));
+  if (unrepresentable.length) {
+    throw new Error(
+      `${file}: Summary sheet has no column for: ${unrepresentable.join(", ")}\n` +
+      `  These columns are NOT NULL, so "not measured" cannot be recorded. Add a\n` +
+      `  matcher in FIELDS, or make the column nullable — do not default to zero.`,
+    );
+  }
+
   const rows = [];
   for (const r of body) {
     const rec = {};
@@ -185,7 +214,11 @@ function parseWorkbook(file) {
     const amName = rawAm || "(unassigned)";
 
     const out = { amName };
-    for (const f of COUNT_FIELDS) out[f] = Math.round(num(rec[f]) ?? 0);
+    // Claimed column, blank cell => a measured 0 (the AM genuinely had none).
+    // Column absent from the workbook entirely => NULL, "not measured". The two
+    // are different facts and the table now distinguishes them; collapsing both
+    // to 0 is what put four fake zeros on every 28/07 row.
+    for (const f of COUNT_FIELDS) out[f] = claimed.has(f) ? Math.round(num(rec[f]) ?? 0) : null;
     out.mrr = Math.round((num(rec.mrr) ?? 0) * 100) / 100;
     out.missedPaymentAmount = Math.round((num(rec.missedPaymentAmount) ?? 0) * 100) / 100;
     // NULL, never 100, when the AM holds no live book.
@@ -212,16 +245,28 @@ const DDL_TABLE = `CREATE TABLE IF NOT EXISTS alfred.am_daily (
   churned_mtd                integer       NOT NULL DEFAULT 0,
   churn_pct_mtd              numeric(5,2),
   retention_risk_tickets     integer       NOT NULL DEFAULT 0,
-  sched_provisioned          integer       NOT NULL DEFAULT 0,
-  sched_product_active       integer       NOT NULL DEFAULT 0,
-  sched_onboarded            integer       NOT NULL DEFAULT 0,
-  sched_incomplete           integer       NOT NULL DEFAULT 0,
+  sched_provisioned          integer,
+  sched_product_active       integer,
+  sched_onboarded            integer,
+  sched_incomplete           integer,
   untouched_human_30d        integer       NOT NULL DEFAULT 0,
   untouched_all_30d          integer       NOT NULL DEFAULT 0,
   source                     text          NOT NULL DEFAULT 'cron',
   metric_version             integer       NOT NULL DEFAULT 1,
   created_at                 timestamptz   DEFAULT now(),
   PRIMARY KEY (snapshot_date, am_name))`;
+
+// Mirrors the migration in src/lib/amSnapshot.ts: the table already exists in
+// production with these four columns NOT NULL DEFAULT 0, so CREATE TABLE IF NOT
+// EXISTS above will not touch them. Both statements are idempotent.
+const DDL_SCHED_NULLABLE = [
+  "sched_provisioned", "sched_product_active", "sched_onboarded", "sched_incomplete",
+].flatMap((c) => [
+  `ALTER TABLE alfred.am_daily ALTER COLUMN ${c} DROP NOT NULL`,
+  `ALTER TABLE alfred.am_daily ALTER COLUMN ${c} DROP DEFAULT`,
+]);
+
+const DELETE_DAY = `DELETE FROM alfred.am_daily WHERE snapshot_date = $1`;
 
 const INSERT = `INSERT INTO alfred.am_daily
   (snapshot_date, am_name, active_accounts, mrr, missed_payment_accounts, missed_payment_amount,
@@ -268,18 +313,24 @@ async function main() {
   const sql = neon(url);
   await sql.query(DDL_SCHEMA);
   await sql.query(DDL_TABLE);
+  for (const stmt of DDL_SCHED_NULLABLE) await sql.query(stmt);
 
+  // One transaction per day, delete-then-insert: the day ends up exactly as the
+  // workbook describes it, or entirely untouched. Row-at-a-time over the HTTP
+  // driver autocommits, so a throw partway through used to leave a day that was
+  // neither the old snapshot nor the new one, with nothing recording which.
   let written = 0;
   for (const day of parsed) {
-    for (const r of day.rows) {
-      await sql.query(INSERT, [
+    await sql.transaction([
+      sql.query(DELETE_DAY, [day.date]),
+      ...day.rows.map((r) => sql.query(INSERT, [
         day.date, r.amName, r.activeAccounts, r.mrr, r.missedPaymentAccounts, r.missedPaymentAmount,
         r.churned30d, r.churnPct30d, r.churnedMtd, r.churnPctMtd, r.retentionRiskTickets,
         r.schedProvisioned, r.schedProductActive, r.schedOnboarded, r.schedIncomplete,
         r.untouchedHuman30d, r.untouchedAll30d, day.metricVersion,
-      ]);
-      written += 1;
-    }
+      ])),
+    ]);
+    written += day.rows.length;
   }
   console.log(`\nwrote ${written} rows across ${parsed.length} days (source='backfill')`);
 }

@@ -3,6 +3,7 @@ import { neonUrl } from "@/lib/neon";
 import { beginAmRun, finishAmRun, takeAmSnapshot } from "@/lib/amSnapshot";
 import { computeAmSnapshot } from "@/lib/amReport";
 import { cronAuthFailure } from "@/lib/cronAuth";
+import { istDate } from "@/lib/istDate";
 
 // Daily AM report snapshot — one row per AM per day into alfred.am_daily.
 // Scheduled at 17:30 IST (12:00 UTC), matching the laptop job it replaces.
@@ -23,7 +24,10 @@ export async function GET(req: Request) {
   if (denied) return denied;
   if (!neonUrl()) return NextResponse.json({ ok: false, reason: "no database configured" });
 
-  const date = new Date().toISOString().slice(0, 10);
+  // IST, not UTC. A retry or a manual run between 18:30 and 24:00 UTC is
+  // already the next day in IST; `toISOString()` stamped it as yesterday and
+  // overwrote a snapshot that was already correct. See src/lib/istDate.ts.
+  const date = istDate();
   const started = Date.now();
   await beginAmRun(date);
   try {

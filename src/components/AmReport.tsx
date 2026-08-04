@@ -33,6 +33,7 @@ import {
   formatMetric,
   parsePgTimestamp,
 } from "@/lib/amMetrics";
+import { istDate } from "@/lib/istDate";
 
 export interface RunLite {
   snapshot_date: string;
@@ -69,17 +70,9 @@ const STICKY_COL: React.CSSProperties = {
 // Freshness
 // ---------------------------------------------------------------------------
 
-/** YYYY-MM-DD as it reads in IST — the timezone the cron and the team run on. */
-function istDate(d: Date): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(d);
-  const g = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  return `${g("year")}-${g("month")}-${g("day")}`;
-}
+// istDate() used to live here, and the cron stamped snapshot_date from UTC —
+// so the page measured freshness in IST against a date written in UTC. Both
+// now read the one helper in src/lib/istDate.ts.
 
 function daysBetweenDates(a: string, b: string): number {
   const ta = Date.parse(`${a}T00:00:00Z`);

@@ -17,17 +17,69 @@ function authHeader() {
   return { Authorization: "Basic " + Buffer.from(`${KEY}:`).toString("base64") };
 }
 
+// Retry, because the AM daily report makes ~30 of these per run on a
+// once-a-day cron. A single transient 429, 502 or timeout used to throw, reject
+// the enclosing Promise.all, and lose the entire day — with the next attempt 24
+// hours away. Three attempts, so the worst case is 3 x 12s of timeout plus ~2s
+// of backoff per request: comfortably inside the route's maxDuration of 300.
+//
+// Only retried when a retry can plausibly help: a timeout, a 429, or a 5xx.
+// A 401 or a 404 means the same thing three times in a row.
+const MAX_ATTEMPTS = 3;
+const BACKOFF_MS = [500, 1_500, 4_000];
+const RETRY_AFTER_CAP_MS = 4_000;
+
+class CbHttpError extends Error {
+  constructor(readonly status: number, readonly retryAfter: string | null, message: string) {
+    super(message);
+    this.name = "CbHttpError";
+  }
+}
+
+function isRetryable(e: unknown): boolean {
+  if (e instanceof CbHttpError) return e.status === 429 || e.status >= 500;
+  // fetch() rejects with an AbortError when our own timeout fires.
+  return e instanceof Error && e.name === "AbortError";
+}
+
+/** Backoff for the wait AFTER `attempt`, honouring Retry-After when Chargebee
+ *  sends one. Jittered +/-25% so concurrent streams do not resynchronise onto
+ *  the same retry instant and reproduce the burst that triggered the 429. */
+function backoffMs(attempt: number, retryAfter: string | null): number {
+  const secs = Number(retryAfter);
+  const base = Number.isFinite(secs) && secs > 0
+    ? Math.min(secs * 1000, RETRY_AFTER_CAP_MS)
+    : BACKOFF_MS[Math.min(attempt - 1, BACKOFF_MS.length - 1)];
+  return Math.round(base * (0.75 + Math.random() * 0.5));
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function cbGet<T = Record<string, unknown>>(path: string, params: Record<string, string> = {}): Promise<T> {
   if (!KEY) throw new Error("CHARGEBEE_API_KEY not set");
   const qs = new URLSearchParams(params).toString();
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-  try {
-    const res = await fetch(`${BASE}${path}${qs ? "?" + qs : ""}`, { headers: authHeader(), signal: ctrl.signal });
-    if (!res.ok) throw new Error(`Chargebee ${res.status}: ${(await res.text().catch(() => "")).slice(0, 160)}`);
-    return (await res.json()) as T;
-  } finally {
-    clearTimeout(timer);
+  const url = `${BASE}${path}${qs ? "?" + qs : ""}`;
+
+  for (let attempt = 1; ; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    let wait = 0;
+    try {
+      const res = await fetch(url, { headers: authHeader(), signal: ctrl.signal });
+      if (!res.ok) {
+        const body = (await res.text().catch(() => "")).slice(0, 160);
+        throw new CbHttpError(res.status, res.headers.get("retry-after"), `Chargebee ${res.status}: ${body}`);
+      }
+      return (await res.json()) as T;
+    } catch (e) {
+      if (attempt >= MAX_ATTEMPTS || !isRetryable(e)) throw e;
+      wait = backoffMs(attempt, e instanceof CbHttpError ? e.retryAfter : null);
+    } finally {
+      // Before the backoff, not after it — this attempt's timeout must not be
+      // left armed while we wait to start the next one.
+      clearTimeout(timer);
+    }
+    await sleep(wait);
   }
 }
 

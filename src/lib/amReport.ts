@@ -8,6 +8,7 @@ import {
 } from "@/lib/metabase";
 import { listSubscriptions, listInvoices, chargebeeConfigured, type CbSubscription } from "@/lib/chargebee";
 import type { AmDailyRow } from "@/lib/amSnapshot";
+import { istMonthStartUnix } from "@/lib/istDate";
 
 // ===========================================================================
 // AM daily report — the compute half. Port of ~/scripts/daily_am_report_detailed.py
@@ -416,9 +417,11 @@ function churnPct(churned: number, active: number): number | null {
 export async function computeAmSnapshot(): Promise<AmDailyRow[]> {
   const nowMs = Date.now();
   const now = Math.floor(nowMs / 1000);
-  const d = new Date(nowMs);
-  // Calendar month in the process's local time, matching the laptop job.
-  const monthStart = Math.floor(new Date(d.getFullYear(), d.getMonth(), 1).getTime() / 1000);
+  // IST calendar month — the same month the team means by "MTD". Reading the
+  // process's local time made this environment-dependent: UTC on Vercel, IST on
+  // the laptop it replaced, and the two disagree for the first 5.5 hours of
+  // every month.
+  const monthStart = istMonthStartUnix(new Date(nowMs));
 
   // Chargebee, scheduling and tickets are independent of everything else.
   const [book, scheduling, ticketsByAm] = await Promise.all([
