@@ -25,6 +25,19 @@ export async function getViewer(): Promise<Viewer> {
   }
 }
 
+// Non-admins who may open the admin analytics tools (Impact / Activity / Alfred)
+// WITHOUT holding the full admin role. Kept here as the single source of truth so
+// the page guards, API guards, and nav all read the same rule. Emails lowercased.
+// NOTE: this does NOT grant /am-report or /admin/archives — those stay admin-only.
+export const ADMIN_TOOL_EMAILS = ["robin@zoca.com"];
+
+/** True if this viewer may open Impact / Activity / Alfred: any admin, plus the
+ *  explicitly-listed ADMIN_TOOL_EMAILS. */
+export function canUseAdminTools(v: Pick<Viewer, "role" | "email">): boolean {
+  if (v.role === "admin") return true;
+  return ADMIN_TOOL_EMAILS.includes((v.email || "").trim().toLowerCase());
+}
+
 /** Restrict an account list to what this viewer may see. */
 export function scopeAccounts<T extends { accountManager: string | null }>(accounts: T[], viewer: Viewer): T[] {
   if (viewer.role === "am") {

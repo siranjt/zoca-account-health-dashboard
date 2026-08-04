@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getViewer } from "@/lib/scope";
+import { getViewer, canUseAdminTools } from "@/lib/scope";
 import CaveNav from "@/components/CaveNav";
 import ActivityLogViewer from "@/components/ActivityLogViewer";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminActivityPage() {
   const viewer = await getViewer();
-  if (viewer.role !== "admin") redirect("/overview");
+  if (!canUseAdminTools(viewer)) redirect("/overview");
   return (
     <>
       <CaveNav />

@@ -550,6 +550,7 @@ const textOf = (resp: any) => (resp?.content || []).filter((b: any) => b.type ==
 const PREFERRED_NAMES: Record<string, string> = {
   "siranjith.t@zoca.com": "Siranj",
   "siranjiththangavel@gmail.com": "Siranj",
+  "robin@zoca.com": "Robin",
 };
 
 // First name to address the user by: preferred override → session name → AM name → email.
