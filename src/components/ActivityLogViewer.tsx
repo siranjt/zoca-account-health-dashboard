@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { DateRangeFilter, defaultRange, rangeParams, type RangeState } from "@/components/DateRangeFilter";
 
 interface Row {
   id: number; email: string | null; name: string | null; role: string | null; am_name: string | null;
@@ -33,13 +34,14 @@ export default function ActivityLogViewer() {
   const [users, setUsers] = useState<Facet[]>([]);
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState<string | null>(null);
-  const [days, setDays] = useState(7);
+  const [range, setRange] = useState<RangeState>(() => defaultRange(7));
+  const [trunc, setTrunc] = useState<{ total: number; returned: number } | null>(null);
   const [user, setUser] = useState("");
   const [event, setEvent] = useState("");
 
   const load = useCallback(() => {
     setLoading(true);
-    const qs = new URLSearchParams({ days: String(days), limit: "300" });
+    const qs = new URLSearchParams({ ...rangeParams(range), limit: "300" });
     if (user) qs.set("user", user);
     if (event) qs.set("event", event);
     fetch(`/api/admin/activity?${qs.toString()}`, { cache: "no-store" })
@@ -48,11 +50,12 @@ export default function ActivityLogViewer() {
         setRows(d.rows || []);
         setEvents(d.events || []);
         setUsers(d.users || []);
-        setNote(d.reason || null);
+        setNote(d.reason || d.error || null);
+        setTrunc(d.truncated ? { total: d.total, returned: d.returned } : null);
       })
       .catch((e) => setNote(String(e)))
       .finally(() => setLoading(false));
-  }, [days, user, event]);
+  }, [range, user, event]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -61,11 +64,7 @@ export default function ActivityLogViewer() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
-          {WINDOWS.map((d) => (
-            <button key={d} onClick={() => setDays(d)} className={`px-2.5 py-1 text-xs font-medium ${days === d ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}>{d}d</button>
-          ))}
-        </div>
+        <DateRangeFilter presets={WINDOWS} value={range} onChange={setRange} />
         <select value={user} onChange={(e) => setUser(e.target.value)} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
           <option value="">All people ({users.length})</option>
           {users.map((u) => <option key={u.email || u.label} value={u.email || ""}>{u.label} ({u.n})</option>)}
@@ -76,6 +75,14 @@ export default function ActivityLogViewer() {
         </select>
         <button onClick={load} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">Refresh</button>
         <span className="text-xs text-slate-400">{loading ? "loading…" : `${rows.length} rows`}</span>
+        {/* Say it, never imply it. A wide range easily matches more than the
+            300-row limit, and a silently short list on a page someone is using
+            to count things reads as "that's all there was". */}
+        {trunc && !loading && (
+          <span className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+            Showing {trunc.returned.toLocaleString()} of {trunc.total.toLocaleString()} matching events — narrow the range or filter to see the rest.
+          </span>
+        )}
       </div>
 
       {note && <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">{note}</div>}

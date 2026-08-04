@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { DateRangeFilter, defaultRange, rangeParams, type RangeState } from "@/components/DateRangeFilter";
 
 type User = {
   label: string; email: string; role: string | null; amName: string | null;
@@ -8,6 +9,7 @@ type User = {
 };
 type Readout = {
   configured: boolean; windowDays: number;
+  fromDate: string; toDate: string;
   dataFrom: string | null; dataTo: string | null; totalEventsAllTime: number;
   events: number; activeUsers: number; accountsReviewed: number; accountOpens: number;
   exports: number; windowChanges: number;
@@ -21,6 +23,11 @@ const WINDOWS = [7, 30, 90];
 
 function ddmmyy(iso: string | null): string {
   if (!iso) return "—";
+  // A bare YYYY-MM-DD is already an IST calendar day — format it as text.
+  // `new Date("2026-08-04")` parses as UTC midnight and getDate() reads it back
+  // in the VIEWER's timezone, so anyone west of UTC would see 03/08.
+  const plain = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (plain) return `${plain[3]}/${plain[2]}/${plain[1].slice(-2)}`;
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso.slice(0, 10);
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(-2)}`;
@@ -43,7 +50,8 @@ function Card({ label, value, sub }: { label: string; value: React.ReactNode; su
 }
 
 export default function ImpactViewer() {
-  const [days, setDays] = useState(30);
+  const [range, setRange] = useState<RangeState>(() => defaultRange(30));
+  const qs = useMemo(() => new URLSearchParams(rangeParams(range)).toString(), [range]);
   const [data, setData] = useState<Readout | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -68,12 +76,12 @@ export default function ImpactViewer() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/admin/impact?days=${days}`, { cache: "no-store" })
+    fetch(`/api/admin/impact?${qs}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => setData(d))
       .catch(() => setData(null))
       .finally(() => setLoading(false));
-  }, [days]);
+  }, [qs]);
 
   const coverage = useMemo(() => daysBetween(data?.dataFrom ?? null, data?.dataTo ?? null), [data]);
   const maxDaily = useMemo(() => Math.max(1, ...(data?.daily ?? []).map((x) => x.events)), [data]);
@@ -82,15 +90,8 @@ export default function ImpactViewer() {
     <div className="space-y-4">
       {/* window + export */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
-          {WINDOWS.map((d) => (
-            <button key={d} onClick={() => setDays(d)}
-              className={`px-2.5 py-1 text-xs font-medium ${days === d ? "bg-slate-800 text-white" : "bg-white text-slate-600 hover:bg-slate-100"}`}>
-              {d}d
-            </button>
-          ))}
-        </div>
-        <a href={`/api/admin/impact?days=${days}&format=csv`}
+        <DateRangeFilter presets={WINDOWS} value={range} onChange={setRange} />
+        <a href={`/api/admin/impact?${qs}&format=csv`}
           className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">
           ⭳ Export CSV
         </a>
@@ -111,7 +112,7 @@ export default function ImpactViewer() {
       {data && (
         <div className="rounded-lg border px-3 py-2 text-[11px] text-slate-500" style={{ borderColor: "var(--cave-line2)", background: "rgba(148,163,184,.06)" }}>
           {data.dataFrom
-            ? <>Activity log spans <b>{ddmmyy(data.dataFrom)} → {ddmmyy(data.dataTo)}</b>{coverage != null && <> (~{coverage} day{coverage === 1 ? "" : "s"} of history)</>} · <b>{data.totalEventsAllTime.toLocaleString()}</b> total events recorded. Figures below cover the last {data.windowDays} days.</>
+            ? <>Activity log spans <b>{ddmmyy(data.dataFrom)} → {ddmmyy(data.dataTo)}</b>{coverage != null && <> (~{coverage} day{coverage === 1 ? "" : "s"} of history)</>} · <b>{data.totalEventsAllTime.toLocaleString()}</b> total events recorded. Figures below cover <b>{ddmmyy(data.fromDate)} → {ddmmyy(data.toDate)}</b> ({data.windowDays} day{data.windowDays === 1 ? "" : "s"}).</>
             : data.configured ? <>No activity has been recorded yet — the log is configured but empty.</> : <>Activity store not configured (<code>DATABASE_URL</code> missing).</>}
         </div>
       )}
