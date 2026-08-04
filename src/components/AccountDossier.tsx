@@ -27,7 +27,6 @@ import HealthTrajectoryCard from "./HealthTrajectoryCard";
 import MeetingLinkChip from "./MeetingLinkChip";
 import AccountContextCards from "./AccountContextCards";
 import { formatNumber, formatDuration, formatTenure } from "@/lib/format";
-import RetoolAllData from "./RetoolAllData";
 import CommunicationTab from "./CommunicationTab";
 import ChangesTab from "./ChangesTab";
 import { track } from "@/lib/track";
@@ -52,7 +51,6 @@ const TABS = [
   "Payments",
   "Scheduling & Support",
   "Front Desk",
-  "All Data (76)",
 ] as const;
 type Tab = (typeof TABS)[number];
 
@@ -780,12 +778,6 @@ export default function AccountDossier({
         {tab === "Changes Log" && (
           <div className="md:col-span-2 xl:col-span-3">
             <ChangesTab entityId={account.entityId} windowDays={windowDays} />
-          </div>
-        )}
-
-        {tab === "All Data (76)" && (
-          <div className="md:col-span-2 xl:col-span-3">
-            <RetoolAllData entityId={account.entityId} />
           </div>
         )}
       </div>
