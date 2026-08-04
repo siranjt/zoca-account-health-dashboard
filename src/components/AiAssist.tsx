@@ -4,6 +4,73 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 interface PromptMeta { function: string; type: string; useCase: string; }
 
+// One-click comprehensive read — reads the full comms + ticket history and
+// produces a handover-grade account analysis. Kept in code (not the shared
+// prompt catalog) so it's versioned with the app.
+const ANALYSER_PROMPT = `Produce a complete ACCOUNT ANALYSIS for this account, at the standard of a rigorous customer-success analyst briefing an incoming account manager. Read ALL the communication history and every Linear ticket provided, then write a structured document with these sections:
+
+1. Executive summary — business, primary contact, email, phone, location, website, current tools, selected Zoca product(s), discussed pricing, launch date, previous AM. Facts only; mark anything inferred as "reported".
+2. Account health — a compact table: overall, relationship, churn risk, product adoption, lead activity, brand sensitivity, main risk, ticket status (one line each).
+3. Business background — history, recent changes, service mix, and the owner's real goal (beyond "more leads").
+4. Sales & product history — options and prices presented, what they chose, what is ambiguous.
+5. Billing — REQUIRES VERIFICATION. List explicitly what the comms/tickets do NOT confirm (trial dates, setup fee, first payment, next renewal). Never assume billing facts.
+6. What the customer specifically requested — extract their stated expectations faithfully, grouped (visibility, priority services, geography, competitor intel, reporting, content ownership, etc.).
+7. Delivery vs promises — compare what onboarding/tickets claim was done against what was actually validated; surface every contradiction (e.g. content promised as customer-published vs an automated email that auto-drafted it; name/spelling mismatches; "Done" tickets with blank required fields).
+8. Open commitments & unresolved items — split Critical vs Important, each with the concrete next action.
+9. Customer profile & communication style — what will work and what to avoid with this person.
+10. Recommended first-call agenda (numbered) and a 30-day objective.
+11. Final assessment — value, main threat, expansion potential.
+
+Rules: ground every statement strictly in the provided communication and tickets — never invent names, dates, prices, or commitments. Distinguish clearly between what was CLAIMED/promised and what is CONFIRMED. Separate visibility, leads, and bookings; do not treat rankings as bookings or a promise as a delivered fact. Where the context is silent, say so rather than guessing.
+
+Length: the ENTIRE analysis — all 11 sections — must fit in one response. Write densely: lead with tables and tight bullet points, keep prose minimal and specific, and cut every filler word, hedge, and repetition. State each fact and flag once. For high-history accounts, prioritise the highest-signal facts and flags and compress the rest — never drop a section or a material finding to save space. Aim for roughly 2,500 words; completeness of coverage matters more than length.`;
+
+// Minimal markdown → HTML (headers, bold/italic, tables, lists, blockquotes, rules)
+// so the analysis downloads as a clean Word document. No dependency: Word opens
+// an HTML file with a .doc extension and renders tables/headers natively.
+function mdToHtml(md: string): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inline = (s: string) => esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*]+?)\*/g, "$1<em>$2</em>").replace(/`([^`]+?)`/g, "<code>$1</code>");
+  const rows = md.replace(/\r/g, "").split("\n");
+  const out: string[] = [];
+  let list: "ul" | "ol" | null = null;
+  const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  for (let i = 0; i < rows.length; i++) {
+    const ln = rows[i];
+    if (/^\s*\|.*\|\s*$/.test(ln) && i + 1 < rows.length && /^\s*\|?[\s:|-]+\|?\s*$/.test(rows[i + 1]) && rows[i + 1].includes("-")) {
+      closeList();
+      const cells = (r: string) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      out.push("<table><tr>" + cells(ln).map((h) => `<th>${inline(h)}</th>`).join("") + "</tr>");
+      i += 2;
+      while (i < rows.length && /^\s*\|.*\|\s*$/.test(rows[i])) { out.push("<tr>" + cells(rows[i]).map((c) => `<td>${inline(c)}</td>`).join("") + "</tr>"); i++; }
+      i--; out.push("</table>"); continue;
+    }
+    const h = ln.match(/^(#{1,4})\s+(.+)/);
+    if (h) { closeList(); out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); continue; }
+    if (/^\s*(-{3,}|_{3,}|\*{3,})\s*$/.test(ln)) { closeList(); out.push("<hr/>"); continue; }
+    if (/^\s*>\s?/.test(ln)) { closeList(); out.push(`<blockquote>${inline(ln.replace(/^\s*>\s?/, ""))}</blockquote>`); continue; }
+    const ul = ln.match(/^\s*[-*]\s+(.+)/), ol = ln.match(/^\s*\d+\.\s+(.+)/);
+    if (ul) { if (list !== "ul") { closeList(); out.push("<ul>"); list = "ul"; } out.push(`<li>${inline(ul[1])}</li>`); continue; }
+    if (ol) { if (list !== "ol") { closeList(); out.push("<ol>"); list = "ol"; } out.push(`<li>${inline(ol[1])}</li>`); continue; }
+    if (ln.trim() === "") { closeList(); continue; }
+    closeList(); out.push(`<p>${inline(ln)}</p>`);
+  }
+  closeList();
+  return out.join("\n");
+}
+
+function downloadDoc(response: string) {
+  const title = (response.match(/^#\s+(.+)/m)?.[1] || "Account Analysis").replace(/[#*_`]/g, "").trim();
+  const style = "body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#111;line-height:1.45}h1{font-size:18pt;margin:0 0 4px}h2{font-size:13.5pt;border-bottom:1px solid #ccc;padding-bottom:2px;margin-top:18px}h3{font-size:11.5pt;margin-top:12px}table{border-collapse:collapse;width:100%;margin:8px 0}th,td{border:1px solid #999;padding:5px 7px;text-align:left;vertical-align:top}th{background:#eef1f4}blockquote{border-left:3px solid #bbb;margin:6px 0;padding:2px 12px;color:#444}code{font-family:Consolas,monospace;font-size:10pt}";
+  const doc = `<!doctype html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><title>${title}</title><style>${style}</style></head><body>${mdToHtml(response)}</body></html>`;
+  const blob = new Blob(["﻿" + doc], { type: "application/msword" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = title.replace(/[^a-z0-9]+/gi, "-").slice(0, 60).replace(/^-|-$/g, "") + ".doc";
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
 export default function AiAssist({
   entityId,
   windowDays,
@@ -114,7 +181,7 @@ export default function AiAssist({
     <div className="rounded-xl border p-3" style={{ borderColor: "var(--cave-line2)", background: "var(--cave-panel)" }}>
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold" style={{ color: "var(--cave-cy)" }}>✨ AI Assist</span>
-        <span className="text-xs text-slate-400">· pick a prompt or write your own · runs over the last {windowDays}d of communication</span>
+        <span className="text-xs text-slate-400">· run the Account Analyser, pick a prompt, or write your own · reads the full communication history</span>
       </div>
 
       {focusBody && (
@@ -145,6 +212,16 @@ export default function AiAssist({
           {useCases.map((u) => <option key={u} value={u}>{u}</option>)}
         </select>
         {loadingPrompt && <span className="self-center text-xs text-slate-400">loading prompt…</span>}
+      </div>
+
+      {/* one-click comprehensive analysis */}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => { setInstruction(ANALYSER_PROMPT); setResponse(null); setError(null); }}
+          className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold text-cyan-300 transition-colors hover:bg-cyan-400/10"
+          style={{ borderColor: "var(--cave-line2)" }}>
+          🔎 Account Analyser
+        </button>
+        <span className="text-[10px] text-slate-500">full-history handover-grade read · can take a minute or two</span>
       </div>
 
       {/* instruction (editable / run your own) */}
@@ -179,12 +256,18 @@ export default function AiAssist({
           <div className="mb-1 flex items-center gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">LLM Response</span>
             {response && (
-              <button
-                onClick={() => { navigator.clipboard?.writeText(response); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
-                className="ml-auto text-[10px] font-medium text-indigo-600 hover:underline"
-              >
-                {copied ? "copied ✓" : "copy"}
-              </button>
+              <div className="ml-auto flex items-center gap-3">
+                <button onClick={() => downloadDoc(response)} className="inline-flex items-center gap-1 text-[10px] font-medium text-indigo-600 hover:underline" title="Download as a Word document">
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>
+                  Word
+                </button>
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(response); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+                  className="text-[10px] font-medium text-indigo-600 hover:underline"
+                >
+                  {copied ? "copied ✓" : "copy"}
+                </button>
+              </div>
             )}
           </div>
           {running ? (

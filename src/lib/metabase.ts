@@ -44,6 +44,8 @@ import {
   detailBookingsByCreatorSql,
   detailWowTasksSql,
   detailCallbackActionsSql,
+  detailFrontDeskStatusSql,
+  detailFrontDeskCallsSql,
   detailPaymentLinksSql,
 } from "./queries";
 import { labelAgent } from "./types";
@@ -429,7 +431,7 @@ export async function getAccountDetailFromMetabase(
   // point-in-time snapshots (rankings, impressions, services, onboarding,
   // scheduling status, forecast, payment links, review distribution) do not.
   const w = Number.isFinite(windowDays) && windowDays > 0 ? Math.round(windowDays) : 90;
-  const [pw, lr, rt, fn, au, bk, kr, im, rd, ls, cm, md, fc, rl, ll, ps, pw2, sv, rq, cs, ob, wo, sst, tb, bs, bc, wt, ca, pl, pm] = await Promise.all([
+  const [pw, lr, rt, fn, au, bk, kr, im, rd, ls, cm, md, fc, rl, ll, ps, pw2, sv, rq, cs, ob, wo, sst, tb, bs, bc, wt, ca, pl, pm, fds, fdc] = await Promise.all([
     runDataset(cfg, detailProfileWeeklySql(id, w)),
     runDataset(cfg, detailLeadsReviewsMonthlySql(id, w)),
     runDataset(cfg, detailRankTrendSql(id, w)),
@@ -460,6 +462,8 @@ export async function getAccountDetailFromMetabase(
     safe(detailCallbackActionsSql(id, w)),
     safe(detailPaymentLinksSql(id)),
     safe(detailProductMrrSql(id)),
+    safe(detailFrontDeskStatusSql(id)),
+    safe(detailFrontDeskCallsSql(id, w)),
   ]);
   const f = fn[0] ?? {};
   const RATING = { FIVE: 5, FOUR: 4, THREE: 3, TWO: 2, ONE: 1, ZERO: 0 } as Record<string, number>;
@@ -599,6 +603,17 @@ export async function getAccountDetailFromMetabase(
       resolutionPct: num(r.resolution_rate_pct),
     })),
     callbackActions: ca.map((r) => ({ action: (r.action as string) || null, count: int0(r.count) })),
+    frontDeskStatus: fds[0]
+      ? {
+          active: (fds[0].fd_active as string) || null,
+          botActive: fds[0].fd_bot == null ? null : Boolean(fds[0].fd_bot),
+          voiceActive: fds[0].fd_voice == null ? null : Boolean(fds[0].fd_voice),
+          virtualNumber: fds[0].fd_vnum == null ? null : Boolean(fds[0].fd_vnum),
+          channel: (fds[0].fd_channel as string) || null,
+          onboardedDate: (fds[0].fd_onboarded as string) || null,
+        }
+      : null,
+    frontDeskCalls: fdc.map((r) => ({ wk: String(r.wk), calls: int0(r.calls) })),
     paymentLinks: pl[0]
       ? {
           missedPayment: (pl[0].missed_payment as string) || null,
