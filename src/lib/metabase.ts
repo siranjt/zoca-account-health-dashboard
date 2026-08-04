@@ -46,6 +46,8 @@ import {
   detailCallbackActionsSql,
   detailFrontDeskStatusSql,
   detailFrontDeskCallsSql,
+  detailMigrationStatusSql,
+  migrationSummarySql,
   detailPaymentLinksSql,
 } from "./queries";
 import { labelAgent } from "./types";
@@ -157,12 +159,30 @@ export async function fetchPublicDashcard(
   return { cols, rows: (data.rows ?? []) as unknown[][] };
 }
 
-async function runDataset(cfg: MetabaseConfig, sql: string): Promise<Row[]> {
+/** Run native SQL against the Zoca POSTGRES db (id 2) — the migration/scheduling
+ *  source tables live there, not in Aurora. */
+export async function queryPostgres(sql: string): Promise<Row[]> {
+  const cfg = readMetabaseConfig();
+  if (!cfg) throw new Error("Metabase not configured (METABASE_BASE_URL / METABASE_API_KEY)");
+  return runDataset(cfg, sql, 2);
+}
+
+// Book-wide migration roll-up is expensive (scans the whole book) but changes
+// slowly — cache it 30 min and share across every account view.
+let _migCache: { at: number; rows: Row[] } | null = null;
+export async function getMigrationSummary(): Promise<Row[]> {
+  if (_migCache && Date.now() - _migCache.at < 30 * 60_000) return _migCache.rows;
+  const rows = await queryPostgres(migrationSummarySql());
+  _migCache = { at: Date.now(), rows };
+  return rows;
+}
+
+async function runDataset(cfg: MetabaseConfig, sql: string, dbId?: number): Promise<Row[]> {
   const res = await fetch(`${cfg.url}/api/dataset`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": cfg.apiKey },
     body: JSON.stringify({
-      database: cfg.databaseId,
+      database: dbId ?? cfg.databaseId,
       type: "native",
       native: { query: sql },
     }),
@@ -476,8 +496,37 @@ export async function getAccountDetailFromMetabase(
   }
   let live = 0; const mediaCadence = md.map((r) => { live += int0(r.delta); return { wk: String(r.wk), live }; });
   const fcRow = fc[0] ?? {};
+
+  // Discovery & Scheduling migration (Postgres db 2): this account's status +
+  // the AM/company roll-up (cached). Degrades to null if the source is down.
+  let migration: AccountDetail["migration"] = null;
+  try {
+    const summaryRow = (r: Row) => ({
+      label: String(r.am_name), accounts: int0(r.accounts),
+      schedOptedInPct: num(r.sched_opted_in_pct), schedEnabledPct: num(r.sched_enabled_pct),
+      webActivePct: num(r.web_active_pct), keywordsPct: num(r.keywords_pct),
+      contentPct: num(r.content_pct), fullyActivatedPct: num(r.fully_activated_pct),
+    });
+    const [msRows, summaryAll] = await Promise.all([queryPostgres(detailMigrationStatusSql(id)), getMigrationSummary()]);
+    const s = msRows[0];
+    if (s) {
+      const am = String(s.am_name || "");
+      const amRow = summaryAll.find((r) => String(r.am_name) === am);
+      const allRow = summaryAll.find((r) => String(r.am_name) === "ALL ACCOUNTS");
+      migration = {
+        subscriptionStatus: (s.subscription_status as string) || null,
+        schedOptedIn: s.sched_opted_in === true, schedEnabled: s.sched_enabled === true,
+        schedOptedInAt: (s.sched_opted_in_at as string) || null, schedOnboardedAt: (s.sched_onboarded_at as string) || null,
+        discoveryWebActive: s.discovery_web_active === true, discoveryWebSince: (s.discovery_web_since as string) || null,
+        keywordRanks: int0(s.keyword_ranks), contentItems: int0(s.content_items), amName: am || null,
+        amSummary: amRow ? summaryRow(amRow) : null, allSummary: allRow ? summaryRow(allRow) : null,
+      };
+    }
+  } catch { /* Postgres/migration source unavailable — no migration panel */ }
+
   return {
     entityId: id,
+    migration,
     profileWeekly: pw.map((r) => ({
       wk: String(r.wk),
       profileClicks: int0(r.profile_clicks),

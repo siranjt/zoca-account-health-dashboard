@@ -603,6 +603,40 @@ export default function AccountDossier({
 
         {tab === "Scheduling & Support" && (
           <>
+            <ChartCard title="Discovery & Scheduling Migration" subtitle="this account's activation status (card 5392)">
+              {detail ? (detail.migration ? (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <Stat label="Subscription" value={detail.migration.subscriptionStatus ?? "—"} />
+                  <Stat label="Discovery Web" value={detail.migration.discoveryWebActive ? `Active${detail.migration.discoveryWebSince ? " · " + ddmmyy(detail.migration.discoveryWebSince) : ""}` : "Off"} />
+                  <Stat label="Scheduling opted-in" value={detail.migration.schedOptedIn ? `Yes${detail.migration.schedOptedInAt ? " · " + ddmmyy(detail.migration.schedOptedInAt) : ""}` : "No"} />
+                  <Stat label="Scheduling enabled" value={yesNo(detail.migration.schedEnabled)} />
+                  <Stat label="Keyword ranks" value={formatNumber(detail.migration.keywordRanks)} />
+                  <Stat label="Content items" value={formatNumber(detail.migration.contentItems)} />
+                </div>
+              ) : <NoData />) : skel}
+            </ChartCard>
+
+            <ChartCard title={`Migration progress — ${detail?.migration?.amName?.split(" ")[0] || "AM"} vs all`} subtitle="% of the book activated (card 5393)">
+              {detail ? (detail.migration?.amSummary ? (() => {
+                const amS = detail.migration.amSummary as unknown as Record<string, number | null>;
+                const allS = (detail.migration.allSummary || {}) as unknown as Record<string, number | null>;
+                const rows: [string, string][] = [["Scheduling opted-in", "schedOptedInPct"], ["Scheduling enabled", "schedEnabledPct"], ["Discovery Web active", "webActivePct"], ["Keywords done", "keywordsPct"], ["Content done", "contentPct"], ["Fully activated", "fullyActivatedPct"]];
+                return (
+                  <div className="text-xs">
+                    <div className="mb-1 grid grid-cols-3 gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400"><span>Metric</span><span className="text-right">{detail.migration.amName?.split(" ")[0] || "AM"}</span><span className="text-right">All</span></div>
+                    {rows.map(([lbl, key]) => (
+                      <div key={lbl} className="grid grid-cols-3 gap-2 border-t py-1" style={{ borderColor: "var(--cave-line)" }}>
+                        <span className="text-slate-600">{lbl}</span>
+                        <span className="text-right font-semibold tabular-nums text-slate-700">{amS[key] ?? "—"}%</span>
+                        <span className="text-right tabular-nums text-slate-400">{allS[key] ?? "—"}%</span>
+                      </div>
+                    ))}
+                    <div className="mt-1.5 text-[10px] text-slate-400">{detail.migration.amSummary.accounts} accounts on this AM&apos;s book · {detail.migration.allSummary?.accounts ?? "—"} book-wide</div>
+                  </div>
+                );
+              })() : <NoData />) : skel}
+            </ChartCard>
+
             <ChartCard title="Scheduling Status" subtitle="entities.product_entities · scheduling.onboarding">
               {detail ? (
                 <div className="grid grid-cols-2 gap-2 text-xs">

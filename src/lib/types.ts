@@ -117,6 +117,12 @@ export interface Delta {
 }
 
 /** Lazy-loaded per-account time series for the expanded detail panel. */
+export interface MigrationSummaryRow {
+  label: string; accounts: number;
+  schedOptedInPct: number | null; schedEnabledPct: number | null;
+  webActivePct: number | null; keywordsPct: number | null;
+  contentPct: number | null; fullyActivatedPct: number | null;
+}
 export interface AccountDetail {
   entityId: string;
   profileWeekly: {
@@ -183,6 +189,13 @@ export interface AccountDetail {
   callbackActions?: { action: string | null; count: number }[];
   frontDeskStatus?: { active: string | null; botActive: boolean | null; voiceActive: boolean | null; virtualNumber: boolean | null; channel: string | null; onboardedDate: string | null } | null;
   frontDeskCalls?: { wk: string; calls: number }[];
+  migration?: {
+    subscriptionStatus: string | null; schedOptedIn: boolean; schedEnabled: boolean;
+    schedOptedInAt: string | null; schedOnboardedAt: string | null;
+    discoveryWebActive: boolean; discoveryWebSince: string | null;
+    keywordRanks: number; contentItems: number; amName: string | null;
+    amSummary: MigrationSummaryRow | null; allSummary: MigrationSummaryRow | null;
+  } | null;
   paymentLinks?: { missedPayment: string | null; paymentMethodUpdate: string | null } | null;
 }
 

@@ -648,6 +648,78 @@ export function detailFrontDeskCallsSql(id: string, windowDays: number): string 
     GROUP BY 1 ORDER BY 1`;
 }
 
+// ---- Discovery & Scheduling Migration (Metabase cards 5392/5393) -----------
+// These run on the Zoca POSTGRES db (id 2) via queryPostgres, NOT Aurora — the
+// source tables (scheduling.onboarding, entities.preferences, local_seo.*,
+// content.items, cx.am_mapping) live there. Ported faithfully from the cards.
+
+/** One account's migration status (card 5392, filtered to the entity). */
+export function detailMigrationStatusSql(id: string): string {
+  return `WITH sub AS (
+      SELECT (cs.custom_fields::jsonb->>'cf_entity_id')::uuid AS entity_id,
+        CASE MAX(CASE WHEN cs.status='non_renewing' THEN 3 WHEN cs.status IN ('active','future') THEN 2 WHEN cs.status='in_trial' THEN 1 ELSE 0 END)
+          WHEN 3 THEN 'non_renewing' WHEN 2 THEN 'active' WHEN 1 THEN 'in_trial' ELSE 'cancelled' END AS subscription_status
+      FROM chargebee.subscriptions cs WHERE cs.deleted=false AND cs.custom_fields::jsonb->>'cf_entity_id' IS NOT NULL GROUP BY 1)
+    SELECT l.name entity_name, COALESCE(sub.subscription_status,'—') subscription_status,
+      COALESCE(so.is_opted_in,false) sched_opted_in, COALESCE(so.is_scheduling_enabled,false) sched_enabled,
+      to_char((so.opted_in_at AT TIME ZONE 'UTC') AT TIME ZONE 'America/New_York','YYYY-MM-DD') sched_opted_in_at,
+      to_char((SELECT min(ol.updated_at_timestamp) FROM scheduling.onboarding_logs ol WHERE ol.location_entity_id=l.entity_id AND ol.is_onboarding_completed),'YYYY-MM-DD') sched_onboarded_at,
+      COALESCE(p.value::boolean,false) discovery_web_active, to_char(p.created_at,'YYYY-MM-DD') discovery_web_since,
+      COALESCE(kg.n,0) keyword_ranks, COALESCE(cq.n,0) content_items,
+      COALESCE((SELECT em.first_name||' '||em.last_name FROM cx.am_mapping am JOIN entities.employees em ON em.entity_id=am.am_entity_id AND em.type IN ('CX_LEAD','AM') WHERE am.entity_id=l.entity_id ORDER BY am.created_at DESC LIMIT 1),
+        (SELECT hs.am_name FROM cx.health_score_snapshots hs WHERE hs.entity_id=l.entity_id ORDER BY hs.recorded_at DESC LIMIT 1),'Unassigned') am_name
+    FROM entities.locations l
+    LEFT JOIN sub ON sub.entity_id=l.entity_id
+    LEFT JOIN scheduling.onboarding so ON so.location_entity_id=l.entity_id
+    LEFT JOIN entities.preferences p ON p.entity_id=l.entity_id AND p.attribute='discovery.web.isActive' AND p.is_deleted IS NOT TRUE
+    LEFT JOIN LATERAL (SELECT count(*)::int n FROM local_seo.keyword_rank kr WHERE kr.job_id IN (SELECT kpe.execution_id FROM local_seo.keyword_pipeline_execution kpe WHERE kpe.state_name='RANK_EXTRACTION' AND kpe.status='completed' AND kpe.entity_id=l.entity_id ORDER BY kpe.created_at DESC LIMIT 1)) kg ON true
+    LEFT JOIN LATERAL (SELECT count(*)::int n FROM content.items ci WHERE ci.entity_id=l.entity_id AND ci.is_deleted IS NOT TRUE) cq ON true
+    WHERE l.entity_id='${id}'::uuid LIMIT 1`;
+}
+
+/** Book-wide migration roll-up by AM + an ALL-ACCOUNTS total (card 5393, no
+ *  filter). Heavy (scans the whole book) — call via a cached getter, not per view. */
+export function migrationSummarySql(): string {
+  return `WITH single_location_business AS (
+      SELECT entity_2_id, (array_agg(DISTINCT entity_1_id))[1] AS entity_1_id
+      FROM entities.entity_relationships WHERE relationship_type='BUSINESS_LOCATION'
+      GROUP BY entity_2_id HAVING count(DISTINCT entity_1_id)=1),
+    sub AS (
+      SELECT (cs.custom_fields::jsonb->>'cf_entity_id')::uuid AS entity_id,
+        CASE MAX(CASE WHEN cs.status='non_renewing' THEN 3 WHEN cs.status IN ('active','future') THEN 2 WHEN cs.status='in_trial' THEN 1 ELSE 0 END)
+          WHEN 3 THEN 'non_renewing' WHEN 2 THEN 'active' WHEN 1 THEN 'in_trial' ELSE 'cancelled' END AS subscription_status
+      FROM chargebee.subscriptions cs WHERE cs.deleted=false AND cs.custom_fields::jsonb->>'cf_entity_id' IS NOT NULL GROUP BY 1),
+    base AS (
+      SELECT COALESCE(so.is_opted_in,false) opted_in, COALESCE(so.is_scheduling_enabled,false) sched_enabled,
+        COALESCE(p.value::boolean,false) web_active, COALESCE(kg.n,0) kw, COALESCE(cq.n,0) ci,
+        COALESCE((SELECT em.first_name||' '||em.last_name FROM cx.am_mapping am JOIN entities.employees em ON em.entity_id=am.am_entity_id AND em.type IN ('CX_LEAD','AM') WHERE am.entity_id=l.entity_id ORDER BY am.created_at DESC LIMIT 1),
+          (SELECT hs.am_name FROM cx.health_score_snapshots hs WHERE hs.entity_id=l.entity_id ORDER BY hs.recorded_at DESC LIMIT 1),'Unassigned') am_name
+      FROM entities.locations l
+      JOIN single_location_business sb ON sb.entity_2_id=l.entity_id
+      JOIN entities.entities ee ON ee.entity_id=l.entity_id AND ee.is_test=false AND ee.is_active=true
+      JOIN sub ON sub.entity_id=l.entity_id AND sub.subscription_status IN ('active','non_renewing')
+      LEFT JOIN scheduling.onboarding so ON so.location_entity_id=l.entity_id
+      LEFT JOIN entities.preferences p ON p.entity_id=l.entity_id AND p.attribute='discovery.web.isActive' AND p.is_deleted IS NOT TRUE
+      LEFT JOIN LATERAL (SELECT count(*)::int n FROM local_seo.keyword_rank kr WHERE kr.job_id IN (SELECT kpe.execution_id FROM local_seo.keyword_pipeline_execution kpe WHERE kpe.state_name='RANK_EXTRACTION' AND kpe.status='completed' AND kpe.entity_id=l.entity_id ORDER BY kpe.created_at DESC LIMIT 1)) kg ON true
+      LEFT JOIN LATERAL (SELECT count(*)::int n FROM content.items ci WHERE ci.entity_id=l.entity_id AND ci.is_deleted IS NOT TRUE) cq ON true),
+    rollup AS (
+      SELECT am_name, count(*) accounts,
+        count(*) FILTER (WHERE opted_in) sched_opted_in, count(*) FILTER (WHERE sched_enabled) sched_enabled,
+        count(*) FILTER (WHERE web_active) web_active, count(*) FILTER (WHERE kw>0) keywords_done,
+        count(*) FILTER (WHERE ci>0) content_done, count(*) FILTER (WHERE web_active AND kw>0 AND ci>0) fully_activated
+      FROM base GROUP BY 1)
+    SELECT 0 _ord, am_name, accounts,
+      round(100.0*sched_opted_in/accounts,1) sched_opted_in_pct, round(100.0*sched_enabled/accounts,1) sched_enabled_pct,
+      round(100.0*web_active/accounts,1) web_active_pct, round(100.0*keywords_done/accounts,1) keywords_pct,
+      round(100.0*content_done/accounts,1) content_pct, round(100.0*fully_activated/accounts,1) fully_activated_pct
+    FROM rollup
+    UNION ALL SELECT 1,'ALL ACCOUNTS', sum(accounts),
+      round(100.0*sum(sched_opted_in)/sum(accounts),1), round(100.0*sum(sched_enabled)/sum(accounts),1),
+      round(100.0*sum(web_active)/sum(accounts),1), round(100.0*sum(keywords_done)/sum(accounts),1),
+      round(100.0*sum(content_done)/sum(accounts),1), round(100.0*sum(fully_activated)/sum(accounts),1)
+    FROM rollup ORDER BY _ord, accounts DESC`;
+}
+
 /** Public payment action links (Retool "paymentRelatedLinks"). */
 export function detailPaymentLinksSql(id: string): string {
   return `SELECT
