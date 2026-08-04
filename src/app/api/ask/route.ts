@@ -8,6 +8,7 @@ import { getComms } from "@/lib/comms";
 import { getAccountTickets, getManagerTickets, getBookTicketsByManager } from "@/lib/tickets";
 import { logInteraction, recall, rememberFact, getSavedNotes, getUsageStats, setFocus, clearFocus, getFocus } from "@/lib/memory";
 import { HEALTH_WEIGHTS } from "@/lib/health";
+import { queryAurora } from "@/lib/metabase";
 import { logActivity } from "@/lib/activity";
 import type { AccountRow, AccountsPayload } from "@/lib/types";
 
@@ -56,8 +57,11 @@ STYLE
 - Dates as DD/MM/YY, money in USD; when listing invoices or items, newest first.
 
 TOOLS
-- book_summary — whole-book tier counts. at_risk_accounts — worst-first list with root drivers. account_health — one account's full metrics. account_detail — time-series behind a row. accounts_by_manager — an account manager's roster plus best/worst. book_aggregate — deterministic roll-ups (totals and group-bys: use it for 'total MRR at risk', 'reviews by AM', counts). explain_health — how an account's composite score is built. billing — LIVE Chargebee billing (subscription MRR/status, auto-collection, next renewal, unpaid invoices, failed transactions). Chargebee is ground truth for payments and revenue; prefer it over the health row's failedPayments proxy when a question is about money, renewals, or payment failures. customer_facts — curated history/notes about an account from the Keeper (Bat Cave Memory); use it for background and context on a customer. support_tickets — Linear tickets (churn/retention/subscription) for an account, active + closed-in-window by classification. reviews_detail — Google review count, average rating, distribution, velocity (last 30/90 days) and recent reviews. message_history — omni-channel communication log (App Chat, Calls with transcript, SMS, Email, Meetings) for one account: per-channel counts + recent message snippets, newest first; use for 'summarize our messages/conversations with X', 'when did we last speak to them?', 'any recent calls/emails?'. cohort_benchmark — one account vs its peer cohort (percentiles + medians). segment_analysis — health/metrics by segment (state/tier/product/AM). movers — biggest gainers/decliners period-over-period. expansion_radar — healthy single-product accounts ripe for upsell. revenue_at_risk — MRR at risk, ranked by revenue exposure. gather_360 — one-shot full dossier (health + billing + tickets + reviews + Keeper history) for briefings and drafts. recall — search your own durable memory of past conversations (across sessions). remember — save a fact the user asks you to keep. usage_stats — analytics over your own history (most-asked accounts/tools). pin_focus — pin an account as the session subject so follow-ups need no re-naming.
+- book_summary — whole-book tier counts. at_risk_accounts — worst-first list with root drivers. account_health — one account's full metrics. account_detail — time-series behind a row. accounts_by_manager — an account manager's roster plus best/worst. book_aggregate — deterministic roll-ups (totals and group-bys: use it for 'total MRR at risk', 'reviews by AM', counts). explain_health — how an account's composite score is built. billing — LIVE Chargebee billing (subscription MRR/status, auto-collection, next renewal, unpaid invoices, failed transactions). Chargebee is ground truth for payments and revenue; prefer it over the health row's failedPayments proxy when a question is about money, renewals, or payment failures. customer_facts — curated history/notes about an account from the Keeper (Bat Cave Memory); use it for background and context on a customer. support_tickets — Linear tickets (churn/retention/subscription) for an account, active + closed-in-window by classification. reviews_detail — Google review count, average rating, distribution, velocity (last 30/90 days) and recent reviews. message_history — omni-channel communication log (App Chat, Calls with transcript, SMS, Email, Meetings) for one account: per-channel counts + recent message snippets, newest first; use for 'summarize our messages/conversations with X', 'when did we last speak to them?', 'any recent calls/emails?'. cohort_benchmark — one account vs its peer cohort (percentiles + medians). segment_analysis — health/metrics by segment (state/tier/product/AM). movers — biggest gainers/decliners period-over-period. expansion_radar — healthy single-product accounts ripe for upsell. revenue_at_risk — MRR at risk, ranked by revenue exposure. gather_360 — one-shot full dossier (health + billing + tickets + reviews + Keeper history) for briefings and drafts. recall — search your own durable memory of past conversations (across sessions). remember — save a fact the user asks you to keep. usage_stats — analytics over your own history (most-asked accounts/tools). pin_focus — pin an account as the session subject so follow-ups need no re-naming. find_account — reverse-lookup a phone / email / partial business name to the account that owns it, across the whole book.
 - Call tools as needed; you may call several at once. If a tool errors or returns nothing, adjust the arguments and retry once before concluding.
+- SPEED — call EVERY tool you need in ONE turn (they run in parallel); never fetch one metric, wait, then fetch the next across separate turns. For a briefing, "tell me about X", a QBR, or an outreach draft, gather_360 already returns health + billing + tickets + reviews + Keeper history together — call it EXACTLY ONCE, never twice, and never follow it with separate account_health / billing / support_tickets / reviews_detail calls for the same account.
+- find_account is your REVERSE LOOKUP. For ANY "whose number is this", "which customer has this phone / email", or a partial business-name match, CALL find_account — it searches billing, GBP and entity phone/email across the whole book. NEVER tell the user you can't look up a phone or email, or that you have no directory / cross-book lookup — you do. If it returns no match, say plainly the identifier isn't on any account's records.
+- PRODUCT HOW-TO — if the question is how to USE the platform ("how do I check if a lead is masked?", "where do I find X?"), that's product usage, not account data: answer briefly if you're certain, then point them to the Training module (top-right ☰ menu → Training) for the full walkthrough. Don't invent steps.
 - For a question about a WHOLE account-manager's book or a segment (e.g. "tickets for X's customers", "MRR across X's book"), use ONE aggregate tool — manager_tickets, accounts_by_manager, book_aggregate, or segment_analysis. NEVER call a per-account tool (support_tickets, billing, account_health) once per account across a whole book — that is too slow and will fail. If the needed aggregate doesn't exist, say so plainly instead of looping.
 - TICKETS — the ONLY ticket taxonomy that exists is the Linear ticket_classification: Churn Ticket, Retention Risk Alert, Subscription Support Ticket, paid_user_offboarding, Subscription_Cancellation. There is NO "finance", "website", "technical" or "product" ticket type in the data. If a user asks for a ticket type that doesn't exist ("how many finance / website tickets"), do NOT loop or guess — say which classifications DO exist and give those counts. support_tickets (one account) and manager_tickets (one AM's book) each return EVERY classification in a SINGLE call — read the by_classification breakdown; never call them repeatedly to get different types. For ANY cross-book / cross-manager ticket comparison ("which AM has the most tickets across the whole book"), use book_tickets_by_manager — ONE call returns every manager; never loop manager_tickets over each AM.
 - You have a DURABLE MEMORY: when the user refers to something discussed earlier or in a previous session ("what did we say about…", "last week", "have we looked at…"), use recall before answering. When the user explicitly tells you to remember / note / keep a fact, you MUST call the remember tool (tie it to the account when there is one) and confirm what you saved — your saved notes resurface automatically in account_facts and the 360 dossier. Only save on an explicit request, and never delete. NEVER claim you lack a memory or "write to memory" tool, and NEVER tell the user to log it elsewhere (Keeper/HubSpot) instead — you DO have the remember tool; use it. If a save genuinely fails, say the save failed — do not say the capability doesn't exist.
@@ -165,6 +169,7 @@ const TOOLS = [
   { name: "explain_health", description: "Explain how one account's composite health score is built: the sub-scores (engagement/value/product), the exact weighting, the driving reason, the primary risk driver, and the recommended action.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "billing", description: "Live billing state for one account from Chargebee (ground truth, beats the health-score payment proxy): subscription status & MRR, auto-collection, next renewal, unpaid invoices + total due, recent failed transactions with the error. Use for 'are they paid up?', 'any failed payments?', 'when do they renew?', 'what's their MRR?'.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
   { name: "customer_facts", description: "Curated facts and history for one account from the Keeper (Bat Cave Memory) — owner details, preferences, past issues, notes captured over time. Use for 'what do we know about them?', 'any history / context?', 'who's the owner?', background before a call.", input_schema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] } },
+  { name: "find_account", description: "REVERSE LOOKUP — find WHICH account a phone number, email address, or partial business name belongs to, searching ACROSS the whole book (billing phone/email, Google Business Profile phone, and the entity phone/business records). Use for 'whose number is 4699883121?', 'which customer has this phone / email?', 'find the account with email x@y.com', or a fuzzy business-name match. Returns the matching account(s) with name + AM, or states plainly that the identifier isn't on any account's records. This is the ONLY cross-book lookup by contact detail — for any such question, use this; never say you can't look up a phone or email.", input_schema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
   { name: "support_tickets", description: "Linear tickets for one account (retention/churn/subscription tickets joined to the entity). Returns ACTIVE counts (state Todo/In Progress/In Review) and tickets CLOSED within a window (days: 7/30/90/180, default 30), broken down BY CLASSIFICATION (Churn Ticket, Retention Risk Alert, Subscription Support Ticket, paid_user_offboarding, Subscription_Cancellation), plus recent active tickets with their Linear identifier and URL. Use for 'any open tickets for X?', 'how many churn / retention / subscription tickets?', 'how many did we close in the last 90 days?'. Sum the matching classifications for a grouped question.", input_schema: { type: "object", properties: { name: { type: "string" }, days: { type: "integer" } }, required: ["name"] } },
   { name: "manager_tickets", description: "Linear ticket totals across an ENTIRE account manager's book in ONE call — active and closed-in-window counts, by classification (Churn Ticket, Retention Risk Alert, Subscription Support Ticket, paid_user_offboarding, Subscription_Cancellation), summed over ALL of that manager's accounts. Use for 'how many churn / retention / subscription tickets are active for X's customers?', 'ticket load across X's book'. ALWAYS use this for a whole-manager ticket question — never call support_tickets account-by-account.", input_schema: { type: "object", properties: { manager: { type: "string" }, days: { type: "integer" } }, required: ["manager"] } },
   { name: "book_tickets_by_manager", description: "Whole-book Linear ticket load rolled up BY MANAGER in ONE call — every account manager's active + closed-in-window counts and per-classification breakdown, ranked by active desc. Use this for ANY cross-book/cross-manager ticket comparison: 'which AM has the most tickets / churn tickets / retention tickets across the whole book?', 'ticket load by manager', 'who has the highest ticket volume?'. ALWAYS use this instead of calling manager_tickets once per manager — one call returns all managers.", input_schema: { type: "object", properties: { days: { type: "integer" } } } },
@@ -394,6 +399,64 @@ async function execTool(name: string, input: Record<string, unknown>, ctx: Ctx) 
       return {
         total_mrr_at_risk: r0(total), at_risk_count: atRisk.length, window_days: payload.windowDays, as_of: asOf,
         top: ranked.slice(0, limit).map((a) => compact({ name: a.name, am: a.accountManager || "Unassigned", mrr: r0(a.mrr), composite: r1(a.health?.composite), tier: a.health?.tier, primary_driver: primaryDriver(a), recommendedAction: a.health?.recommendedAction })),
+      };
+    }
+    if (name === "find_account") {
+      const raw = String(input.query || "").trim();
+      if (!raw) return { error: "provide a phone number, email, or business name to look up" };
+      const digits = raw.replace(/[^0-9]/g, "");
+      const isEmail = raw.includes("@");
+      const isPhone = !isEmail && digits.length >= 7;
+      // Partial NAME → in-memory search over the already-scoped book (fast).
+      if (!isPhone && !isEmail) {
+        const hits = findAccounts(list, raw);
+        return { query: raw, matched_on: "name", matches: hits.slice(0, 12).map((a) => ({ name: a.name, am: a.accountManager || "Unassigned", entityId: a.entityId })), note: hits.length ? undefined : `no account name matches "${raw}"` };
+      }
+      // PHONE / EMAIL → warehouse search, then filter to what the viewer may see.
+      let rows: Record<string, unknown>[] = [];
+      try {
+        if (isPhone) {
+          const d = digits.slice(-10); // ignore country code — match on the last 10 digits
+          rows = await queryAurora(
+            `SELECT DISTINCT eid, matched FROM (
+               SELECT (s.custom_fields::jsonb->>'cf_entity_id') eid, 'billing phone' matched
+                 FROM chargebee.customers c JOIN chargebee.subscriptions s ON s.customer_id=c.id
+                 WHERE regexp_replace(COALESCE(c.phone,''),'[^0-9]','','g') LIKE '%${d}%'
+               UNION SELECT p.entity_id::text, 'phone record' FROM entities.phones p
+                 WHERE regexp_replace(COALESCE(p.phone_number,''),'[^0-9]','','g') LIKE '%${d}%'
+               UNION SELECT g.entity_id::text, 'GBP phone' FROM gbp.locations g
+                 WHERE regexp_replace(COALESCE(g.phone_numbers::text,''),'[^0-9]','','g') LIKE '%${d}%'
+               UNION SELECT b.entity_id::text, 'business phone' FROM entities.businesses b
+                 WHERE regexp_replace(COALESCE(b.phone_numbers::text,''),'[^0-9]','','g') LIKE '%${d}%'
+             ) x WHERE eid IS NOT NULL LIMIT 25`
+          ) as Record<string, unknown>[];
+        } else {
+          const e = raw.replace(/'/g, "''");
+          rows = await queryAurora(
+            `SELECT DISTINCT (s.custom_fields::jsonb->>'cf_entity_id') eid, 'billing email' matched
+               FROM chargebee.customers c JOIN chargebee.subscriptions s ON s.customer_id=c.id
+               WHERE c.email ILIKE '%${e}%' AND (s.custom_fields::jsonb->>'cf_entity_id') IS NOT NULL LIMIT 25`
+          ) as Record<string, unknown>[];
+        }
+      } catch (err) {
+        return { query: raw, error: `lookup failed: ${String((err as Error)?.message || err).slice(0, 120)}` };
+      }
+      const byId = new Map(list.map((a) => [a.entityId, a]));
+      const seen = new Set<string>();
+      const matches: Array<Record<string, unknown>> = [];
+      for (const r of rows) {
+        const eid = r.eid ? String(r.eid) : "";
+        if (!eid || seen.has(eid)) continue;
+        seen.add(eid);
+        const a = byId.get(eid);
+        if (a) matches.push({ name: a.name, am: a.accountManager || "Unassigned", entityId: eid, matched_on: r.matched });
+      }
+      const outOfBook = rows.length > 0 && matches.length === 0;
+      return {
+        query: raw, matched_on: isPhone ? "phone" : "email", matches,
+        note: matches.length ? undefined
+          : outOfBook ? `a record with this ${isPhone ? "number" : "email"} exists but is not in the active/accessible book (churned, unmapped, or outside your scope)`
+          : `no account in the book has this ${isPhone ? "phone number" : "email"} on file`,
       };
     }
     if (name === "gather_360") {
