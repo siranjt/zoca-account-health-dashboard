@@ -365,12 +365,6 @@ html.light {
 @media (prefers-reduced-motion: reduce) {
   .am-stale { animation: none; box-shadow: 0 0 0 1px var(--am-bad); }
 }
-/* AM report drill-down panel — reveal from below, disabled under reduced motion */
-.am-drill { animation: cave-scanin .22s ease-out both; }
-@media (prefers-reduced-motion: reduce) { .am-drill { animation: none; } }
-.drill-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
-.drill-scroll::-webkit-scrollbar-thumb { background: var(--cave-line2); border-radius: 8px; }
-.drill-scroll::-webkit-scrollbar-track { background: var(--cave-panel); }
 /* anchor targets sit under the sticky nav */
 .am-anchor { scroll-margin-top: 84px; }
 

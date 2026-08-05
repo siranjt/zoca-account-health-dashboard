@@ -32,6 +32,7 @@ import {
 } from "@/lib/amMetrics";
 import { istDate } from "@/lib/istDate";
 import AmTodayTable from "./AmTodayTable";
+import AmDetailSection from "./AmDetailSection";
 
 export interface RunLite {
   snapshot_date: string;
@@ -608,6 +609,7 @@ export default function AmReport({ view, runs, dbConfigured, now }: Props) {
       {view.latest ? (
         <>
           <AmTodayTable amRows={view.amRows} totalRow={view.totalRow} latest={view.latest} previous={view.previous} />
+          <AmDetailSection latest={view.latest} />
           <TrendGrid view={view} />
           <PerAmTrends view={view} />
         </>

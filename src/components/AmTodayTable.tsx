@@ -6,7 +6,7 @@
 // preserved verbatim — NULL pct = empty cell, `def.`/`new` delta markers, the
 // unassigned data-quality flag, the sticky first column, the company total pinned.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   AM_METRICS,
   UNASSIGNED,
@@ -19,21 +19,11 @@ import {
   type MetricKey,
 } from "@/lib/amMetrics";
 
-// One drill-down sheet, as /api/am-report/detail returns it (the workbook's own
-// model). Declared locally rather than imported from @/lib/amDetail, which is a
-// server-only module — this island must not pull it into the client bundle.
-type DrillCell = string | number | null;
-interface DrillSheet {
-  title: string;
-  headers: string[];
-  rows: DrillCell[][];
-  totalRow: DrillCell[] | null;
-  notes: string | null;
-  seq: number;
-}
-
 // Which account-level sheet stands behind each metric. Metrics with no entry
 // (active_accounts, mrr) describe the whole book and have no drill target.
+// Clicking a drillable value dispatches `am-detail-open`; AmDetailSection (the
+// browsable sheet view below the table) catches it, selects the sheet, applies
+// the AM scope, and scrolls into view. One data source, one renderer.
 const DRILL_SHEET: Partial<Record<MetricKey, string>> = {
   missed_payment_accounts: "Missed Payments",
   missed_payment_amount: "Missed Payments",
@@ -127,25 +117,6 @@ function DeltaCell({ row, m }: { row: AmRowView; m: MetricDef }) {
   );
 }
 
-// One cell in a drill-down sheet. Numbers are right-aligned tabular figures with
-// locale grouping; a Linear/http value becomes a link; everything else is text.
-function DrillCellView({ value }: { value: DrillCell }) {
-  if (typeof value === "number") {
-    return <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums" style={{ color: "var(--cave-txt)" }}>{value.toLocaleString()}</td>;
-  }
-  const s = value == null ? "" : String(value);
-  if (/^https?:\/\//.test(s)) {
-    return (
-      <td className="whitespace-nowrap px-2 py-1.5">
-        <a href={s} target="_blank" rel="noreferrer noopener" className="underline" style={{ color: "var(--cave-cy)" }}>
-          open ↗
-        </a>
-      </td>
-    );
-  }
-  return <td className="whitespace-nowrap px-2 py-1.5" style={{ color: s ? "var(--cave-txt)" : "var(--cave-dim)" }}>{s}</td>;
-}
-
 export default function AmTodayTable({
   amRows,
   totalRow,
@@ -160,39 +131,12 @@ export default function AmTodayTable({
   const [sort, setSort] = useState<{ key: MetricKey | null; dir: "asc" | "desc" }>({ key: null, dir: "desc" });
   const [focus, setFocus] = useState<Group | "all">("all");
 
-  // Drill-down: which sheet is open and (optionally) scoped to one AM. The detail
-  // is fetched lazily the first time a cell is clicked, so the page stays light
-  // for anyone who never drills in.
-  const [drill, setDrill] = useState<{ sheet: string; am: string | null } | null>(null);
-  const [detail, setDetail] = useState<DrillSheet[] | null>(null);
-  const [detailStatus, setDetailStatus] = useState<"idle" | "loading" | "error">("idle");
-
-  const ensureDetail = useCallback(async () => {
-    if (detail || detailStatus === "loading") return;
-    setDetailStatus("loading");
-    try {
-      const r = await fetch("/api/am-report/detail");
-      if (!r.ok) throw new Error(String(r.status));
-      const d = (await r.json()) as { sheets?: DrillSheet[] };
-      setDetail(d.sheets ?? []);
-      setDetailStatus("idle");
-    } catch {
-      setDetailStatus("error");
-    }
-  }, [detail, detailStatus]);
-
-  function openDrill(sheet: string, am: string | null) {
-    void ensureDetail();
-    setDrill({ sheet, am });
+  // Clicking a drillable value hands off to AmDetailSection (below the table)
+  // via a window event — it owns the fetch and the browsable sheet view, so this
+  // island stays the aggregate table and nothing is fetched here.
+  function openDetail(sheet: string, am: string | null) {
+    window.dispatchEvent(new CustomEvent("am-detail-open", { detail: { sheet, am } }));
   }
-
-  // Escape closes the panel — the expected way out of a disclosed layer.
-  useEffect(() => {
-    if (!drill) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrill(null);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [drill]);
 
   // Columns to DISPLAY (heat scale + movers still use the full set below).
   const shown = focus === "all" ? AM_METRICS : AM_METRICS.filter((m) => GROUP_OF[m.key] === focus);
@@ -280,7 +224,7 @@ export default function AmTodayTable({
             One row per AM · the small figure under each value is the change against{" "}
             {previous ? <b>{ddmmyy(previous)}</b> : <span>the previous snapshot (none yet)</span>}. Cells are shaded
             green/red by whether the value is good or bad; <b>click a column header to sort</b>, or{" "}
-            <b>click an underlined value to see the accounts behind it</b>.
+            <b>click an underlined value to jump to the accounts behind it</b> in Account detail below.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -417,11 +361,11 @@ export default function AmTodayTable({
                         {drillable ? (
                           <button
                             type="button"
-                            onClick={() => openDrill(sheetTitle!, scope)}
+                            onClick={() => openDetail(sheetTitle!, scope)}
                             className={`w-full cursor-pointer text-right underline decoration-dotted decoration-slate-500 underline-offset-2 outline-none transition-colors hover:decoration-solid focus-visible:decoration-solid ${r.isTotal ? "font-bold" : ""}`}
                             style={{ color: "var(--cave-txt)" }}
-                            title={`View the ${sheetTitle} accounts behind this${scope ? ` for ${scope}` : " (whole company)"}`}
-                            aria-label={`View ${sheetTitle} accounts behind ${m.label}${scope ? ` for ${scope}` : ", whole company"}`}
+                            title={`Show the ${sheetTitle} accounts behind this${scope ? ` for ${scope}` : " (whole company)"} in Account detail below`}
+                            aria-label={`Show ${sheetTitle} accounts behind ${m.label}${scope ? ` for ${scope}` : ", whole company"} in the Account detail section`}
                           >
                             {num}
                           </button>
@@ -442,132 +386,6 @@ export default function AmTodayTable({
           </tbody>
         </table>
       </div>
-
-      {drill &&
-        (() => {
-          const sheet = detail?.find((s) => s.title === drill.sheet) ?? null;
-          const amCol = sheet ? sheet.headers.indexOf("AM") : -1;
-          const scoped =
-            sheet && drill.am && amCol >= 0
-              ? sheet.rows.filter((row) => String(row[amCol]) === drill.am)
-              : (sheet?.rows ?? []);
-          return (
-            <div
-              className="am-drill mt-3 rounded-lg border"
-              style={{ borderColor: "var(--cave-line2)", background: "var(--cave-panel2)" }}
-              role="region"
-              aria-label={`${drill.sheet} accounts`}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2" style={{ borderColor: "var(--cave-line)" }}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--cave-cy)" }}>
-                    {drill.sheet}
-                  </span>
-                  {drill.am ? (
-                    <button
-                      type="button"
-                      onClick={() => setDrill({ sheet: drill.sheet, am: null })}
-                      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px]"
-                      style={{ borderColor: "var(--cave-cy)", color: "var(--cave-cy)", background: "color-mix(in srgb, var(--cave-cy) 12%, transparent)" }}
-                      title="Clear the AM filter — show the whole company"
-                    >
-                      {drill.am} <span aria-hidden>✕</span>
-                    </button>
-                  ) : (
-                    <span className="text-[10.5px] text-slate-400">whole company</span>
-                  )}
-                  {sheet && <span className="text-[10.5px] text-slate-400">· {scoped.length} account{scoped.length === 1 ? "" : "s"}</span>}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setDrill(null)}
-                  className="rounded px-2 py-0.5 text-xs text-slate-400 outline-none transition-colors hover:text-slate-200 focus-visible:text-slate-200"
-                  aria-label="Close accounts panel"
-                  title="Close (Esc)"
-                >
-                  ✕ Close
-                </button>
-              </div>
-
-              {detailStatus === "loading" && !sheet && (
-                <div className="px-3 py-6 text-center text-xs text-slate-400">Loading accounts…</div>
-              )}
-              {detailStatus === "error" && !sheet && (
-                <div className="flex flex-wrap items-center justify-center gap-2 px-3 py-6 text-center text-xs" style={{ color: "var(--am-bad)" }}>
-                  Couldn’t load the account detail.
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDetailStatus("idle");
-                      void ensureDetail();
-                    }}
-                    className="rounded border px-2 py-0.5 text-[11px]"
-                    style={{ borderColor: "var(--cave-line2)", color: "var(--cave-cy)" }}
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
-              {detail && !sheet && detailStatus !== "loading" && (
-                <div className="px-3 py-6 text-center text-xs text-slate-400">
-                  No <b>{drill.sheet}</b> detail for this day yet — the workbook writes it after the 17:30 run.
-                </div>
-              )}
-              {sheet && scoped.length === 0 && (
-                <div className="px-3 py-6 text-center text-xs text-slate-400">
-                  No accounts{drill.am ? <> for <b>{drill.am}</b></> : ""} on this sheet — nothing to action here.
-                </div>
-              )}
-
-              {sheet && scoped.length > 0 && (
-                <div className="px-3 pb-3">
-                  {sheet.notes && <p className="py-2 text-[10.5px] italic text-slate-500">{sheet.notes}</p>}
-                  <div className="drill-scroll max-h-[26rem] overflow-auto rounded border" style={{ borderColor: "var(--cave-line)" }}>
-                    <table className="w-full border-collapse text-[11px]">
-                      <thead className="sticky top-0 z-[2]">
-                        <tr>
-                          {sheet.headers.map((h, i) => (
-                            <th
-                              key={i}
-                              className="whitespace-nowrap px-2 py-1.5 text-left font-semibold text-white"
-                              style={{ background: "var(--cave-hdr, #1f2937)" }}
-                            >
-                              {h}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {scoped.map((row, ri) => (
-                          <tr key={ri} className="border-t" style={{ borderColor: "var(--cave-line)" }}>
-                            {row.map((cell, ci) => (
-                              <DrillCellView key={ci} value={cell} />
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                      {!drill.am && sheet.totalRow && (
-                        <tfoot>
-                          <tr style={{ background: "var(--cave-panel)", borderTop: "2px solid var(--cave-line2)" }}>
-                            {sheet.totalRow.map((cell, ci) => (
-                              <td
-                                key={ci}
-                                className={`whitespace-nowrap px-2 py-1.5 font-bold tabular-nums ${typeof cell === "number" ? "text-right" : "text-left"}`}
-                                style={{ color: "var(--cave-txt)" }}
-                              >
-                                {typeof cell === "number" ? cell.toLocaleString() : (cell ?? "")}
-                              </td>
-                            ))}
-                          </tr>
-                        </tfoot>
-                      )}
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
 
       <p className="mt-2 text-[10px] text-slate-500">
         Blank cell = no value, by design: churn % is left blank when the AM holds no live book, because a percentage on
