@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/scope";
 import { neonUrl } from "@/lib/neon";
 import { getAmTrend } from "@/lib/amSnapshot";
+import { getAmDetail } from "@/lib/amDetail";
 import { buildAmReportView, parseTrend } from "@/lib/amMetrics";
 import { buildAmReportXlsx } from "@/lib/amExcel";
 
@@ -20,7 +21,10 @@ export async function GET() {
   if (!neonUrl()) return new NextResponse("no database configured", { status: 503 });
 
   const view = buildAmReportView(parseTrend(await getAmTrend()));
-  const buf = await buildAmReportXlsx(view);
+  // Drill-down sheets for the same day the Summary describes. Empty (never
+  // throws) when nothing has been ingested yet — the export stays Summary-only.
+  const detail = await getAmDetail(view.latest ?? undefined);
+  const buf = await buildAmReportXlsx(view, detail.sheets);
   const fname = `AM_Daily_Report_${view.latest ?? "latest"}.xlsx`;
 
   return new NextResponse(buf, {
