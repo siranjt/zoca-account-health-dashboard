@@ -22,18 +22,16 @@ import {
   UNASSIGNED,
   STALE_AFTER_HOURS,
   type AmReportView,
-  type AmRowView,
   type AmSeries,
   type MetricDef,
   type SeriesPoint,
   ddmmyy,
   ddmmyyHm,
-  deltaTone,
-  formatDelta,
   formatMetric,
   parsePgTimestamp,
 } from "@/lib/amMetrics";
 import { istDate } from "@/lib/istDate";
+import AmTodayTable from "./AmTodayTable";
 
 export interface RunLite {
   snapshot_date: string;
@@ -196,195 +194,6 @@ function FreshnessBanner({ f, view }: { f: Freshness; view: AmReportView }) {
         )}
       </div>
     </section>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Today — one row per AM, every metric, delta per cell
-// ---------------------------------------------------------------------------
-
-function DeltaCell({ row, m }: { row: AmRowView; m: MetricDef }) {
-  const d = row.deltas[m.key];
-  // Invisible placeholder rather than nothing: it holds the row height steady
-  // without putting a character in front of a screen reader.
-  if (d.kind === "none" || d.kind === "blank")
-    return (
-      <span aria-hidden className="opacity-0">
-        ·
-      </span>
-    );
-  if (d.kind === "new")
-    return (
-      <span style={{ color: "var(--cave-cy)" }} title="No row for this AM on the comparison day">
-        new
-      </span>
-    );
-  if (d.kind === "version")
-    return (
-      <span
-        style={{ color: "var(--am-warn)" }}
-        title="The definition of this metric changed between the two days. The step is a definition change, not movement — see Definitions."
-      >
-        def.
-      </span>
-    );
-  const diff = d.diff;
-  if (d.kind === "flat" || diff === null || diff === 0)
-    return (
-      <span style={{ color: "var(--am-flat)" }} title="Unchanged">
-        ·
-      </span>
-    );
-  const tone = deltaTone(diff, m.direction);
-  const color = tone === "good" ? "var(--am-good)" : tone === "bad" ? "var(--am-bad)" : "var(--am-flat)";
-  return (
-    <span style={{ color }} title={`${formatDelta(diff, m.format)} vs the previous snapshot`}>
-      {formatDelta(diff, m.format)}
-    </span>
-  );
-}
-
-function TodayTable({ view }: { view: AmReportView }) {
-  const rows: AmRowView[] = view.totalRow ? [view.totalRow, ...view.amRows] : view.amRows;
-
-  if (!rows.length) {
-    return (
-      <div className="rounded-xl border p-6 text-center text-sm text-slate-400" style={PANEL}>
-        No snapshot rows to show.
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-xl border p-3" style={PANEL}>
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--cave-cy)" }}>
-            Today · {ddmmyy(view.latest)}
-          </h2>
-          <p className="mt-0.5 text-[11px] text-slate-400">
-            Every metric, one row per AM. The small figure under each value is the change against{" "}
-            {view.previous ? (
-              <b>{ddmmyy(view.previous)}</b>
-            ) : (
-              <span>the previous snapshot (none yet — this is the first day)</span>
-            )}
-            . Column headers link to their definition.
-          </p>
-        </div>
-        <a href="#definitions" className="text-[11px] underline" style={{ color: "var(--cave-cy)" }}>
-          Metric definitions ↓
-        </a>
-      </div>
-
-      <div className="table-scroll -mx-1">
-        <table className="w-full border-collapse text-[11px]">
-          <thead className="sticky top-0 z-[3] text-left uppercase tracking-wide text-slate-400">
-            <tr>
-              {/* The corner cell is sticky on BOTH axes, and must out-stack the
-                  row headers it crosses or it drifts under them when scrolled. */}
-              <th
-                className="px-2 py-1.5 font-semibold"
-                style={{ ...STICKY_COL, top: 0, zIndex: 4, background: "var(--cave-panel2)" }}
-              >
-                Account manager
-              </th>
-              {AM_METRICS.map((m) => (
-                <th
-                  key={m.key}
-                  className="whitespace-nowrap px-2 py-1.5 text-right align-bottom font-semibold"
-                  style={{ background: "var(--cave-panel2)" }}
-                >
-                  <a
-                    href={`#def-${m.key}`}
-                    title={m.tooltip}
-                    className="no-underline hover:underline"
-                    style={{ color: "inherit" }}
-                  >
-                    {m.label}
-                    {m.versionSensitive && (
-                      <sup style={{ color: "var(--am-warn)" }} title="Definition changed — see Definitions">
-                        †
-                      </sup>
-                    )}
-                  </a>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const unassigned = r.amName === UNASSIGNED;
-              const rowBg = r.isTotal ? "var(--cave-panel2)" : "var(--cave-panel)";
-              return (
-                <tr
-                  key={r.amName}
-                  className="border-t border-slate-100"
-                  style={r.isTotal ? { borderBottom: "2px solid var(--cave-line2)" } : undefined}
-                >
-                  <td
-                    className={`whitespace-nowrap px-2 py-1.5 ${r.isTotal ? "font-bold" : "font-medium"}`}
-                    style={{
-                      ...STICKY_COL,
-                      background: rowBg,
-                      color: r.isTotal ? "var(--cave-cy)" : "var(--cave-txt)",
-                      borderLeft: unassigned ? "3px solid var(--am-warn)" : undefined,
-                    }}
-                  >
-                    {r.amName}
-                    {unassigned && (
-                      <span
-                        className="ml-1.5 rounded px-1 py-px text-[9px] uppercase tracking-wide"
-                        style={{ color: "var(--am-warn)", border: "1px solid var(--am-warn)" }}
-                        title="Churned accounts lose their AM link. This is a data-quality signal, not an account manager."
-                      >
-                        data quality
-                      </span>
-                    )}
-                  </td>
-                  {AM_METRICS.map((m) => {
-                    const v = r.values[m.key];
-                    return (
-                      <td
-                        key={m.key}
-                        className="px-2 py-1.5 text-right align-top tabular-nums"
-                        style={{ background: rowBg }}
-                        title={
-                          v === null && m.format === "pct"
-                            ? `${r.amName} holds no live book, so this percentage is not computed. A rate on an empty denominator would print as 100% and read as an accusation.`
-                            : undefined
-                        }
-                      >
-                        {/* A NULL percentage is an EMPTY cell. Never 100. */}
-                        <div className={r.isTotal ? "font-bold" : ""} style={{ color: "var(--cave-txt)" }}>
-                          {v === null ? (
-                            <span aria-hidden className="opacity-0">
-                              ·
-                            </span>
-                          ) : (
-                            formatMetric(v, m.format)
-                          )}
-                        </div>
-                        <div className="text-[10px] leading-tight">
-                          <DeltaCell row={r} m={m} />
-                        </div>
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <p className="mt-2 text-[10px] text-slate-500">
-        Blank cell = no value, by design: churn % is left blank when the AM holds no live book, because a percentage on
-        an empty denominator is arithmetic, not performance. <span style={{ color: "var(--am-warn)" }}>def.</span> = the
-        metric&apos;s definition changed between the two days, so no delta is claimed.{" "}
-        <span style={{ color: "var(--cave-cy)" }}>new</span> = the AM had no row on the comparison day.
-      </p>
-    </div>
   );
 }
 
@@ -798,7 +607,7 @@ export default function AmReport({ view, runs, dbConfigured, now }: Props) {
       <FreshnessBanner f={f} view={view} />
       {view.latest ? (
         <>
-          <TodayTable view={view} />
+          <AmTodayTable amRows={view.amRows} totalRow={view.totalRow} latest={view.latest} previous={view.previous} />
           <TrendGrid view={view} />
           <PerAmTrends view={view} />
         </>
