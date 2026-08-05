@@ -27,6 +27,10 @@ export default function LandingDeck({
 }) {
   const [light, setLight] = useState(false);
   const [ask, setAsk] = useState("");
+  // Per-viewer count of conversations awaiting a reply — fetched lazily so the
+  // deck's first paint isn't blocked, and scoped server-side (an AM sees only
+  // their own). Null until it lands; badge shown only when there's a backlog.
+  const [unrespCount, setUnrespCount] = useState<number | null>(null);
 
   useEffect(() => {
     const upd = () => setLight(document.documentElement.classList.contains("light"));
@@ -34,6 +38,15 @@ export default function LandingDeck({
     const obs = new MutationObserver(upd);
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     return () => obs.disconnect();
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/admin/unresponded?count=1", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && typeof d?.count === "number") setUnrespCount(d.count); })
+      .catch(() => {});
+    return () => { alive = false; };
   }, []);
 
   const openAlfred = (prefill?: string) =>
@@ -56,6 +69,8 @@ export default function LandingDeck({
         send: "Ring",
         overviewDesc: "The client ledger",
         riskTileTitle: "At-risk clients",
+        unrespTitle: "Awaiting reply",
+        unrespDesc: "Clients waiting on you",
       }
     : {
         eyebrow: "Batcave · Account Health Grid",
@@ -72,6 +87,8 @@ export default function LandingDeck({
         send: "Ask",
         overviewDesc: "The account grid",
         riskTileTitle: "Threat board",
+        unrespTitle: "Unresponded",
+        unrespDesc: "Messages awaiting your reply",
       };
 
   const kpis = [
@@ -82,10 +99,10 @@ export default function LandingDeck({
     { label: L.kLabels[4], value: stats.mrr ? "$" + stats.mrr.toLocaleString("en-US") : "—", tone: "var(--cave-txt)" },
   ];
 
-  const tiles: { t: string; d: string; glyph: React.ReactNode; href?: string; ext?: string; onClick?: () => void }[] = [
+  const tiles: { t: string; d: string; glyph: React.ReactNode; href?: string; ext?: string; onClick?: () => void; badge?: number | null }[] = [
     { t: "Overview", d: L.overviewDesc, glyph: "▦", href: "/overview" },
     { t: "Trends", d: "Health over time", glyph: "◠", href: "/trends" },
-    { t: L.riskTileTitle, d: "Jump to the red accounts", glyph: "◉", href: "/overview?color=red" },
+    { t: L.unrespTitle, d: L.unrespDesc, glyph: "✉", href: "/admin/unresponded", badge: unrespCount },
     { t: "Training", d: "CAVE//OS Training module", glyph: "🎓", ext: "/training.html" },
     { t: "Command search", d: "Find anything · ⌘K", glyph: "⌕", onClick: openPalette },
     { t: light ? "Ring for Alfred" : "Ask Alfred", d: "Reason over the live data", glyph: <AlfredMark size={24} />, onClick: () => openAlfred() },
@@ -164,15 +181,15 @@ export default function LandingDeck({
           {tiles.map((tile) =>
             tile.ext ? (
               <a key={tile.t} href={tile.ext} target="_blank" rel="noopener noreferrer" className="no-underline">
-                <TileBody glyph={tile.glyph} t={tile.t} d={tile.d} />
+                <TileBody glyph={tile.glyph} t={tile.t} d={tile.d} badge={tile.badge} />
               </a>
             ) : tile.href ? (
               <Link key={tile.t} href={tile.href} className="no-underline">
-                <TileBody glyph={tile.glyph} t={tile.t} d={tile.d} />
+                <TileBody glyph={tile.glyph} t={tile.t} d={tile.d} badge={tile.badge} />
               </Link>
             ) : (
               <button key={tile.t} onClick={tile.onClick} className="text-left">
-                <TileBody glyph={tile.glyph} t={tile.t} d={tile.d} />
+                <TileBody glyph={tile.glyph} t={tile.t} d={tile.d} badge={tile.badge} />
               </button>
             )
           )}
@@ -266,10 +283,21 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function TileBody({ glyph, t, d }: { glyph: React.ReactNode; t: string; d: string }) {
+function TileBody({ glyph, t, d, badge }: { glyph: React.ReactNode; t: string; d: string; badge?: number | null }) {
   return (
-    <div className="cave-brk cave-tile h-full rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm transition-transform">
-      <div className="text-xl" style={{ color: "var(--cave-cy)" }}>{glyph}</div>
+    <div className="cave-brk cave-tile relative h-full rounded-lg border border-slate-200 bg-white px-4 py-4 shadow-sm transition-transform">
+      <div className="flex items-start justify-between">
+        <div className="text-xl" style={{ color: "var(--cave-cy)" }}>{glyph}</div>
+        {typeof badge === "number" && badge > 0 && (
+          <span
+            className="rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums"
+            style={{ color: "#dc2626", background: "rgba(220,38,38,.12)", border: "1px solid rgba(220,38,38,.5)" }}
+            title={`${badge} awaiting a reply`}
+          >
+            {badge}
+          </span>
+        )}
+      </div>
       <div className="mt-2 text-sm font-semibold" style={{ color: "var(--cave-txt)" }}>{t}</div>
       <div className="mt-0.5 text-[11px]" style={{ color: "var(--cave-dim)" }}>{d}</div>
     </div>

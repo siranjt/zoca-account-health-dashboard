@@ -139,6 +139,26 @@ export async function fetchPublicQuestionCsv(uuid: string): Promise<string> {
 }
 
 /**
+ * Rows of a PUBLIC Metabase question as objects (shared link — no API key).
+ * JSON rather than CSV on purpose: any free-text column (a chat message body,
+ * a note) can carry embedded commas, quotes and newlines that a hand-rolled CSV
+ * split mangles. The public card query endpoint returns a plain array of
+ * {column: value} objects, so there is nothing to parse.
+ */
+export async function fetchPublicQuestionJson(uuid: string): Promise<Row[]> {
+  const base = metabaseBaseUrl();
+  if (!base) throw new Error("METABASE_BASE_URL not set");
+  const res = await fetch(`${base}/api/public/card/${uuid}/query/json`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Metabase public question ${uuid}: ${res.status}`);
+  const json: unknown = await res.json();
+  if (!Array.isArray(json)) {
+    const err = (json as { error?: unknown })?.error;
+    throw new Error(`Metabase public question ${uuid}: ${err ? String(err).slice(0, 160) : "unexpected response"}`);
+  }
+  return json as Row[];
+}
+
+/**
  * One dashcard of a PUBLIC dashboard, as column display names + raw rows.
  * The scheduling onboarding counts live only on dashboard cards, not in a table.
  */
