@@ -28,6 +28,38 @@ const STICKY_COL: React.CSSProperties = {
   borderRight: "1px solid var(--cave-line)",
 };
 
+// Metric groups — let the user collapse the 15-wide grid to one concern at a time.
+type Group = "book" | "payments" | "churn" | "scheduling" | "touch";
+const GROUP_OF: Record<MetricKey, Group> = {
+  active_accounts: "book",
+  mrr: "book",
+  missed_payment_accounts: "payments",
+  missed_payment_amount: "payments",
+  churned_30d: "churn",
+  churn_pct_30d: "churn",
+  churned_mtd: "churn",
+  churn_pct_mtd: "churn",
+  retention_risk_tickets: "churn",
+  sched_provisioned: "scheduling",
+  sched_product_active: "scheduling",
+  sched_onboarded: "scheduling",
+  sched_incomplete: "scheduling",
+  untouched_human_30d: "touch",
+  untouched_all_30d: "touch",
+};
+const GROUPS: { key: Group | "all"; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "book", label: "Book" },
+  { key: "payments", label: "Payments" },
+  { key: "churn", label: "Churn & risk" },
+  { key: "scheduling", label: "Scheduling" },
+  { key: "touch", label: "Touch" },
+];
+
+function csvCell(s: string): string {
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
 type Delta = AmRowView["deltas"][MetricKey];
 
 // A real, colourable movement — mirrors the fall-through branch in DeltaCell.
@@ -80,6 +112,10 @@ export default function AmTodayTable({
   previous: string | null;
 }) {
   const [sort, setSort] = useState<{ key: MetricKey | null; dir: "asc" | "desc" }>({ key: null, dir: "desc" });
+  const [focus, setFocus] = useState<Group | "all">("all");
+
+  // Columns to DISPLAY (heat scale + movers still use the full set below).
+  const shown = focus === "all" ? AM_METRICS : AM_METRICS.filter((m) => GROUP_OF[m.key] === focus);
 
   // Per-metric value range over REAL AMs (unassigned excluded so its data-quality
   // extremes don't wash out the colour scale for everyone else).
@@ -128,6 +164,21 @@ export default function AmTodayTable({
     return items.sort((a, b) => b.sig - a.sig).slice(0, 6);
   }, [amRows, ranges]);
 
+  function exportCsv() {
+    const cols = shown;
+    const lines = [["Account manager", ...cols.map((m) => m.label)].map(csvCell).join(",")];
+    for (const r of rows) {
+      const cells = [csvCell(r.amName), ...cols.map((m) => (r.values[m.key] === null ? "" : String(r.values[m.key])))];
+      lines.push(cells.join(","));
+    }
+    const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `am-report-${latest}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function toggleSort(k: MetricKey) {
     setSort((s) => (s.key === k ? { key: k, dir: s.dir === "desc" ? "asc" : "desc" } : { key: k, dir: "desc" }));
   }
@@ -166,9 +217,40 @@ export default function AmTodayTable({
             green/red by whether the value is good or bad; <b>click a column header to sort</b>.
           </p>
         </div>
-        <a href="#definitions" className="text-[11px] underline" style={{ color: "var(--cave-cy)" }}>
-          Metric definitions ↓
-        </a>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportCsv}
+            className="rounded border px-2 py-1 text-[11px] transition-colors hover:text-slate-200"
+            style={{ borderColor: "var(--cave-line2)", color: "var(--cave-cy)" }}
+            title="Download the current view (respects the active focus) as CSV"
+          >
+            ⇩ Export CSV
+          </button>
+          <a href="#definitions" className="text-[11px] underline" style={{ color: "var(--cave-cy)" }}>
+            Metric definitions ↓
+          </a>
+        </div>
+      </div>
+
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Focus</span>
+        {GROUPS.map((g) => {
+          const active = focus === g.key;
+          return (
+            <button
+              key={g.key}
+              onClick={() => setFocus(g.key)}
+              className="rounded-full border px-2.5 py-0.5 text-[10.5px] transition-colors"
+              style={{
+                borderColor: active ? "var(--cave-cy)" : "var(--cave-line)",
+                color: active ? "var(--cave-cy)" : "var(--cave-dim)",
+                background: active ? "color-mix(in srgb, var(--cave-cy) 12%, transparent)" : "transparent",
+              }}
+            >
+              {g.label}
+            </button>
+          );
+        })}
       </div>
 
       {movers.length > 0 && (
@@ -198,7 +280,7 @@ export default function AmTodayTable({
               <th className="px-2 py-1.5 font-semibold" style={{ ...STICKY_COL, top: 0, zIndex: 4, background: "var(--cave-panel2)" }}>
                 Account manager
               </th>
-              {AM_METRICS.map((m) => {
+              {shown.map((m) => {
                 const active = sort.key === m.key;
                 return (
                   <th
@@ -244,7 +326,7 @@ export default function AmTodayTable({
                       </span>
                     )}
                   </td>
-                  {AM_METRICS.map((m) => {
+                  {shown.map((m) => {
                     const v = r.values[m.key];
                     const bg = heatBg(m, v, !!r.isTotal) ?? rowBg;
                     return (
