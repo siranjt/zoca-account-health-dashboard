@@ -6,6 +6,7 @@
 import { getAccountsFromMetabase, getAccountDetailFromMetabase, getCcDailyFromMetabase } from "./metabase";
 import { getMockAccounts, getMockAccountDetail } from "./mock";
 import { getPaymentDetail } from "./chargebee";
+import { getSql, neonUrl } from "./neon";
 import type { AccountDetail, AccountsPayload, AccountRow } from "./types";
 
 export const ALLOWED_WINDOWS = [7, 30, 90, 180];
@@ -83,6 +84,57 @@ function bookKey(r: ResolvedRange): string {
   return r.custom ? `c:${r.from}:${r.to}` : `w:${r.windowDays}`;
 }
 
+// ---- L2 book cache (Neon) --------------------------------------------------
+// The in-memory bookCache above is L1 — fast, but it dies with each Vercel
+// serverless instance, so cold instances re-fetch the ~6s book. This L2 in Neon
+// survives instances: a cold instance reads the last full book from Postgres
+// (~50-100ms) instead of hitting Metabase. Full book only (viewer-independent);
+// role-scoping still happens after the read, in the page components. Fail-safe:
+// any Neon error falls through to the live Metabase fetch (never worse than today).
+let bookCacheTableReady: Promise<void> | null = null;
+function ensureBookCacheTable(): Promise<void> {
+  if (!bookCacheTableReady) {
+    bookCacheTableReady = (async () => {
+      const sql = getSql();
+      await sql.query(`CREATE SCHEMA IF NOT EXISTS alfred`);
+      await sql.query(`CREATE TABLE IF NOT EXISTS alfred.book_cache (
+        cache_key text PRIMARY KEY,
+        payload jsonb NOT NULL,
+        at timestamptz DEFAULT now())`);
+    })().catch((e) => { bookCacheTableReady = null; throw e; });
+  }
+  return bookCacheTableReady;
+}
+
+async function readBookL2(key: string): Promise<AccountsPayload | null> {
+  if (!neonUrl()) return null;
+  try {
+    await ensureBookCacheTable();
+    const rows = (await getSql()`
+      SELECT payload, extract(epoch from (now() - at)) * 1000 AS age_ms
+      FROM alfred.book_cache WHERE cache_key = ${key}`) as Array<{ payload: AccountsPayload | string; age_ms: number }>;
+    const row = rows[0];
+    if (!row || Number(row.age_ms) >= BOOK_TTL_MS) return null;
+    return typeof row.payload === "string" ? (JSON.parse(row.payload) as AccountsPayload) : row.payload;
+  } catch (e) {
+    console.error("[data] book L2 read failed (falling through to fetch):", e);
+    return null;
+  }
+}
+
+async function writeBookL2(key: string, payload: AccountsPayload): Promise<void> {
+  if (!neonUrl()) return;
+  try {
+    await ensureBookCacheTable();
+    await getSql()`
+      INSERT INTO alfred.book_cache (cache_key, payload, at)
+      VALUES (${key}, ${JSON.stringify(payload)}::jsonb, now())
+      ON CONFLICT (cache_key) DO UPDATE SET payload = EXCLUDED.payload, at = now()`;
+  } catch (e) {
+    console.error("[data] book L2 write failed (non-fatal):", e);
+  }
+}
+
 export async function getAccountsPayload(input?: RangeInput): Promise<AccountsPayload> {
   const r = resolveRange(input);
   const key = bookKey(r);
@@ -94,6 +146,11 @@ export async function getAccountsPayload(input?: RangeInput): Promise<AccountsPa
   if (inflight) return inflight;
 
   const run = (async (): Promise<AccountsPayload> => {
+    // L2: a warm Neon copy from another instance skips the ~6s Metabase fetch.
+    if (useMetabase()) {
+      const l2 = await readBookL2(key);
+      if (l2) { bookCache.set(key, { at: Date.now(), payload: l2 }); return l2; }
+    }
     let source: "mock" | "metabase" = "mock";
     let accounts: AccountRow[];
     let cacheable = true;
@@ -113,7 +170,12 @@ export async function getAccountsPayload(input?: RangeInput): Promise<AccountsPa
       generatedAt: new Date().toISOString(),
       source, windowDays: r.windowDays, from: r.from, to: r.to, custom: r.custom, allTime: r.allTime, accounts,
     };
-    if (cacheable) bookCache.set(key, { at: Date.now(), payload });
+    if (cacheable) {
+      bookCache.set(key, { at: Date.now(), payload });
+      // Persist to L2 (awaited: Vercel kills post-response background work). Only
+      // real Metabase data — never the mock fallback (cacheable already guards that).
+      if (source === "metabase") await writeBookL2(key, payload);
+    }
     return payload;
   })().finally(() => bookInflight.delete(key));
 
