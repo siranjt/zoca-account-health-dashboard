@@ -56,10 +56,6 @@ const GROUPS: { key: Group | "all"; label: string }[] = [
   { key: "touch", label: "Touch" },
 ];
 
-function csvCell(s: string): string {
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 type Delta = AmRowView["deltas"][MetricKey];
 
 // A real, colourable movement — mirrors the fall-through branch in DeltaCell.
@@ -164,21 +160,6 @@ export default function AmTodayTable({
     return items.sort((a, b) => b.sig - a.sig).slice(0, 6);
   }, [amRows, ranges]);
 
-  function exportCsv() {
-    const cols = shown;
-    const lines = [["Account manager", ...cols.map((m) => m.label)].map(csvCell).join(",")];
-    for (const r of rows) {
-      const cells = [csvCell(r.amName), ...cols.map((m) => (r.values[m.key] === null ? "" : String(r.values[m.key])))];
-      lines.push(cells.join(","));
-    }
-    const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `am-report-${latest}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   function toggleSort(k: MetricKey) {
     setSort((s) => (s.key === k ? { key: k, dir: s.dir === "desc" ? "asc" : "desc" } : { key: k, dir: "desc" }));
   }
@@ -218,14 +199,14 @@ export default function AmTodayTable({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={exportCsv}
-            className="rounded border px-2 py-1 text-[11px] transition-colors hover:text-slate-200"
+          <a
+            href="/api/am-report/export"
+            className="rounded border px-2 py-1 text-[11px] no-underline transition-colors hover:text-slate-200"
             style={{ borderColor: "var(--cave-line2)", color: "var(--cave-cy)" }}
-            title="Download the current view (respects the active focus) as CSV"
+            title="Download the full report as a formatted Excel workbook (Summary + Definitions)"
           >
-            ⇩ Export CSV
-          </button>
+            ⇩ Export Excel
+          </a>
           <a href="#definitions" className="text-[11px] underline" style={{ color: "var(--cave-cy)" }}>
             Metric definitions ↓
           </a>
